@@ -13,6 +13,7 @@ Agent Workbench keeps a lead task responsible only for intake, routing, coordina
 - Keep the lead task orchestration-only; delegate planning, implementation, verification, and review.
 - Require explicit authorization for pushes, pull requests, deployments, messages, global configuration changes, credentials, and destructive actions.
 - Select model capability and thinking effort from task evidence, not a vendor model name or price alone.
+- Use subagents as bounded context and evidence boundaries, not an unconditional parallel swarm.
 - Keep the portable contract free of runtime dependencies and product-specific model names.
 
 ## Repository layout
