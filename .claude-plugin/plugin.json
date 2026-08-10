@@ -1,0 +1,11 @@
+{
+  "name": "agent-workbench",
+  "version": "0.2.0",
+  "description": "Portable parent-owned orchestration with capability-aware model routing, verification, and acceptance across agent harnesses.",
+  "author": {
+    "name": "suguspnk"
+  },
+  "homepage": "https://github.com/suguspnk/agent-workbench",
+  "repository": "https://github.com/suguspnk/agent-workbench",
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,31 @@
+{
+  "name": "agent-workbench",
+  "owner": {
+    "name": "suguspnk"
+  },
+  "description": "Portable plan-build-verify workflows for agent harnesses.",
+  "plugins": [
+    {
+      "name": "agent-workbench",
+      "source": "./",
+      "description": "Portable parent-owned orchestration with capability-aware model routing, verification, and acceptance.",
+      "author": {
+        "name": "suguspnk"
+      },
+      "homepage": "https://github.com/suguspnk/agent-workbench",
+      "repository": "https://github.com/suguspnk/agent-workbench",
+      "license": "Apache-2.0",
+      "keywords": [
+        "orchestration",
+        "verification",
+        "agent-skills"
+      ],
+      "category": "Productivity",
+      "tags": [
+        "orchestration",
+        "workflow",
+        "portable"
+      ]
+    }
+  ]
+}
