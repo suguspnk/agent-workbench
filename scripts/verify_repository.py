@@ -65,6 +65,9 @@ def main() -> None:
         ROOT / "adapters/codex/.codex/agents/awb-deep-worker.toml",
         ROOT / "adapters/codex/.codex/agents/awb-verifier.toml",
         ROOT / "adapters/codex/.codex/agents/awb-reviewer.toml",
+        ROOT / "adapters/codex/.codex/agents/awb-test-engineer.toml",
+        ROOT / "adapters/codex/.codex/agents/awb-migration-worker.toml",
+        ROOT / "adapters/codex/.codex/agents/awb-security-reviewer.toml",
     ]
     for path in required:
         require(path)

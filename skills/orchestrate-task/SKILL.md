@@ -42,7 +42,7 @@ Before delegating, inspect what the current harness actually exposes:
 - Read [model-selection.md](references/model-selection.md) before selecting a **subagent** model, effort level, or execution mode. Honor a user pin; otherwise request the lowest capability tier that can meet the task's quality bar, then escalate only on evidence.
 - Do not choose a worker based on price alone. Factor in task ambiguity, context needs, tool autonomy, failure impact, required modality, and evaluation evidence.
 
-When the optional Codex adapter is installed and its roles are observable, route routine evidence gathering to `awb_fast_investigator`, bounded implementation to `awb_builder`, difficult work to `awb_deep_worker`, verification to `awb_verifier`, and consequential review to `awb_reviewer`. Assign `awb_planner` before implementation when the architecture or owned paths are not settled. If those roles are unavailable, select only a native child capability that is actually exposed; do not emulate the role in the lead task.
+When the optional Codex adapter is installed and its roles are observable, use the routing card and decision table in [model-selection.md](references/model-selection.md). Do not collapse a migration, security review, difficult diagnosis, or independent test pass into the generic builder role. If an exact role is unavailable, select only a native child capability that is actually exposed; do not emulate the role in the lead task.
 
 ### 3. Send a bounded packet
 

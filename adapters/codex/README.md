@@ -10,5 +10,8 @@ The `orchestrate-task` skill selects a role only after confirming that the harne
 | `awb_fast_investigator` | Narrow, repeatable evidence gathering | Luna / low |
 | `awb_builder` | Bounded implementation and tests | Terra / medium |
 | `awb_deep_worker` | Difficult debugging or design work | Sol / high |
-| `awb_verifier` | Independent validation and tests | Terra / medium |
-| `awb_reviewer` | Consequential correctness and security review | Sol / high |
+| `awb_test_engineer` | Independent integration and regression validation | Terra / high |
+| `awb_verifier` | Scope, diff, and deterministic-check validation | Terra / medium |
+| `awb_migration_worker` | Schema, persistence, or compatibility migration | Sol / extra high |
+| `awb_reviewer` | Consequential correctness and compatibility review | Sol / high |
+| `awb_security_reviewer` | Security-sensitive review | Sol / extra high |
