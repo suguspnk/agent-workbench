@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orchestrate Task"
+  short_description: "Portable plan-build-verify workflow"
+  default_prompt: "Use $orchestrate-task to plan, delegate, verify, and accept this task."
