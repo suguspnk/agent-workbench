@@ -58,6 +58,13 @@ def main() -> None:
         ROOT / "skills/orchestrate-task/agents/openai.yaml",
         ROOT / "skills/orchestrate-task/references/portable-contract.md",
         ROOT / "skills/orchestrate-task/references/model-selection.md",
+        ROOT / "adapters/codex/README.md",
+        ROOT / "adapters/codex/.codex/agents/awb-planner.toml",
+        ROOT / "adapters/codex/.codex/agents/awb-fast-investigator.toml",
+        ROOT / "adapters/codex/.codex/agents/awb-builder.toml",
+        ROOT / "adapters/codex/.codex/agents/awb-deep-worker.toml",
+        ROOT / "adapters/codex/.codex/agents/awb-verifier.toml",
+        ROOT / "adapters/codex/.codex/agents/awb-reviewer.toml",
     ]
     for path in required:
         require(path)
@@ -98,6 +105,9 @@ def main() -> None:
     model_reference = (ROOT / "skills/orchestrate-task/references/model-selection.md").read_text(encoding="utf-8")
     if "provider-neutral policy" not in model_reference:
         fail("model-selection reference must retain its provider-neutral boundary")
+    skill = (ROOT / "skills/orchestrate-task/SKILL.md").read_text(encoding="utf-8")
+    if "orchestration-only" not in skill:
+        fail("orchestrate-task must retain the orchestration-only lead boundary")
     print("Repository invariants passed.")
 
 

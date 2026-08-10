@@ -1,6 +1,6 @@
 # Model Selection and Thinking Effort
 
-Use this reference only when the current harness exposes model, reasoning-effort, or execution-mode controls. It is a routing policy, not permission to change a user pin, spend limit, provider configuration, or harness default.
+Use this reference only when the current harness exposes model, reasoning-effort, or execution-mode controls for child tasks. It is a subagent-routing policy, not permission to change the lead task's model, a user pin, spend limit, provider configuration, or harness default.
 
 ## 1. Classify before selecting
 
@@ -23,6 +23,10 @@ Raise the class when any of these are true: the task requires a modality unavail
 - **Frontier**: the provider's strongest generally available model for difficult reasoning, long-horizon coding, or high-consequence analysis.
 
 Use provider model IDs only after the harness exposes them. Do not infer a name, capability, price, context limit, reasoning setting, or entitlement from documentation, a role label, or a previous task. If no tier can be observed, write the desired tier and continue without claiming the harness applied it.
+
+### Codex adapter mapping
+
+The optional Codex adapter encodes the tiers as named child roles: `awb_fast_investigator` for efficient/low, `awb_builder` for balanced/medium, `awb_deep_worker` for frontier/high, and `awb_reviewer` for frontier/high read-only review. It also provides `awb_planner` and `awb_verifier`. The lead task remains unchanged. Use these names only after the adapter has been installed and the configured models are available.
 
 ## 3. Set effort separately from the model
 
@@ -47,7 +51,7 @@ Do not retry unchanged work at a higher tier, fan out expensive workers before t
 
 ## 5. Record the decision and learn
 
-For a consequential, repeated, or costly task, keep this compact routing record in the lead ledger:
+For a consequential, repeated, or costly child task, keep this compact routing record in the lead ledger:
 
 ```text
 task_class: routine | bounded | complex | critical

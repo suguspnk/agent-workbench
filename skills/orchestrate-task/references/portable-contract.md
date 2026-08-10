@@ -18,7 +18,7 @@ capabilities: observed harness features and explicit unknowns
 routing: task class, risk, requested capability tier, effort, and reason; use only exposed controls
 ```
 
-Read [model-selection.md](model-selection.md) before filling `routing`. A user-selected model, budget, or policy overrides this recommendation.
+Read [model-selection.md](model-selection.md) before filling `routing` for a child task. A user-selected model, budget, or policy overrides this recommendation; never apply routing to the lead task.
 
 ## Worker packet
 
@@ -73,6 +73,12 @@ verdict: ship | fix-first | rethink | blocked
 ```
 
 Require concrete findings tied to the actual artifact. Each finding must include a severity, affected path or artifact, evidence, and a specific requested resolution. A reviewer must not implement its own fixes. If the harness cannot enforce read-only behavior, report that limitation and use before/after state checks when safe and sufficient.
+
+## Lead boundary
+
+The lead task may classify, create packets, assign and monitor child tasks, record state, request corrections, and accept or block based on child evidence. It must not implement, investigate, run verification, or perform an independent review itself.
+
+If a required child task cannot be created or monitored with stable identity, the lead must mark the work blocked and state the limitation. It must not quietly complete the work in the lead task.
 
 ## Capability portability
 
