@@ -1,10 +1,21 @@
 # Model Selection and Thinking Effort
 
-Use this reference only when the current harness exposes model, reasoning-effort, or execution-mode controls for child tasks. It is a subagent-routing policy, not permission to change the lead task's model, a user pin, spend limit, provider configuration, or harness default.
+Use this reference only for child tasks when the harness exposes model, reasoning-effort, or execution-mode controls. It never changes the lead task, a user pin, spend limit, provider configuration, or harness default.
 
-## 1. Fill a routing card before selecting
+## Contents
 
-Classify each child packet, not the parent request. Record the values that materially change quality, latency, or risk:
+- [Routing card](#1-fill-a-routing-card)
+- [Two-stage routing](#2-route-in-two-stages)
+- [Context and parallelism](#3-constrain-context-handoffs-and-parallelism)
+- [Replay protection](#4-protect-against-harmful-downgrades)
+- [Capability and effort](#5-map-capability-and-effort)
+- [Evidence-driven adjustment](#6-adjust-from-evidence)
+- [Routing record](#7-record-the-decision)
+- [Research basis](#research-basis)
+
+## 1. Fill a routing card
+
+Classify each child packet, not the parent request:
 
 ```text
 work_shape: map | plan | extract | implement | test | debug | migrate | review
@@ -20,119 +31,129 @@ change_authority: none | owned local paths | shared contract | external/destruct
 router_confidence: high | uncertain | unresolved
 ```
 
-The lead must not use prompt length or urgency as a proxy for any field. A long extraction job can stay cheap; a two-file authorization change can require the strongest route. Treat noisy artifacts, shared contracts, external/destructive authority, and unresolved routing as escalation signals even when the diff is small.
+Prompt length and urgency are not routing signals. A long fixed-schema extraction may remain efficient; a two-file authorization change is critical. If local execution is allowed, save exactly these fields as JSON and run:
 
-## 2. Choose the exact child role
+```sh
+python3 scripts/route_subagent.py --card /path/to/routing-card.json
+```
 
-Apply the first matching rule. The roles below are supplied by the optional Codex adapter; use the corresponding native child capability when another harness exposes an equivalent.
+The script is the canonical deterministic implementation of the rules below. Confirm that its role and controls exist in the current harness before spawning. If it cannot run, route manually and record that limitation.
 
-| Condition | Child role | Model / effort | Required follow-up |
-| --- | --- | --- | --- |
-| Read-only map, extraction, classification, or fixed-schema evidence; settled inputs; no design decision; no security or public-contract boundary | `awb_fast_investigator` | Luna / low | Include exact source paths or structured output validation |
-| Architecture, ownership, dependency order, or acceptance criteria are not settled | `awb_planner` | Sol / high | Feed a bounded plan to a separate worker |
-| Bounded internal implementation; known interface; reversible; focused tests; no unresolved failure hypothesis | `awb_builder` | Terra / medium | `awb_verifier` |
-| Multi-component refactor, public API contract, hard diagnosis, competing hypotheses, repeated tool loop, or noisy context that must be distilled | `awb_deep_worker` | Sol / high | `awb_test_engineer` or `awb_reviewer` |
-| Schema, persistence, compatibility, backfill, rollout, or rollback work | `awb_migration_worker` | Sol / extra high | `awb_test_engineer` and `awb_reviewer` |
-| Independent scope/diff check, deterministic validation, or focused acceptance check | `awb_verifier` | Terra / medium | Return commands and actual outputs |
-| Integration, regression, concurrency, or failure-path validation | `awb_test_engineer` | Terra / high | Return coverage gaps and residual risk |
-| Consequential correctness, compatibility, or maintainability review | `awb_reviewer` | Sol / high | Findings only; no fixes |
-| Authorization, secrets, untrusted input, tenant/data isolation, or privilege-boundary review | `awb_security_reviewer` | Sol / extra high | Findings only; include negative-test gaps |
+## 2. Route in two stages
 
-If rules conflict, prefer the highest-risk condition. Split a mixed packet instead of assigning one broad role: for example, route discovery to `awb_planner`, the migration to `awb_migration_worker`, and security review to `awb_security_reviewer`.
+Choose a primary role for the packet, then add every applicable risk follow-up. A security or migration requirement is not allowed to disappear because a broader implementation rule matched first.
+
+### Stage A: primary role
+
+| Packet condition | Primary role | Capability / effort |
+| --- | --- | --- |
+| Settled read-only map or extraction with no public, persistent, security, or change-authority boundary | `awb_fast_investigator` | Efficient / low |
+| Explicit planning, open-ended ambiguity, or unresolved routing | `awb_planner` | Frontier / high |
+| Bounded internal implementation with settled interfaces and modest blast radius | `awb_builder` | Balanced / medium |
+| Difficult debugging, public-contract implementation, cross-component work, competing hypotheses, high blast radius, or long/noisy implementation context | `awb_deep_worker` | Frontier / high |
+| Schema, persistence, compatibility, backfill, rollout, or rollback work | `awb_migration_worker` | Frontier / maximum |
+| Focused scope/diff inspection or deterministic acceptance check | `awb_verifier` | Balanced / medium |
+| Integration, regression, concurrency, failure-path, or high-impact validation | `awb_test_engineer` | Balanced / high |
+| Consequential correctness, compatibility, or maintainability review | `awb_reviewer` | Frontier / high |
+| Authorization, secrets, untrusted input, tenant/data isolation, or privilege-boundary review | `awb_security_reviewer` | Frontier / maximum |
+
+### Stage B: mandatory follow-ups
+
+- Every implementation role requires `awb_verifier`.
+- Migration and persistent-data work additionally require `awb_test_engineer` and `awb_reviewer`.
+- Public API implementation additionally requires `awb_reviewer`.
+- Security-boundary or external/destructive work additionally requires `awb_security_reviewer`.
+- Deep work with integration/regression evidence or shared/production impact additionally requires `awb_test_engineer`.
+- An unresolved implementation routes to `awb_planner` first; route the resulting bounded packet again instead of assuming a worker.
+
+Split mixed work into packets. Do not ask a findings-only reviewer to implement, or let an implementer verify its own result.
+
+### Harness mappings
+
+- **Claude Code plugin:** bundled agents appear with scoped names such as `agent-workbench:awb-builder`. They use the family aliases `haiku`, `sonnet`, and `opus` so workspace model allowlists and provider substitution remain observable. Plugin agent tool lists narrow capabilities, but Claude Code does not enforce `permissionMode` for plugin agents.
+- **Codex:** the optional adapter exposes underscore names such as `awb_builder` and pins current model/effort profiles. Custom-agent values override parent/default subagent values. Confirm model availability before use.
+- **Other harnesses:** map the portable role, capability tier, and effort only to controls the host actually exposes. If no exact role exists, use a native child with an equivalent bounded packet; never emulate child work in the lead.
 
 ## 3. Constrain context, handoffs, and parallelism
 
 Treat subagents as context boundaries first and a speed mechanism second.
 
-- Send only the source paths, facts, and tools needed for the packet. Put a large log, diff, or artifact at an exact path; do not paste it into every child packet.
-- Require a short, factual handoff: status, changed paths, commands, evidence, open questions, and one next decision. Separate observations from recommendations.
-- Start one child when work is sequential, capacity is constrained, or one packet determines the next. Parallelize only independent paths with no shared writes and a defined merge/verification plan.
-- Keep an efficient role read-only or tightly bounded. Do not give it open-ended investigation, public contracts, security decisions, destructive authority, or a free-form “fix it” instruction.
-- When a child fails, revise the packet, context, tool surface, or role first. Do not treat a higher tier as the automatic retry.
+- Send only the facts, paths, artifacts, and tools required for the packet. Point to large logs or diffs instead of pasting them into every child.
+- Require a compact factual handoff: status, changed paths, commands, evidence, risks, open questions, and one next decision.
+- Parallelize only independent paths with no shared writes and a defined merge/verification plan. Serialize shared-file, contract, and dependent work.
+- Keep efficient roles read-only or tightly bounded. Do not give them open-ended investigation, public contracts, security decisions, destructive authority, or a free-form “fix it” packet.
+- For test/review roles with shell access, require before/after working-tree status. Tool allowlists that omit Edit and Write do not make arbitrary shell commands read-only.
+- On failure, revise the packet, context, tools, or role before escalating. Never repeat an unchanged prompt merely at higher effort.
 
 ## 4. Protect against harmful downgrades
 
-Escalate immediately when a packet crosses a risk boundary or fails its evidence bar. Lower a default only after a replay set shows that a cheaper profile preserves the required outcome.
+Set `must_not_downgrade` for public APIs, persistent data, security boundaries, production-critical impact, and external/destructive authority. Lower those defaults only after representative replay evidence demonstrates the same acceptance outcome.
 
-Maintain a living replay set with known hard cases, easy-but-long inputs, recent failures, ordinary successful packets, irreversible/high-risk work, and cases that changed profile after a routing-policy update. Record an acceptable role range, `must_not_downgrade` flag, required checks, and outcome criteria for each case.
+The repository replay set lives at `tests/routing-cases.json`. Run it after changing routing rules, profiles, model mappings, or tool environments:
 
-Track both unnecessary escalation (cost without accepted-result gain) and harmful downgrade (a cheaper route that misses the evidence bar, needs recovery, or creates human repair). Prioritize harmful downgrades over savings, and rerun the replay set when routing instructions, profiles, models, or tool environments change.
+```sh
+python3 scripts/route_subagent.py --replay tests/routing-cases.json
+```
 
-## 5. Classify the baseline tier
+Add known hard cases, easy-but-long inputs, recent failures, ordinary successes, irreversible work, and cases whose profile changed. Track both unnecessary escalation and harmful downgrade, prioritizing harmful downgrade prevention.
 
-Record the task's highest applicable class. Classify by the work required, not by the length of the prompt.
+## 5. Map capability and effort
 
-| Class | Signals | Default capability tier | Default effort |
-| --- | --- | --- | --- |
-| Deterministic | A local tool or fixed procedure can produce and verify the answer. | No model or efficient | None or low |
-| Routine | Narrow scope, stable inputs, reversible outcome, fixed schema or clear edit. | Efficient | Low |
-| Bounded | Several related steps, known interfaces, modest ambiguity, ordinary code or analysis. | Balanced | Medium |
-| Complex | Novel diagnosis, broad context, cross-system constraints, sustained tool use, or consequential review. | Frontier | High |
-| Critical | Security, authorization, migration, financial or production-impacting decision, or difficult work where a missed defect has material cost. | Frontier plus independent verification | High, then maximum only if justified |
+Capability tiers are provider-neutral:
 
-Raise the class when any of these are true: the task requires a modality unavailable to a lower tier, the model must make autonomous tool choices, the context is large or contradictory, a false positive or negative is costly, or the result must meet a strict proof, test, or evidence bar. Do not raise it merely because the task is urgent or the prompt is long.
+- **Efficient:** lowest-cost, lowest-latency exposed model that supports the required context, modality, tools, and output.
+- **Balanced:** strong general-purpose model for bounded implementation and validation.
+- **Frontier:** strongest generally available model for difficult reasoning, long-horizon coding, or high-consequence analysis.
 
-## 6. Map the tier to the current harness
+Set effort separately:
 
-- **Efficient**: the least expensive and lowest-latency exposed model that supports the required context, modality, tools, and structured output.
-- **Balanced**: the provider's general-purpose, strong model for normal implementation, analysis, and review.
-- **Frontier**: the provider's strongest generally available model for difficult reasoning, long-horizon coding, or high-consequence analysis.
+- **Low:** fixed-schema extraction, classification, quick lookup, or focused navigation.
+- **Medium:** bounded multi-step implementation and deterministic verification.
+- **High:** hard debugging, design tradeoffs, broad review, agentic tool loops, or substantial ambiguity.
+- **Maximum:** only the hardest quality-first security, migration, optimization, or demonstrated lower-effort failure with a concrete evaluation plan.
 
-Use provider model IDs only after the harness exposes them. Do not infer a name, capability, price, context limit, reasoning setting, or entitlement from documentation, a role label, or a previous task. If no tier can be observed, write the desired tier and continue without claiming the harness applied it.
+Do not infer model names, capabilities, context limits, prices, or entitlements. When controls are absent, record the desired tier and effort as unavailable; do not claim they were applied. Keep effort stable within a cached child conversation unless the expected quality gain justifies cache loss.
 
-### Codex adapter mapping
+## 6. Adjust from evidence
 
-The optional Codex adapter encodes the tiers as named child roles: `awb_fast_investigator` for efficient/low, `awb_builder` for balanced/medium, `awb_deep_worker` for frontier/high, and `awb_migration_worker` or `awb_security_reviewer` for extra-high-risk work. It also provides `awb_planner`, `awb_verifier`, `awb_test_engineer`, and `awb_reviewer`. The lead task remains unchanged. Use these names only after the adapter has been installed and the configured models are available.
+Start at the routed default unless a user pin, policy, or representative evaluation says otherwise.
 
-## 7. Set effort separately from the model
+- Escalate model tier for missing capability, context, modality, or persistent reasoning failure.
+- Escalate effort when the same capable model needs more exploration or verification.
+- Prefer a clearer packet, smaller context, deterministic tool, or independent reviewer when that addresses the cause.
+- De-escalate only after representative cases meet the same acceptance bar. Do not generalize from one easy success.
+- Never use maximum effort as a substitute for missing requirements, weak tests, unclear authorization, or unbounded scope.
 
-Choose the smallest effort that can meet the evidence bar. Effort changes internal work, tool-call behavior, latency, and cost; it is not a visible-answer-length control.
+## 7. Record the decision
 
-- **None / low**: deterministic transformations, straightforward classification, extraction to a validated schema, quick lookup, or focused code navigation. Keep a deterministic verifier where possible.
-- **Medium**: default for bounded multi-step work, ordinary implementation, focused debugging, and routine code review.
-- **High**: use for hard debugging, non-trivial design tradeoffs, agentic coding with tool loops, broad review, research synthesis, or significant ambiguity.
-- **Maximum**: reserve for the hardest quality-first work with a concrete evaluation or verification plan: critical security or migration review, complex optimization, or a difficult defect that lower effort demonstrably missed. Use a provider's equivalent quality-first mode only when the extra latency and cost are authorized.
-
-For a long cached conversation, avoid changing effort midstream unless the expected quality gain exceeds the lost cache efficiency. If the provider adapts reasoning automatically, treat the requested effort as a preference and still measure the outcome.
-
-## 8. Escalate and de-escalate from evidence
-
-Start at the class default unless a user pin, policy, or prior evaluation says otherwise.
-
-Escalate one dimension at a time after checking the packet, inputs, tool results, and verifier. Escalate the **model tier** for missing capability, context, modality, or persistent reasoning failure. Escalate **effort** when the same capable model needs more exploration or verification. Prefer a better packet, smaller context, deterministic tool, or independent reviewer when that addresses the cause.
-
-De-escalate after representative tasks meet the acceptance bar at a lower tier or effort. Do not generalize from one easy success. Keep separate baselines for materially different task classes, modalities, and tool environments.
-
-Do not retry unchanged work at a higher tier, fan out expensive workers before the work is independently divisible, or use maximum effort as a substitute for missing requirements, weak tests, or unclear authorization.
-
-## 9. Record the decision and learn
-
-For a consequential, repeated, or costly child task, keep this compact routing record in the lead ledger:
+For consequential, repeated, or costly child work, keep:
 
 ```text
+primary_role: exact native or portable role
 task_class: routine | bounded | complex | critical
-signals: ambiguity, context, modality, tool autonomy, impact
-context_profile: compact | focused | noisy | long-running
-parallelism: sequential | independent-read-only | independent-write | dependent
+signals: ambiguity, context, tool autonomy, contract, and impact
+required_followups: exact independent roles
 must_not_downgrade: yes | no, with reason
 capability_tier: efficient | balanced | frontier | unavailable
-effort: none | low | medium | high | maximum | unavailable
+effort: low | medium | high | maximum | unavailable
 user_or_policy_pin: none | description
-reason: concise selection rationale
-evidence: acceptance result, verifier outcome, latency, token/cost telemetry when available
+reason: concise routing rationale
+evidence: acceptance, verifier result, latency, and token/cost telemetry when available
 next_adjustment: retain | lower tier | raise effort | raise tier | redesign packet
 ```
 
-Evaluate representative tasks with the actual prompts, tools, and data. Compare task success, correctness, completeness, edge cases, required evidence, latency, token usage, and cost. Choose the configuration with the lowest total cost that meets the quality bar; lower model cost is not a win if it increases retries, review failures, or human repair.
+Choose the lowest total-cost configuration that meets the quality bar. A cheaper model is not a saving if it increases retries, review failures, or human repair.
 
 ## Research basis
 
-This provider-neutral policy follows a common current pattern in first-party guidance: select for capability, speed, and cost; tune reasoning effort separately; and validate on representative evaluations rather than assuming the highest setting wins. It also incorporates recurring practitioner reports: use subagents to bound context, keep low-tier workers narrowly scoped, and prevent cost-driven downgrades until replay evidence supports them. These reports are directional experience data, not a substitute for local measurement. Provider-specific names, defaults, limits, and pricing change frequently; consult the current host documentation before creating an adapter.
+First-party guidance consistently separates capability, latency/cost, and reasoning effort, and recommends evaluation on representative prompts and data. Practitioner reports support bounded mission cards and context isolation, while also showing that nominal routing can be bypassed without explicit profiles and replay/log analysis. Community evidence is directional rather than a substitute for local measurement.
 
+- [OpenAI Codex subagent guidance](https://learn.chatgpt.com/docs/agent-configuration/subagents)
 - [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model)
 - [Anthropic: choosing a model](https://platform.claude.com/docs/en/about-claude/models/choosing-a-model)
 - [Anthropic: effort](https://platform.claude.com/docs/en/build-with-claude/effort)
+- [Anthropic: Claude Code subagents](https://code.claude.com/docs/en/sub-agents)
 - [Google: Gemini thinking](https://ai.google.dev/gemini-api/docs/generate-content/thinking)
-- [Codex user discussion: custom subagent roles](https://www.reddit.com/r/codex/comments/1tkpquf/how_i_set_up_custom_subagents_for_codex/)
-- [Practitioner discussion: routing regressions and harmful downgrades](https://www.reddit.com/r/AI_Agents/comments/1ub1vl0/routing_agent_work_across_4_llm_tiers/)
-- [Practitioner discussion: bounded worker contracts and context](https://www.reddit.com/r/AI_Agents/comments/1so3bs1/sub_agents_with_cheap_model/)
+- [Codex practitioner: custom subagent roles and mission cards](https://www.reddit.com/r/codex/comments/1tkpquf/how_i_set_up_custom_subagents_for_codex/)
+- [Codex practitioner: automatic model/effort routing](https://www.reddit.com/r/codex/comments/1uvxi3n/i_think_codex_needs_an_auto_modelreasoning/)
+- [Claude practitioner report: routing bypass and observability](https://www.reddit.com/r/ClaudeWorkflows/comments/1uf6hdt/workflow_claude_code_model_routing_with_gearbox_a/)

@@ -3,12 +3,12 @@
   "owner": {
     "name": "suguspnk"
   },
-  "description": "Portable plan-build-verify workflows for agent harnesses.",
+  "description": "Portable orchestration-only workflows with bounded subagent routing.",
   "plugins": [
     {
       "name": "agent-workbench",
       "source": "./",
-      "description": "Portable parent-owned orchestration with capability-aware model routing, verification, and acceptance.",
+      "description": "Portable orchestration-only coordination with automatic subagent routing and independent verification.",
       "author": {
         "name": "suguspnk"
       },

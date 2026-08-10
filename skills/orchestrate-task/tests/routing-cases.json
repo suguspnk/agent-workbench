@@ -1,0 +1,330 @@
+[
+  {
+    "id": "settled-read-only-map",
+    "card": {
+      "work_shape": "map",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "syntax",
+      "context_profile": "focused source set",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_fast_investigator",
+      "task_class": "routine",
+      "capability_tier": "efficient",
+      "effort": "low",
+      "required_followups": [],
+      "must_not_downgrade": false
+    }
+  },
+  {
+    "id": "large-but-fixed-extraction",
+    "card": {
+      "work_shape": "extract",
+      "scope": "cross-component",
+      "ambiguity": "settled",
+      "contract": "none",
+      "tool_loop": "repeated local tools",
+      "impact": "reversible",
+      "evidence_bar": "syntax",
+      "context_profile": "noisy logs/large artifacts",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_fast_investigator",
+      "task_class": "routine",
+      "must_not_downgrade": false
+    }
+  },
+  {
+    "id": "bounded-internal-implementation",
+    "card": {
+      "work_shape": "implement",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "user-visible",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_builder",
+      "task_class": "bounded",
+      "capability_tier": "balanced",
+      "effort": "medium",
+      "required_followups": ["awb_verifier"],
+      "must_not_downgrade": false
+    }
+  },
+  {
+    "id": "small-bounded-builder",
+    "card": {
+      "work_shape": "implement",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "compact facts",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_builder",
+      "task_class": "bounded",
+      "capability_tier": "balanced",
+      "effort": "medium",
+      "required_followups": ["awb_verifier"]
+    }
+  },
+  {
+    "id": "public-api-change",
+    "card": {
+      "work_shape": "implement",
+      "scope": "cross-component",
+      "ambiguity": "local unknown",
+      "contract": "public API",
+      "tool_loop": "repeated local tools",
+      "impact": "shared system",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "dependent sequence",
+      "change_authority": "shared contract",
+      "router_confidence": "uncertain"
+    },
+    "expected": {
+      "primary_role": "awb_deep_worker",
+      "required_followups": ["awb_verifier", "awb_test_engineer", "awb_reviewer"],
+      "must_not_downgrade": true
+    }
+  },
+  {
+    "id": "unresolved-implementation-needs-plan",
+    "card": {
+      "work_shape": "implement",
+      "scope": "cross-system",
+      "ambiguity": "open-ended",
+      "contract": "internal",
+      "tool_loop": "repeated external tools",
+      "impact": "shared system",
+      "evidence_bar": "integration/regression",
+      "context_profile": "long-running history",
+      "parallelism": "dependent sequence",
+      "change_authority": "shared contract",
+      "router_confidence": "unresolved"
+    },
+    "expected": {
+      "primary_role": "awb_planner",
+      "required_followups": [],
+      "reroute_after_planning": true
+    }
+  },
+  {
+    "id": "difficult-debugging",
+    "card": {
+      "work_shape": "debug",
+      "scope": "cross-component",
+      "ambiguity": "competing hypotheses",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "shared system",
+      "evidence_bar": "integration/regression",
+      "context_profile": "noisy logs/large artifacts",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "uncertain"
+    },
+    "expected": {
+      "primary_role": "awb_deep_worker",
+      "required_followups": ["awb_verifier", "awb_test_engineer"]
+    }
+  },
+  {
+    "id": "persistent-data-migration",
+    "card": {
+      "work_shape": "migrate",
+      "scope": "cross-system",
+      "ambiguity": "local unknown",
+      "contract": "persistent data",
+      "tool_loop": "repeated local tools",
+      "impact": "production-critical",
+      "evidence_bar": "independent review",
+      "context_profile": "long-running history",
+      "parallelism": "dependent sequence",
+      "change_authority": "shared contract",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_migration_worker",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "maximum",
+      "required_followups": ["awb_verifier", "awb_test_engineer", "awb_reviewer"],
+      "must_not_downgrade": true
+    }
+  },
+  {
+    "id": "security-boundary-implementation",
+    "card": {
+      "work_shape": "implement",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "security boundary",
+      "tool_loop": "repeated local tools",
+      "impact": "production-critical",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_deep_worker",
+      "required_followups": ["awb_verifier", "awb_test_engineer", "awb_security_reviewer"],
+      "must_not_downgrade": true
+    }
+  },
+  {
+    "id": "focused-verification",
+    "card": {
+      "work_shape": "test",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "compact facts",
+      "parallelism": "none",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_verifier",
+      "required_followups": []
+    }
+  },
+  {
+    "id": "integration-test-pass",
+    "card": {
+      "work_shape": "test",
+      "scope": "cross-component",
+      "ambiguity": "local unknown",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "shared system",
+      "evidence_bar": "integration/regression",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_test_engineer",
+      "capability_tier": "balanced",
+      "effort": "high"
+    }
+  },
+  {
+    "id": "persistent-data-test-stays-test-only",
+    "card": {
+      "work_shape": "test",
+      "scope": "cross-component",
+      "ambiguity": "settled",
+      "contract": "persistent data",
+      "tool_loop": "repeated local tools",
+      "impact": "production-critical",
+      "evidence_bar": "integration/regression",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_test_engineer",
+      "task_class": "critical",
+      "required_followups": [],
+      "must_not_downgrade": true
+    }
+  },
+  {
+    "id": "security-review",
+    "card": {
+      "work_shape": "review",
+      "scope": "cross-component",
+      "ambiguity": "local unknown",
+      "contract": "security boundary",
+      "tool_loop": "repeated local tools",
+      "impact": "production-critical",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_security_reviewer",
+      "task_class": "critical",
+      "effort": "maximum",
+      "required_followups": [],
+      "must_not_downgrade": true
+    }
+  },
+  {
+    "id": "unresolved-security-review-plans-first",
+    "card": {
+      "work_shape": "review",
+      "scope": "cross-system",
+      "ambiguity": "open-ended",
+      "contract": "security boundary",
+      "tool_loop": "repeated external tools",
+      "impact": "production-critical",
+      "evidence_bar": "independent review",
+      "context_profile": "long-running history",
+      "parallelism": "dependent sequence",
+      "change_authority": "external/destructive",
+      "router_confidence": "unresolved"
+    },
+    "expected": {
+      "primary_role": "awb_planner",
+      "required_followups": [],
+      "reroute_after_planning": true,
+      "must_not_downgrade": true
+    }
+  },
+  {
+    "id": "ordinary-consequential-review",
+    "card": {
+      "work_shape": "review",
+      "scope": "cross-component",
+      "ambiguity": "settled",
+      "contract": "public API",
+      "tool_loop": "repeated local tools",
+      "impact": "shared system",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_reviewer",
+      "task_class": "complex",
+      "must_not_downgrade": true
+    }
+  }
+]

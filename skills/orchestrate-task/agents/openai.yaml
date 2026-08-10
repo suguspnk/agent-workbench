@@ -1,4 +1,4 @@
 interface:
   display_name: "Orchestrate Task"
-  short_description: "Portable plan-build-verify workflow"
-  default_prompt: "Use $orchestrate-task to plan, delegate, verify, and accept this task."
+  short_description: "Route bounded work to verified subagents"
+  default_prompt: "Use $orchestrate-task to coordinate this task through bounded subagents and accept only independently verified evidence."

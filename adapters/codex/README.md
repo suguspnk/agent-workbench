@@ -1,8 +1,10 @@
 # Codex Subagent Adapter
 
-Copy the `.codex/agents/` directory in this adapter into a trusted project's `.codex/agents/` directory, or into your personal Codex agent directory. It provides fixed model and reasoning-effort settings for named child roles; it does not configure the parent task.
+Copy this adapter's `.codex/agents/*.toml` files into a trusted project's `.codex/agents/`, or into `~/.codex/agents/` for personal roles. Review same-named destination files first because a direct copy can replace them. The profiles pin model and reasoning-effort settings for named child roles; they never configure the parent task.
 
 The `orchestrate-task` skill selects a role only after confirming that the harness exposes the role and its configured models. Update a profile locally when your account uses different model availability. Do not copy these profiles into an untrusted project.
+
+Codex custom-agent files override inherited subagent model and effort defaults. The verifier and test engineer need `workspace-write` to run checks that create caches or artifacts, but their instructions prohibit source edits. Require before/after status evidence; this is a behavioral boundary, not a filesystem proof that every command was read-only.
 
 | Role | Purpose | Default |
 | --- | --- | --- |
