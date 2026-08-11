@@ -13,7 +13,8 @@ Contributions are welcome through issues and pull requests.
 - Do not weaken `must_not_downgrade` boundaries without representative acceptance evidence.
 - Bump both plugin manifest versions together and update `CHANGELOG.md` for a release.
 - Avoid dependencies unless they provide a material benefit that cannot be achieved with the standard library.
-- Keep pull-request candidate code behind the trusted `.github/ci/run_sandboxed_validation.py` boundary. Never execute candidate scripts on the Actions host or pass runner credentials, network, writable source, Git metadata, the Docker socket, caches, artifacts, or trusted-checkout mounts into the container.
+- Keep pull-request candidate code behind the trusted `.github/ci/run_sandboxed_validation.py` boundary. Never execute candidate scripts on the Actions host or pass runner credentials, network, writable source, Git metadata, the Docker socket, caches, artifacts, or a trusted checkout into the container. Only the four individually mounted base-branch control files may enter the trusted-invariant container.
+- Treat `.github/ci/trusted_invariant_gate.py`, `.github/ci/trusted_validation_policy.json`, `.github/ci/run_sandboxed_validation.py`, and `.github/workflows/validate.yml` as protected root controls. Ordinary pull requests must fail when they change any of them; update them only through a separately reviewed protected-base bootstrap while the previous gate remains authoritative.
 - Rotate validation images only to reviewed exact patch-level Docker Official Image `linux/amd64` digests. Update the workflow allowlist and exact tests together, inspect the pulled OS, architecture, and Python version, and fail closed if a digest is unavailable.
 
 ## Validation
@@ -23,7 +24,7 @@ Run with Python 3.11 or newer:
 ```sh
 python3 scripts/verify_repository.py
 python3 -m unittest discover -s tests -v
-python3 -m py_compile scripts/verify_repository.py .github/ci/run_sandboxed_validation.py skills/orchestrate-task/scripts/route_subagent.py
+python3 -m py_compile scripts/verify_repository.py .github/ci/run_sandboxed_validation.py .github/ci/trusted_invariant_gate.py skills/orchestrate-task/scripts/route_subagent.py
 git diff --check
 ```
 

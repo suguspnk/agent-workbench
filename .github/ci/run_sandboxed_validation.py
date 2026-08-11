@@ -10,6 +10,7 @@ import json
 import os
 import re
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -27,6 +28,10 @@ ALLOWED_IMAGES = {
     "3.11": "python:3.11.15-slim-bookworm@sha256:77923445c077d8eb971b14b2b114a1d9cd4a87edb4c75654820ca4832ee8cb15",
     "3.12": "python:3.12.13-slim-bookworm@sha256:72d3d75f2639ab82b34b29390ad3d6e0827c775befee94edda8e9976818f488d",
 }
+VALIDATION_MODES = frozenset({"trusted-invariants", "candidate-behavior"})
+TRUSTED_GATE = Path(__file__).with_name("trusted_invariant_gate.py").resolve()
+TRUSTED_POLICY = Path(__file__).with_name("trusted_validation_policy.json").resolve()
+TRUSTED_WORKFLOW = (Path(__file__).parents[1] / "workflows/validate.yml").resolve()
 SAFE_CHILD_ENV = {
     "HOME": "/tmp",
     "TMPDIR": "/tmp",
@@ -197,6 +202,7 @@ def validate_inputs(
     workspace: str,
     expected_sha: str,
     container_name: str,
+    validation_mode: str,
 ) -> Path:
     candidate = _safe_existing_directory(workspace)
     if not _SAFE_SHA.fullmatch(expected_sha):
@@ -205,6 +211,10 @@ def validate_inputs(
         raise SandboxError("image and Python minor must match the reviewed allowlist")
     if not _SAFE_CONTAINER.fullmatch(container_name):
         raise SandboxError("container name is outside the trusted format")
+    if validation_mode not in VALIDATION_MODES:
+        raise SandboxError("validation mode is outside the trusted allowlist")
+    if validation_mode == "trusted-invariants" and expected_python != "3.12":
+        raise SandboxError("trusted invariants require the reviewed Python 3.12 image")
     return candidate
 
 
@@ -221,6 +231,12 @@ def _git(candidate: Path, arguments: list[str]) -> ProcessResult:
 
 
 def verify_checkout_credentials(candidate: Path, expected_sha: str) -> None:
+    try:
+        root_before = candidate.lstat()
+    except OSError as error:
+        raise SandboxError("candidate checkout cannot be inspected") from error
+    if not stat.S_ISDIR(root_before.st_mode) or stat.S_ISLNK(root_before.st_mode):
+        raise SandboxError("candidate checkout must remain an ordinary directory")
     head = _git(candidate, ["rev-parse", "--verify", "HEAD"])
     if head.timed_out or head.returncode or head.truncated:
         raise SandboxError("could not verify candidate HEAD")
@@ -234,6 +250,7 @@ def verify_checkout_credentials(candidate: Path, expected_sha: str) -> None:
     metadata = candidate / ".git"
     if not metadata.is_dir() or metadata.is_symlink():
         raise SandboxError("candidate checkout must use an ordinary .git directory")
+    metadata_before = metadata.lstat()
     for residue in (candidate / ".git-credentials", metadata / ".git-credentials"):
         if residue.exists() or residue.is_symlink():
             raise SandboxError("candidate checkout contains a .git-credentials file")
@@ -269,9 +286,50 @@ def verify_checkout_credentials(candidate: Path, expected_sha: str) -> None:
             ):
                 raise SandboxError("candidate Git URL contains user information")
 
+    tracked = _git(candidate, ["status", "--porcelain=v1", "--untracked-files=no"])
+    if tracked.timed_out or tracked.returncode or tracked.truncated or tracked.output:
+        raise SandboxError("candidate checkout has modified tracked files")
+    try:
+        root_after = candidate.lstat()
+        metadata_after = metadata.lstat()
+    except OSError as error:
+        raise SandboxError("candidate checkout changed during verification") from error
+    root_identity_before = (root_before.st_dev, root_before.st_ino, root_before.st_mode)
+    root_identity_after = (root_after.st_dev, root_after.st_ino, root_after.st_mode)
+    metadata_identity_before = (metadata_before.st_dev, metadata_before.st_ino, metadata_before.st_mode)
+    metadata_identity_after = (metadata_after.st_dev, metadata_after.st_ino, metadata_after.st_mode)
+    if root_identity_before != root_identity_after or metadata_identity_before != metadata_identity_after:
+        raise SandboxError("candidate checkout inode changed during verification")
 
-def build_docker_command(candidate: Path, image: str, expected_python: str, container_name: str) -> list[str]:
+
+def _trusted_control_paths(validation_mode: str) -> list[tuple[Path, str]]:
     helper = Path(__file__).resolve()
+    controls = [(helper, "/opt/awb/run_validation.py")]
+    if validation_mode == "trusted-invariants":
+        controls.extend(
+            (
+                (TRUSTED_GATE, "/opt/awb/trusted_invariant_gate.py"),
+                (TRUSTED_POLICY, "/opt/awb/trusted_validation_policy.json"),
+                (TRUSTED_WORKFLOW, "/opt/awb/validate.yml"),
+            )
+        )
+    for path, _ in controls:
+        try:
+            metadata = path.lstat()
+        except OSError as error:
+            raise SandboxError("trusted validation control is missing") from error
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+            raise SandboxError("trusted validation controls must be regular non-symlink files")
+    return controls
+
+
+def build_docker_command(
+    candidate: Path,
+    image: str,
+    expected_python: str,
+    container_name: str,
+    validation_mode: str,
+) -> list[str]:
     command = [
         "docker", "run", "--name", container_name,
         "--platform=linux/amd64", "--pull=never", "--network=none", "--read-only",
@@ -281,16 +339,17 @@ def build_docker_command(candidate: Path, image: str, expected_python: str, cont
         "--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=268435456,mode=1777",
         "--tmpfs=/workspace/.git:ro,nosuid,nodev,noexec,size=65536,mode=000",
         f"--mount=type=bind,src={candidate},dst=/workspace,readonly",
-        f"--mount=type=bind,src={helper},dst=/opt/awb/run_validation.py,readonly",
         "--workdir=/workspace",
     ]
+    for source, destination in _trusted_control_paths(validation_mode):
+        command.insert(-1, f"--mount=type=bind,src={source},dst={destination},readonly")
     for key, value in SAFE_CHILD_ENV.items():
         command.extend(("--env", f"{key}={value}"))
     command.extend(
         (
             image,
             "/usr/local/bin/python", "-I", "/opt/awb/run_validation.py",
-            "--inside", "--expected-python", expected_python,
+            "--inside", "--validation-mode", validation_mode, "--expected-python", expected_python,
         )
     )
     return command
@@ -307,13 +366,17 @@ def _forbidden_environment() -> list[str]:
     return sorted(forbidden)
 
 
-def inside_container_main(expected_python: str) -> None:
+def inside_container_main(expected_python: str, validation_mode: str) -> None:
     if os.geteuid() == 0 or (os.geteuid(), os.getegid()) != (65532, 65532):
         raise SandboxError("sandbox must run as uid and gid 65532")
     if f"{sys.version_info.major}.{sys.version_info.minor}" != expected_python:
         raise SandboxError("sandbox Python minor differs from the matrix selection")
     if os.environ.get("AWB_CI_SANDBOX") != "1":
         raise SandboxError("sandbox sentinel is missing")
+    if validation_mode not in VALIDATION_MODES:
+        raise SandboxError("validation mode is outside the trusted allowlist")
+    if validation_mode == "trusted-invariants" and expected_python != "3.12":
+        raise SandboxError("trusted invariants require Python 3.12")
     forbidden = _forbidden_environment()
     if forbidden:
         raise SandboxError(f"forbidden environment variables are present: {','.join(forbidden)}")
@@ -328,7 +391,17 @@ def inside_container_main(expected_python: str) -> None:
         pass
     else:
         raise SandboxError("candidate Git metadata is readable inside the sandbox")
-    argv = ["/usr/local/bin/python", "-I", "/workspace/scripts/verify_repository.py"]
+    if validation_mode == "trusted-invariants":
+        argv = [
+            "/usr/local/bin/python", "-I", "/opt/awb/trusted_invariant_gate.py",
+            "--candidate-root", "/workspace",
+            "--policy", "/opt/awb/trusted_validation_policy.json",
+            "--trusted-gate", "/opt/awb/trusted_invariant_gate.py",
+            "--trusted-launcher", "/opt/awb/run_validation.py",
+            "--trusted-workflow", "/opt/awb/validate.yml",
+        ]
+    else:
+        argv = ["/usr/local/bin/python", "-I", "/workspace/scripts/verify_repository.py"]
     os.execve(argv[0], argv, dict(SAFE_CHILD_ENV))
 
 
@@ -342,12 +415,12 @@ def cleanup_container(container_name: str) -> None:
         raise SandboxError("container cleanup failed")
 
 
-def host_main(workspace: str, expected_sha: str, image: str, expected_python: str) -> None:
+def host_main(workspace: str, expected_sha: str, image: str, expected_python: str, validation_mode: str) -> None:
     suffix = hashlib.sha256(f"{os.getpid()}:{time.monotonic_ns()}:{workspace}".encode()).hexdigest()[:20]
     container_name = f"awb-validation-{suffix}"
-    candidate = validate_inputs(image, expected_python, workspace, expected_sha, container_name)
+    candidate = validate_inputs(image, expected_python, workspace, expected_sha, container_name, validation_mode)
     verify_checkout_credentials(candidate, expected_sha)
-    command = build_docker_command(candidate, image, expected_python, container_name)
+    command = build_docker_command(candidate, image, expected_python, container_name, validation_mode)
     validation: ProcessResult | None = None
     cleanup_error: BaseException | None = None
     try:
@@ -371,7 +444,10 @@ def host_main(workspace: str, expected_sha: str, image: str, expected_python: st
             f"sandboxed validation failed with exit {validation.returncode}; "
             f"truncated={validation.truncated}; output={sanitize_output(validation.output, parent_secrets)}"
         )
-    print(f"Sandboxed repository invariants passed for Python {expected_python}.")
+    if validation_mode == "trusted-invariants":
+        print("Trusted repository invariants passed.")
+    else:
+        print(f"Candidate behavior checks passed for Python {expected_python} (non-authoritative).")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -380,15 +456,19 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--candidate")
     parser.add_argument("--expected-sha")
     parser.add_argument("--image")
+    parser.add_argument("--validation-mode", choices=sorted(VALIDATION_MODES), required=True)
     parser.add_argument("--expected-python", required=True)
     arguments = parser.parse_args(argv)
     try:
         if arguments.inside:
-            inside_container_main(arguments.expected_python)
+            inside_container_main(arguments.expected_python, arguments.validation_mode)
         else:
             if not all((arguments.candidate, arguments.expected_sha, arguments.image)):
                 raise SandboxError("host mode requires candidate, expected SHA, and image")
-            host_main(arguments.candidate, arguments.expected_sha, arguments.image, arguments.expected_python)
+            host_main(
+                arguments.candidate, arguments.expected_sha, arguments.image,
+                arguments.expected_python, arguments.validation_mode,
+            )
     except SandboxError as error:
         print(f"ERROR: {sanitize_output(str(error))}", file=sys.stderr)
         raise SystemExit(1)

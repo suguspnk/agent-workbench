@@ -15,21 +15,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  repository-invariants:
+  trusted-invariants:
+    name: Trusted invariants (authoritative)
     runs-on: ubuntu-24.04
     timeout-minutes: 8
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - python-version: "3.11"
-            image: python:3.11.15-slim-bookworm@sha256:77923445c077d8eb971b14b2b114a1d9cd4a87edb4c75654820ca4832ee8cb15
-          - python-version: "3.12"
-            image: python:3.12.13-slim-bookworm@sha256:72d3d75f2639ab82b34b29390ad3d6e0827c775befee94edda8e9976818f488d
     steps:
-      - name: Pull reviewed validation image
-        run: docker pull --platform linux/amd64 '${{ matrix.image }}'
-      - name: Check out trusted validator
+      - name: Pull reviewed trusted-validation image
+        run: docker pull --platform linux/amd64 'python:3.12.13-slim-bookworm@sha256:72d3d75f2639ab82b34b29390ad3d6e0827c775befee94edda8e9976818f488d'
+      - name: Check out trusted controls
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
@@ -41,7 +34,46 @@ jobs:
           ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.sha }}
           path: candidate
           persist-credentials: false
-      - name: Run candidate validation in containment
+      - name: Enforce trusted repository invariants
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merge_commit_sha || github.sha }}
+        run: >-
+          python3 -I trusted/.github/ci/run_sandboxed_validation.py
+          --candidate "$GITHUB_WORKSPACE/candidate"
+          --expected-sha "$EXPECTED_SHA"
+          --image 'python:3.12.13-slim-bookworm@sha256:72d3d75f2639ab82b34b29390ad3d6e0827c775befee94edda8e9976818f488d'
+          --expected-python '3.12'
+          --validation-mode trusted-invariants
+
+  candidate-behavior:
+    name: Candidate behavior / Python ${{ matrix.python-version }} (non-authoritative)
+    needs: trusted-invariants
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.11"
+            image: python:3.11.15-slim-bookworm@sha256:77923445c077d8eb971b14b2b114a1d9cd4a87edb4c75654820ca4832ee8cb15
+          - python-version: "3.12"
+            image: python:3.12.13-slim-bookworm@sha256:72d3d75f2639ab82b34b29390ad3d6e0827c775befee94edda8e9976818f488d
+    steps:
+      - name: Pull reviewed candidate-validation image
+        run: docker pull --platform linux/amd64 '${{ matrix.image }}'
+      - name: Check out trusted launcher
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
+          path: trusted
+          persist-credentials: false
+      - name: Check out candidate without credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Run non-authoritative candidate behavior checks
         env:
           EXPECTED_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merge_commit_sha || github.sha }}
         run: >-
@@ -50,3 +82,4 @@ jobs:
           --expected-sha "$EXPECTED_SHA"
           --image '${{ matrix.image }}'
           --expected-python '${{ matrix.python-version }}'
+          --validation-mode candidate-behavior

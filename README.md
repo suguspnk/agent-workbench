@@ -36,6 +36,8 @@ skills/orchestrate-task/
 └── tests/routing-cases.json            # routing replay set
 scripts/verify_repository.py            # dependency-free package validation
 .github/ci/run_sandboxed_validation.py  # trusted bounded PR-validation launcher
+.github/ci/trusted_invariant_gate.py     # base-trusted candidate-data validator
+.github/ci/trusted_validation_policy.json # immutable reviewed invariant policy
 ```
 
 The Markdown workflow, routing schema, and task contract are the portable core. Harness-specific adapters map portable roles to capabilities the host actually exposes.
@@ -108,7 +110,9 @@ Secure artifact and routing-card reads require POSIX `os.open` directory-descrip
 python3 scripts/verify_repository.py
 ```
 
-Pull-request validation uses a trusted base-branch `pull_request_target` workflow. Candidate code runs only in exact-digest Python containers with no network, no credentials, a read-only source mount, hidden Git metadata, and process, memory, CPU, time, and output bounds. Local unit tests exercise the command and failure contracts without launching Docker. A live controlled-fork and same-repository PR test is still required before activating this workflow; that external bootstrap is deliberately outside ordinary local development authorization.
+Pull-request validation uses a trusted base-branch `pull_request_target` workflow. The authoritative `trusted-invariants` job parses candidate data with base-branch gate and policy files, byte-binds all four CI control files, and rejects changes to the pinned validator, router, replay set, workflow, or complete 22-profile policy expectations. Only after that gate passes does the explicitly non-authoritative `candidate-behavior` matrix execute the candidate validator. Both jobs use exact-digest Python containers with no network, no credentials, a read-only source mount, hidden Git metadata, and process, memory, CPU, time, and output bounds.
+
+An ordinary pull request cannot update the trusted gate, policy, launcher, or workflow because the authoritative job compares candidate copies with the base branch. Updating those root controls requires a separately reviewed bootstrap change on the protected base branch while the old trusted workflow remains authoritative. Local unit tests exercise the command and failure contracts without launching Docker. A live controlled-fork and same-repository PR test is still required before activation; that external bootstrap remains outside ordinary local development authorization.
 
 When Claude Code is installed, also run:
 

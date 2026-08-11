@@ -734,6 +734,31 @@ def check_release_and_ci() -> None:
         fail("README.md contains the obsolete unconditional child-task claim")
 
     workflow = safe_read_text(ROOT / ".github/workflows/validate.yml")
+    policy = load_json(ROOT / ".github/ci/trusted_validation_policy.json")
+    expected_policy_keys = {
+        "schema_version", "max_file_bytes", "policy_markers", "policy_rows",
+        "authorization_by_role", "codex_profiles", "claude_profiles",
+        "pinned_candidate_files", "workflow_sha256", "checkout_action", "validation_images",
+    }
+    require_exact_keys(ROOT / ".github/ci/trusted_validation_policy.json", policy, expected_policy_keys)
+    if policy.get("schema_version") != 1:
+        fail("trusted validation policy schema_version must be 1")
+    if set(policy.get("codex_profiles", {})) != set(CODEX_PROFILES):
+        fail("trusted validation policy must contain all 11 exact Codex role names")
+    expected_claude_roles = {name.replace("-", "_") for name in CLAUDE_PROFILES}
+    if set(policy.get("claude_profiles", {})) != expected_claude_roles:
+        fail("trusted validation policy must contain all 11 exact Claude role names")
+    pinned_paths = {
+        "scripts/verify_repository.py",
+        "skills/orchestrate-task/scripts/route_subagent.py",
+        "skills/orchestrate-task/tests/routing-cases.json",
+    }
+    pins = policy.get("pinned_candidate_files")
+    if not isinstance(pins, dict) or set(pins) != pinned_paths:
+        fail("trusted validation policy must contain the exact candidate-file pins")
+    for relative_path in sorted(pinned_paths):
+        if pins.get(relative_path) != hashlib.sha256(safe_read_bytes(ROOT / relative_path)).hexdigest():
+            fail(f"trusted validation policy pin is stale: {safe_diagnostic(relative_path)}")
     checkout = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
     images = (
         "python:3.11.15-slim-bookworm@sha256:77923445c077d8eb971b14b2b114a1d9cd4a87edb4c75654820ca4832ee8cb15",
@@ -746,19 +771,32 @@ def check_release_and_ci() -> None:
         "runs-on: ubuntu-24.04",
         "timeout-minutes: 8",
         "cancel-in-progress: true",
+        "trusted-invariants:",
+        "name: Trusted invariants (authoritative)",
+        "candidate-behavior:",
+        "needs: trusted-invariants",
+        "(non-authoritative)",
         "path: trusted",
         "path: candidate",
         "refs/pull/{0}/merge",
         "github.event.pull_request.merge_commit_sha",
         "python3 -I trusted/.github/ci/run_sandboxed_validation.py",
+        "--validation-mode trusted-invariants",
+        "--validation-mode candidate-behavior",
         "docker pull --platform linux/amd64",
         *images,
     )
     for fragment in required_fragments:
         if fragment not in workflow:
             fail(f"CI containment contract is missing: {safe_diagnostic(fragment)}")
-    if workflow.count(checkout) != 2 or workflow.count("persist-credentials: false") != 2:
-        fail("CI must use exactly two reviewed credential-free checkouts")
+    if workflow.count(checkout) != 4 or workflow.count("persist-credentials: false") != 4:
+        fail("CI must use exactly four reviewed credential-free checkouts across the two jobs")
+    if policy.get("checkout_action") != checkout:
+        fail("trusted validation policy checkout_action differs from the workflow pin")
+    if policy.get("validation_images") != {"3.11": images[0], "3.12": images[1]}:
+        fail("trusted validation policy image pins differ from the workflow")
+    if policy.get("workflow_sha256") != hashlib.sha256(workflow.encode("utf-8")).hexdigest():
+        fail("trusted validation policy workflow_sha256 differs from the workflow")
     forbidden_fragments = (
         "\n  pull_request:\n",
         "actions/setup-python@",
@@ -812,6 +850,8 @@ def main() -> None:
         ".agents/plugins/marketplace.json",
         ".github/workflows/validate.yml",
         ".github/ci/run_sandboxed_validation.py",
+        ".github/ci/trusted_invariant_gate.py",
+        ".github/ci/trusted_validation_policy.json",
         "skills/orchestrate-task/SKILL.md",
         "skills/orchestrate-task/agents/openai.yaml",
         "skills/orchestrate-task/references/portable-contract.md",
