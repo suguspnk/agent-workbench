@@ -299,7 +299,7 @@
   },
   "max_file_bytes": 2097152,
   "pinned_candidate_files": {
-    "scripts/verify_repository.py": "932db473972aeff4076f9a0b46bc20c75bff94e77698f3ee2fb1a16aba6c7aaa",
+    "scripts/verify_repository.py": "b3a17dd77eaa03504d2f0b2b5089081903631ecaa4ce08c8d16fb2f97f8d563a",
     "skills/orchestrate-task/scripts/route_subagent.py": "4d62c0f8156dee0cc7fd617cb7dcf0036c859b97abb574222e529b9d0e364a9f",
     "skills/orchestrate-task/tests/routing-cases.json": "34633b97e8f5c5b263453cc191b116fa6f1907310a51380578d940f0261702a9"
   },

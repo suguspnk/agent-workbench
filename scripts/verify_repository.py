@@ -732,6 +732,27 @@ def check_release_and_ci() -> None:
             fail(f"README.md is missing required guidance: {phrase}")
     if "Planning, implementation, testing, verification, review, and exact authorized operations run in bounded child tasks." in readme:
         fail("README.md contains the obsolete unconditional child-task claim")
+    contributing = safe_read_text(ROOT / "CONTRIBUTING.md")
+    bootstrap_required = (
+        "There is no preceding trusted invariant gate for the initial activation",
+        "old host-executing pull-request automation",
+        "in-flight runs",
+        "After merge",
+        "one controlled fork PR and one same-repository PR",
+    )
+    for path, text in ((ROOT / "README.md", readme), (ROOT / "CONTRIBUTING.md", contributing)):
+        for phrase in bootstrap_required:
+            if phrase not in text:
+                fail(f"{relative(path)} is missing initial CI bootstrap truth: {safe_diagnostic(phrase)}")
+    obsolete_bootstrap_claims = (
+        "while the previous gate remains authoritative",
+        "while the old trusted workflow remains authoritative",
+        "while the old workflow remains authoritative",
+    )
+    for path, text in ((ROOT / "README.md", readme), (ROOT / "CONTRIBUTING.md", contributing)):
+        for phrase in obsolete_bootstrap_claims:
+            if phrase in text:
+                fail(f"{relative(path)} incorrectly claims a preceding trusted bootstrap gate")
 
     workflow = safe_read_text(ROOT / ".github/workflows/validate.yml")
     policy = load_json(ROOT / ".github/ci/trusted_validation_policy.json")

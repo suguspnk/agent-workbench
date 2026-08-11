@@ -54,6 +54,29 @@ def chmod_export_no_follow(root: Path, directory_mode: int, file_mode: int) -> N
 
 
 class VerifyRepositoryNegativeTests(unittest.TestCase):
+    def test_bootstrap_docs_pin_initial_unprotected_activation_truth(self) -> None:
+        documents = (
+            (ROOT / "README.md").read_text(encoding="utf-8"),
+            (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8"),
+        )
+        required = (
+            "There is no preceding trusted invariant gate for the initial activation",
+            "old host-executing pull-request automation",
+            "in-flight runs",
+            "After merge",
+            "one controlled fork PR and one same-repository PR",
+        )
+        forbidden = (
+            "while the previous gate remains authoritative",
+            "while the old trusted workflow remains authoritative",
+            "while the old workflow remains authoritative",
+        )
+        for document in documents:
+            for phrase in required:
+                self.assertIn(phrase, document)
+            for phrase in forbidden:
+                self.assertNotIn(phrase, document)
+
     def test_minimal_subprocess_environment_does_not_inherit_parent_canary(self) -> None:
         with mock.patch.dict(os.environ, {"AWB_PARENT_CREDENTIAL_CANARY": "do-not-inherit"}, clear=False):
             environment = VERIFY.minimal_subprocess_environment()

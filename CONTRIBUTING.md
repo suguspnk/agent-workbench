@@ -14,7 +14,7 @@ Contributions are welcome through issues and pull requests.
 - Bump both plugin manifest versions together and update `CHANGELOG.md` for a release.
 - Avoid dependencies unless they provide a material benefit that cannot be achieved with the standard library.
 - Keep pull-request candidate code behind the trusted `.github/ci/run_sandboxed_validation.py` boundary. Never execute candidate scripts on the Actions host or pass runner credentials, network, writable source, Git metadata, the Docker socket, caches, artifacts, or a trusted checkout into the container. Only the four individually mounted base-branch control files may enter the trusted-invariant container.
-- Treat `.github/ci/trusted_invariant_gate.py`, `.github/ci/trusted_validation_policy.json`, `.github/ci/run_sandboxed_validation.py`, and `.github/workflows/validate.yml` as protected root controls. Ordinary pull requests must fail when they change any of them; update them only through a separately reviewed protected-base bootstrap while the previous gate remains authoritative.
+- Treat `.github/ci/trusted_invariant_gate.py`, `.github/ci/trusted_validation_policy.json`, `.github/ci/run_sandboxed_validation.py`, and `.github/workflows/validate.yml` as protected root controls. After initial activation, ordinary pull requests must fail when they change any of them; update them only through a separately reviewed protected-base procedure.
 - Rotate validation images only to reviewed exact patch-level Docker Official Image `linux/amd64` digests. Update the workflow allowlist and exact tests together, inspect the pulled OS, architecture, and Python version, and fail closed if a digest is unavailable.
 
 ## Validation
@@ -28,7 +28,7 @@ python3 -m py_compile scripts/verify_repository.py .github/ci/run_sandboxed_vali
 git diff --check
 ```
 
-The local sandbox tests do not activate GitHub Actions or prove the shared-kernel boundary against a live fork. Before rollout, use a separately authorized protected bootstrap while the old workflow is disabled, then forward-test one controlled fork PR and one same-repository PR. Do not recover from containment failure by running candidate code directly on the host.
+The local sandbox tests do not activate GitHub Actions or prove the shared-kernel boundary against a live fork. There is no preceding trusted invariant gate for the initial activation because GitHub reads a `pull_request_target` workflow from the base branch. Use a separately authorized protected-base or administrator procedure: disable the old host-executing pull-request automation and cancel its in-flight runs before landing the new workflow. After merge, forward-test one controlled fork PR and one same-repository PR before treating the new workflow as active protection. Do not recover from containment failure by running candidate code directly on the host.
 
 When a supported Claude Code is available, also run `claude plugin validate . --strict`. A legacy non-strict run is compatibility evidence, not strict validation. Include failed or skipped checks and the reason in the pull request.
 
