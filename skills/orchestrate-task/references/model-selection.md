@@ -40,7 +40,7 @@ operation_authorization: packet ID/revision, exact action/canonical target, stab
 external_verification: matching operator reference/binding/action/target, exact scope, separate approval, public read-only access, and direct observation
 ```
 
-`external-operation` is valid only with `work_shape: operate`; `external-verification` is valid only with `work_shape: verify-external`; and `network` is valid only for one of those two complete authorized cards. External verification additionally requires `ambiguity: settled` and `router_confidence: high`; uncertainty fails before capability or network routing. The stable SHA-256 binding covers the packet ID, revision, action, and canonical target to detect inconsistent references; it does not authenticate who supplied the packet, so trusted transport is still mandatory. These names are requirements, never self-granted authority. Ordinary local verification may request `shell` without `network`.
+`external-operation` is reserved for `work_shape: operate`; `external-verification` is reserved for `work_shape: verify-external`; and `network` is structurally valid only on one of those complete cards. After validating the complete reserved schema, the router fails closed with `external execution unavailable: no constrained network adapter is configured`. External verification additionally requires `ambiguity: settled` and `router_confidence: high`; uncertainty fails before the adapter-unavailable diagnostic. These names preserve diagnostic compatibility and never self-grant authority. Ordinary local verification may request `shell` without `network`.
 
 Authorization-critical free text and list items must be trimmed NFC text, within the documented length bound, with Unicode control, format, and surrogate categories rejected. Replay IDs use a bounded ASCII identifier grammar so diagnostics can safely escape all other input.
 
@@ -62,12 +62,12 @@ Choose a primary role for the packet, then add every applicable risk follow-up. 
 | --- | --- | --- |
 | Settled read-only map or extraction with no public, persistent, security, or change-authority boundary | `awb_fast_investigator` | Efficient / low |
 | Settled consequential public, persistent, or security map/extraction | `awb_deep_investigator` | Frontier / high |
-| Explicit planning, open-ended ambiguity, or unresolved routing | `awb_planner` | Frontier / high |
+| Explicit planning, any map/extraction not both settled and high-confidence, open-ended ambiguity, or unresolved routing | `awb_planner` | Frontier / high |
 | Bounded internal implementation with settled interfaces and modest blast radius | `awb_builder` | Balanced / medium |
 | Difficult debugging, public-contract implementation, cross-component work, competing hypotheses, high blast radius, or long/noisy implementation context | `awb_deep_worker` | Frontier / high |
 | Schema, persistence, compatibility, backfill, rollout, or rollback work | `awb_migration_worker` | Frontier / maximum |
-| One exact trusted-user-authorized external/destructive action | `awb_operator` | Frontier / maximum |
-| Separately authorized public read-only verification of one exact external target/scope | `awb_verifier` | Balanced / medium |
+| Structurally complete external/destructive action | unavailable reserved `awb_operator` profile | Blocked |
+| Structurally complete public read-only external verification | unavailable | Blocked |
 | Focused scope/diff inspection or deterministic acceptance check | `awb_verifier` | Balanced / medium |
 | Integration, regression, concurrency, failure-path, or high-impact validation | `awb_test_engineer` | Balanced / high |
 | Consequential correctness, compatibility, or maintainability review | `awb_reviewer` | Frontier / high |
@@ -80,14 +80,30 @@ Choose a primary role for the packet, then add every applicable risk follow-up. 
 - Shared-system or production-critical implementation/deep work requires `awb_test_engineer` independently of `evidence_bar`.
 - Public API implementation additionally requires `awb_reviewer`.
 - Security-boundary implementation additionally requires `awb_security_reviewer`.
-- An exact operator packet always requires a separately authorized `verify-external` `awb_verifier` pass followed by `awb_security_reviewer`. The verifier observes the exact public target/scope directly and cannot trust the operator handoff. Legacy external/destructive cards without `work_shape=operate`, intrinsic external-operation capability, network/shell tools, a security boundary, and complete authorization fail closed.
+- External operation and external verification cards always fail closed because there is no constrained network execution adapter. Their names and schemas remain reserved so callers receive deterministic structural diagnostics and one stable unavailable-adapter error instead of a silently changed schema.
 - An unresolved implementation routes to `awb_planner` first. Its current `required_*` values come only from read-only `planning_*` fields; legacy/eventual implementation requirements are returned under `deferred_*`, with current authority `none` and the requested authority retained separately. Route the resulting settled bounded packet again before assigning any mutation.
 
 Derive public, persistent, and security overlays independently, including pairwise and all-boundary cards. Split work shapes when useful, but never erase a boundary. Do not ask a findings-only reviewer to implement, or let an implementer/operator verify its own result.
 
+### External execution is unavailable
+
+External operations are blocked because mandatory independent external verification cannot safely run without a constrained network adapter. Static routing-card or URL checks do not solve runtime SSRF, DNS rebinding, redirect, connection, or response-handling risks.
+
+A future adapter must enforce all of these controls outside the routing card:
+
+- an operator-owned destination allowlist that card content cannot extend;
+- a canonical HTTPS URL only, rejecting userinfo, fragments, ambiguous encodings, and proxy credentials;
+- explicit host and port allowlists;
+- denial of literal and resolved special-use, private, loopback, link-local, and metadata addresses;
+- connection-time DNS and IP enforcement plus TLS certificate and hostname verification;
+- redirects denied, or every hop fully canonicalized, resolved, allowlisted, and revalidated;
+- resistance to DNS rebinding and resolution changes between policy evaluation and connection;
+- bounded methods, request bodies, response sizes, and timeouts; and
+- sanitized, bounded verification evidence that cannot disclose credentials or untrusted response data unsafely.
+
 ### Harness mappings
 
-- **Claude Code plugin:** bundled agents appear with scoped names such as `agent-workbench:awb-builder`. They use the family aliases `haiku`, `sonnet`, and `opus` so workspace model allowlists and provider substitution remain observable. Plugin agent tool lists narrow capabilities, but Claude Code does not enforce `permissionMode` for plugin agents.
+- **Claude Code plugin:** bundled agents appear with scoped names such as `agent-workbench:awb-builder`. They use the family aliases `haiku`, `sonnet`, and `opus` so workspace model allowlists and provider substitution remain observable. Plugin agent tool lists narrow capabilities, but Claude Code does not enforce `permissionMode` for plugin agents. The reserved `awb-operator` profile is unavailable and has no Bash tool.
 - **Codex:** the optional adapter exposes underscore names such as `awb_builder` and pins current model/effort profiles. Custom-agent values override parent/default subagent values. Confirm model availability before use.
 - **Other harnesses:** map the portable role, capability tier, and effort only to controls the host actually exposes. If no exact role exists, use a native child with an equivalent bounded packet; never emulate child work in the lead.
 
@@ -101,7 +117,7 @@ Treat subagents as context boundaries first and a speed mechanism second.
 - Require a compact factual handoff: status, changed paths, commands, evidence, risks, open questions, and one next decision.
 - Parallelize only independent paths with no shared writes and a defined merge/verification plan. Serialize shared-file, contract, and dependent work.
 - Keep efficient roles read-only or tightly bounded. Do not give them open-ended investigation, public contracts, security decisions, destructive authority, or a free-form “fix it” packet.
-- For every shell-capable role, preflight repository commands and transitive entrypoints. Default-deny network, credential access, messages, push, deploy, global configuration, and destructive action. Only the operator may receive mutation authority; only an exact external-verification packet may grant the verifier public read-only network access.
+- For every shell-capable role, preflight repository commands and transitive entrypoints. Default-deny network, credential access, messages, push, deploy, global configuration, and destructive action. Only the operator may receive external/destructive mutation authority; bounded implementation roles may receive owned local paths or shared contract authority. The operator is currently unavailable, and no packet grants the verifier network access.
 - Prefer native worktree/sandbox isolation, isolated caches, ephemeral databases, and credential-path denial. Owned paths and nominal read-only tools are behavioral unless the host enforces them; block security-critical work when enforced isolation is required but unavailable.
 - Require before/after working-tree inventory, HEAD/relevant refs, relevant configuration, generated outputs, external-side-effect attestation, secret scan, and sanitized minimal handoff evidence.
 - On failure, revise the packet, context, tools, or role before escalating. Never repeat an unchanged prompt merely at higher effort.
@@ -110,7 +126,7 @@ Treat subagents as context boundaries first and a speed mechanism second.
 
 Set `must_not_downgrade` for migrations, public APIs, persistent data, security boundaries, production-critical impact, and external/destructive authority. Owned-path deletion is currently unsupported and fails closed. Lower defaults only after representative replay evidence demonstrates the same acceptance outcome.
 
-The repository replay set lives at `skills/orchestrate-task/tests/routing-cases.json`. Every case has an exact complete output object; duplicate IDs, missing/unknown expected keys, and partial expectations are rejected. Run it from the repository root after changing routing rules, profiles, model mappings, or tool environments:
+The repository replay set lives at `skills/orchestrate-task/tests/routing-cases.json`. Every case has either an exact complete output object or one exact expected error; duplicate IDs, conflicting expectations, missing/unknown expected keys, and partial expectations are rejected. Run it from the repository root after changing routing rules, profiles, model mappings, or tool environments:
 
 ```sh
 python3 skills/orchestrate-task/scripts/route_subagent.py --replay skills/orchestrate-task/tests/routing-cases.json

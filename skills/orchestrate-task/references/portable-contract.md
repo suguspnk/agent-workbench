@@ -44,9 +44,9 @@ Every implementation packet must explicitly invoke `implementation-quality-gover
 
 Before any repository-controlled command, inspect the entrypoint and transitive scripts, hooks, plugins, and configuration. Use the narrowest native sandbox/worktree available, isolated caches and ephemeral data stores, and disabled or denied credential paths. Owned paths are behavioral coordination unless the host enforces them. If security-critical work requires enforced isolation and the host offers only instructions, block and disclose the limitation.
 
-## Exact operation authorization
+## Reserved external operation schema
 
-Only `awb_operator` may receive `change_authority: external/destructive`. The routing card must use `work_shape: operate` and include:
+Only `awb_operator` may ever receive `change_authority: external/destructive`; bounded implementation roles may receive `owned local paths` or `shared contract`. The operator is currently unavailable. The routing card may still use the reserved `work_shape: operate` schema for deterministic diagnostics:
 
 ```text
 operation_authorization:
@@ -60,15 +60,17 @@ operation_authorization:
   verification: independent verifier
 ```
 
-The operator rechecks target identity and approval immediately before acting, uses only the minimum host-supplied scoped credential, performs no source edit, and stops if any field is missing, stale, ambiguous, or broader than current authorization. The canonical digest binds fields for deterministic integrity checking; it is not a signature or proof of authenticity, so the packet still requires trusted transport. Current profiles reject owned-path deletion rather than widening a worker or operator sandbox.
+The router validates all fields and then fails with `external execution unavailable: no constrained network adapter is configured`. The canonical digest remains reserved compatibility data, not a signature, authentication mechanism, or execution grant. Current profiles reject owned-path deletion rather than widening a worker or operator sandbox.
 
-After the operation, create a new `verify-external` card for `awb_verifier`; do not reuse the operator packet or trust its handoff. It references the exact operator packet ID and revision, action, canonical target, and matching authorization binding, plus an exact scope, separate trusted-user authorization, `ambiguity: settled`, `router_confidence: high`, `access: public read-only`, `evidence: independent direct observation`, intrinsic `external-verification`, and network plus shell tools. Any disagreement or uncertainty fails before capability/network routing. This grants no credentials or mutation authority. The security reviewer follows the direct verifier.
+The reserved `verify-external` card still references the exact operator packet ID and revision, action, canonical target, matching authorization binding, exact scope, separate trusted-user authorization, `ambiguity: settled`, `router_confidence: high`, `access: public read-only`, `evidence: independent direct observation`, intrinsic `external-verification`, and network plus shell tools. Structural disagreement or uncertainty fails first; a complete card then receives the same unavailable-adapter error. No verifier packet grants network access, credentials, or mutation authority. Ordinary local verifier shell checks remain supported.
+
+External operations are blocked because mandatory independent external verification cannot safely run. A future adapter must satisfy the runtime SSRF controls in [model-selection.md](model-selection.md), including an adapter-owned allowlist independent of card content, canonical HTTPS-only destinations, host/port and literal/resolved address policy, connection-time DNS/IP and TLS validation, per-hop redirect policy, rebinding resistance, bounded requests/responses/time, and sanitized evidence. Static router URL validation is not a substitute.
 
 For unresolved implementation, keep the planner's current authority `none` and current planning requirements read-only. Preserve eventual implementation capabilities, modalities, tools, skills, and change authority as deferred output, require a settled planning handoff, then reroute a new card before assigning a worker. Deferred values never authorize the planning step.
 
 Normalize authorization-critical text to NFC before packet construction. The router rejects non-normalized text, whitespace-only or surrounding-whitespace values, oversize values, and Unicode control, format, or surrogate categories. Replay identifiers use a bounded ASCII grammar; diagnostics JSON-escape untrusted identifiers and keys.
 
-Privileged names cannot self-authorize: reject `external-operation` outside `operate`, `external-verification` outside `verify-external`, and `network` outside either complete authorized shape. A local verifier may use `shell` without network access.
+Privileged names cannot self-authorize: reject `external-operation` outside `operate`, `external-verification` outside `verify-external`, and `network` outside either structurally complete reserved shape. Complete reserved external cards still fail unavailable. A local verifier may use `shell` without network access.
 
 ## Secret-safe handoff
 
@@ -102,7 +104,7 @@ verdict: ship | fix-first | rethink | blocked
 
 Reviewers inspect the actual artifact and complete diff. Findings include severity, path/artifact, evidence, impact or exploit scenario, and a requested resolution; they explicitly say when no actionable findings remain. Ordinary and security review are separate. Read-only claims must distinguish OS/harness enforcement from behavioral instructions.
 
-Follow-ups run in this order: implementation or operation, required test engineering, direct verifier, ordinary reviewer, security reviewer. External operations require a separately authorized external-verification packet before security review. Record every identity and packet revision in the lead ledger. A material mutation invalidates affected verification and all prior approvals; rerun them against the final tree. A verifier or reviewer must not share the implementer/operator identity.
+Follow-ups run in this order: implementation, required test engineering, verifier, ordinary reviewer, security reviewer. External operation and verification stop at the unavailable-adapter gate and do not enter this sequence. Record every identity and packet revision in the lead ledger. A material mutation invalidates affected verification and all prior approvals; rerun them against the final tree. A verifier or reviewer must not share the implementer/operator identity.
 
 ## Lead and portability boundaries
 

@@ -1213,44 +1213,7 @@
         "binding": "sha256:bf618fcb1f605e0fbea7f307949518573c4ab29e1a3d79d495ed41499a1723a2"
       }
     },
-    "expected": {
-      "primary_role": "awb_operator",
-      "task_class": "critical",
-      "capability_tier": "frontier",
-      "effort": "maximum",
-      "required_followups": [
-        "awb_verifier",
-        "awb_security_reviewer"
-      ],
-      "reroute_after_planning": false,
-      "must_not_downgrade": true,
-      "required_capabilities": [
-        "external-operation"
-      ],
-      "required_modalities": [],
-      "required_tools": [
-        "network",
-        "shell"
-      ],
-      "required_skills": [],
-      "skill_fallback_required": false,
-      "reasons": [
-        "an exact authorized external action requires the least-authority operator"
-      ],
-      "deferred_capabilities": [],
-      "deferred_modalities": [],
-      "deferred_tools": [],
-      "deferred_skills": [],
-      "current_change_authority": "external/destructive",
-      "deferred_change_authority": null,
-      "authorization_binding": "sha256:bf618fcb1f605e0fbea7f307949518573c4ab29e1a3d79d495ed41499a1723a2",
-      "authorization_reference": {
-        "packet_id": "operator-123",
-        "revision": "1",
-        "action": "merge pull request",
-        "target": "owner/repository pull request 123"
-      }
-    }
+    "expected_error": "external execution unavailable: no constrained network adapter is configured"
   },
   {
     "id": "worker-required-skill",
@@ -1445,43 +1408,7 @@
         "authorization_binding": "sha256:bf618fcb1f605e0fbea7f307949518573c4ab29e1a3d79d495ed41499a1723a2"
       }
     },
-    "expected": {
-      "primary_role": "awb_verifier",
-      "task_class": "critical",
-      "capability_tier": "balanced",
-      "effort": "medium",
-      "required_followups": [
-        "awb_security_reviewer"
-      ],
-      "reroute_after_planning": false,
-      "must_not_downgrade": true,
-      "required_capabilities": [
-        "external-verification"
-      ],
-      "required_modalities": [],
-      "required_tools": [
-        "network",
-        "shell"
-      ],
-      "required_skills": [],
-      "skill_fallback_required": false,
-      "reasons": [
-        "separately authorized public read-only external verification requires direct independent observation"
-      ],
-      "deferred_capabilities": [],
-      "deferred_modalities": [],
-      "deferred_tools": [],
-      "deferred_skills": [],
-      "current_change_authority": "none",
-      "deferred_change_authority": null,
-      "authorization_binding": "sha256:bf618fcb1f605e0fbea7f307949518573c4ab29e1a3d79d495ed41499a1723a2",
-      "authorization_reference": {
-        "packet_id": "operator-123",
-        "revision": "1",
-        "action": "merge pull request",
-        "target": "owner/repository pull request 123"
-      }
-    }
+    "expected_error": "external execution unavailable: no constrained network adapter is configured"
   },
   {
     "id": "ordinary-local-shell-verification",
@@ -1530,6 +1457,129 @@
       "deferred_skills": [],
       "current_change_authority": "none",
       "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "map-local-unknown-plans",
+    "card": {
+      "work_shape": "map",
+      "scope": "bounded component",
+      "ambiguity": "local unknown",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "syntax",
+      "context_profile": "focused source set",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_planner",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": true,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "read-only evidence or routing remains unsettled"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": "none",
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "extract-competing-hypotheses-plans",
+    "card": {
+      "work_shape": "extract",
+      "scope": "bounded component",
+      "ambiguity": "competing hypotheses",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "syntax",
+      "context_profile": "focused source set",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_planner",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": true,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "read-only evidence or routing remains unsettled"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": "none",
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "map-uncertain-confidence-plans",
+    "card": {
+      "work_shape": "map",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "syntax",
+      "context_profile": "focused source set",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "uncertain"
+    },
+    "expected": {
+      "primary_role": "awb_planner",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": true,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "read-only evidence or routing remains unsettled"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": "none",
       "authorization_binding": null,
       "authorization_reference": null
     }

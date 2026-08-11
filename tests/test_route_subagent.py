@@ -25,23 +25,31 @@ class RouteSubagentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.cases = ROUTER.load_json(REPLAY_PATH)
+        cls.success_cases = [case for case in cls.cases if "expected" in case]
+        cls.error_cases = [case for case in cls.cases if "expected_error" in case]
 
     def test_replay_expectations_are_complete_and_exact(self) -> None:
         for case in self.cases:
             with self.subTest(case=case["id"]):
-                self.assertEqual(set(case["expected"]), ROUTER.OUTPUT_KEYS)
-                self.assertEqual(ROUTER.route(case["card"]), case["expected"])
+                if "expected" in case:
+                    self.assertEqual(set(case["expected"]), ROUTER.OUTPUT_KEYS)
+                    self.assertEqual(ROUTER.route(case["card"]), case["expected"])
+                else:
+                    with self.assertRaisesRegex(ROUTER.RoutingError, f"^{case['expected_error']}$"):
+                        ROUTER.route(case["card"])
 
     def test_every_role_is_reachable(self) -> None:
-        reached = {ROUTER.route(case["card"])["primary_role"] for case in self.cases}
-        self.assertEqual(reached, set(ROUTER.ROLE_PROFILE))
+        reached = {ROUTER.route(case["card"])["primary_role"] for case in self.success_cases}
+        self.assertEqual(reached, set(ROUTER.ENABLED_ROLES))
+        self.assertNotIn("awb_operator", reached)
+        self.assertIn("awb_operator", ROUTER.ROLE_PROFILE)
 
     def test_routing_is_deterministic(self) -> None:
         card = self.cases[0]["card"]
         self.assertEqual(ROUTER.route(card), ROUTER.route(dict(reversed(list(card.items())))))
 
     def test_all_evidence_and_boundary_overlays_are_independent(self) -> None:
-        by_id = {case["id"]: case["expected"] for case in self.cases}
+        by_id = {case["id"]: case["expected"] for case in self.success_cases}
         self.assertEqual(by_id["bounded-integration-regression"]["required_followups"], ["awb_test_engineer", "awb_verifier"])
         self.assertEqual(by_id["bounded-independent-review"]["required_followups"], ["awb_test_engineer", "awb_verifier", "awb_reviewer"])
         self.assertEqual(by_id["persistent-debugging-overlays"]["required_followups"], ["awb_test_engineer", "awb_verifier", "awb_reviewer"])
@@ -49,7 +57,7 @@ class RouteSubagentTests(unittest.TestCase):
         self.assertEqual(by_id["shared-impact-sole-test-trigger"]["required_followups"], ["awb_test_engineer", "awb_verifier"])
         self.assertEqual(by_id["production-impact-sole-test-trigger"]["required_followups"], ["awb_test_engineer", "awb_verifier"])
         order = {role: index for index, role in enumerate(("awb_test_engineer", "awb_verifier", "awb_reviewer", "awb_security_reviewer"))}
-        for case in self.cases:
+        for case in self.success_cases:
             followups = case["expected"]["required_followups"]
             with self.subTest(order=case["id"]):
                 self.assertEqual(followups, sorted(set(followups), key=order.__getitem__))
@@ -61,16 +69,38 @@ class RouteSubagentTests(unittest.TestCase):
         self.assertTrue(expected["must_not_downgrade"])
         self.assertEqual(expected["required_followups"], ["awb_test_engineer", "awb_verifier", "awb_reviewer"])
 
-    def test_operator_to_external_verifier_to_security_review_flow(self) -> None:
-        by_id = {case["id"]: case["expected"] for case in self.cases}
-        self.assertEqual(by_id["authorized-external-operation"]["required_followups"], ["awb_verifier", "awb_security_reviewer"])
-        verification = by_id["independent-external-verification"]
-        self.assertEqual(verification["primary_role"], "awb_verifier")
-        self.assertEqual(verification["required_followups"], ["awb_security_reviewer"])
-        self.assertIn("external-verification", verification["required_capabilities"])
-        operation = by_id["authorized-external-operation"]
-        self.assertEqual(operation["authorization_binding"], verification["authorization_binding"])
-        self.assertEqual(operation["authorization_reference"], verification["authorization_reference"])
+    def test_external_execution_cards_fail_with_stable_unavailable_adapter_error(self) -> None:
+        self.assertEqual(
+            {case["id"] for case in self.error_cases},
+            {"authorized-external-operation", "independent-external-verification"},
+        )
+        for case in self.error_cases:
+            with self.subTest(case=case["id"]), self.assertRaisesRegex(
+                ROUTER.RoutingError, f"^{ROUTER.EXTERNAL_EXECUTION_UNAVAILABLE}$"
+            ):
+                ROUTER.route(case["card"])
+
+    def test_successful_routes_never_expose_external_or_network_requirements(self) -> None:
+        forbidden_capabilities = {"external-operation", "external-verification"}
+        for case in self.success_cases:
+            result = ROUTER.route(case["card"])
+            with self.subTest(case=case["id"]):
+                self.assertTrue(forbidden_capabilities.isdisjoint(result["required_capabilities"]))
+                self.assertTrue(forbidden_capabilities.isdisjoint(result["deferred_capabilities"]))
+                self.assertNotIn("network", result["required_tools"])
+                self.assertNotIn("network", result["deferred_tools"])
+
+    def test_unsettled_map_and_extract_always_plan_before_terminal_investigation(self) -> None:
+        ids = {
+            "map-local-unknown-plans",
+            "extract-competing-hypotheses-plans",
+            "map-uncertain-confidence-plans",
+        }
+        for case in (case for case in self.success_cases if case["id"] in ids):
+            result = ROUTER.route(case["card"])
+            with self.subTest(case=case["id"]):
+                self.assertEqual(result["primary_role"], "awb_planner")
+                self.assertTrue(result["reroute_after_planning"])
 
     def test_unresolved_implementation_defers_mutation_requirements_to_planner(self) -> None:
         case = next(case for case in self.cases if case["id"] == "unresolved-implementation-needs-plan")
@@ -190,7 +220,8 @@ class RouteSubagentTests(unittest.TestCase):
                     continue
                 with self.subTest(ambiguity=ambiguity, confidence=confidence), self.assertRaisesRegex(ROUTER.RoutingError, "requires settled ambiguity and high router confidence"):
                     ROUTER.route(dict(valid, ambiguity=ambiguity, router_confidence=confidence))
-        self.assertEqual(ROUTER.route(valid), next(case["expected"] for case in self.cases if case["id"] == "independent-external-verification"))
+        with self.assertRaisesRegex(ROUTER.RoutingError, f"^{ROUTER.EXTERNAL_EXECUTION_UNAVAILABLE}$"):
+            ROUTER.route(valid)
 
     def test_privileged_capabilities_and_network_cannot_self_grant(self) -> None:
         base = dict(self.cases[0]["card"])
@@ -395,6 +426,10 @@ class RouteSubagentTests(unittest.TestCase):
             bad["expected"].pop("effort")
             bad["expected"]["unsupported"] = True
             path.write_text(json.dumps([bad]), encoding="utf-8")
+            self.assertEqual(ROUTER.check_replay(path), 1)
+            error_case = json.loads(json.dumps(self.error_cases[0]))
+            error_case["expected"] = {}
+            path.write_text(json.dumps([error_case]), encoding="utf-8")
             self.assertEqual(ROUTER.check_replay(path), 1)
 
     def test_replay_diagnostics_escape_untrusted_ids_and_keys(self) -> None:

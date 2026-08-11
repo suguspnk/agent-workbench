@@ -66,15 +66,17 @@ POLICY_COMMON = {
     "evidence": "record before and after inventory, HEAD, relevant refs and configuration, generated outputs, and external-side-effect attestation",
 }
 NON_OPERATOR_AUTHORIZATION = "deny network, credentials, messages, push, deploy, global configuration, destructive actions, and external actions"
-OPERATOR_AUTHORIZATION = "only exact operation_authorization may permit one external action; owned-path deletion is unsupported and must fail closed"
-VERIFIER_AUTHORIZATION = "deny network by default; only exact external_verification may permit public read-only network observation; deny credentials and all mutation"
+OPERATOR_AUTHORIZATION = "external operations are unavailable; deny network, credentials, mutation, and every external action; reserved authorization data never grants execution"
+VERIFIER_AUTHORIZATION = "deny network, credentials, and external verification; allow only ordinary local verification and no source mutation"
+OBSOLETE_AUTHORITY_WORDING = "Only the operator may receive mutation authority"
+REQUIRED_AUTHORITY_DISTINCTION = "Only the operator may receive external/destructive mutation authority; bounded implementation roles may receive owned local paths or shared contract authority."
 ROLE_SEMANTICS = {
     "awb_deep_worker": ("settled architecture", "implementation-quality-governance"),
     "awb_migration_worker": ("observability", "deletion semantics", "implementation-quality-governance"),
     "awb_builder": ("implementation-quality-governance",),
     "awb_deep_investigator": ("terminal", "public, persistent, or security-sensitive"),
-    "awb_operator": ("operation_authorization", "minimum scoped", "Fail closed"),
-    "awb_verifier": ("complete assigned diff", "differ from the implementer or operator"),
+    "awb_operator": ("operation_authorization", "unavailable", "Fail closed"),
+    "awb_verifier": ("complete assigned diff", "differ from the implementer or operator", "external execution unavailable"),
     "awb_reviewer": ("complete diff", "no actionable findings remain"),
     "awb_security_reviewer": ("complete diff", "no actionable findings remain", "ordinary"),
 }
@@ -92,12 +94,12 @@ REVIEWED_ROLE_BODY_SHA256 = {
         "awb_deep_worker": "ae607646642d55d22c37c89391360059525c7a8673ac908bc6c18b19a067fa40",
         "awb_fast_investigator": "d30e6dbcd5ff921eaf21e6caee923a0c3a92d9ebecdf2082c259525fa3b1d83d",
         "awb_migration_worker": "27a633e67f03671b7b6e73b8ef1a9bc00c69c9fc55f74f2ed35beeaeb60ba196",
-        "awb_operator": "b46dca21fae785ad2c8a0f7e10e108af38f3f3305698585a8a92cb1658e4cc14",
+        "awb_operator": "80af1575db93d350251f307488ff26a4155e02c768701c2af2398799b1c96fa1",
         "awb_planner": "9e2a8450629ab36e141f4b86f4db1c972ec9c2b47e54faadeddb109cbda6992b",
         "awb_reviewer": "a34115a9e819541f2790148a7e3cbdd196fc16d09f5e45bc50122fa22a34122b",
         "awb_security_reviewer": "1cdfb5e4bc070b22ed336ced00062504d13dc54311d42f60decbc59a8bbd3f4a",
         "awb_test_engineer": "44e78e326e2d2df273d33229023af14bee89161dacfc7901072fe429a24f02ad",
-        "awb_verifier": "ae5dc752e8b1f4d9ac6fbb4875dd282f2126843e4f7e16f5bf19833baaa188cc",
+        "awb_verifier": "3e165104373fbbf7ffbf8f486cc656e59f1235dd914365cccd82597444edaf8f",
     },
     "claude": {
         "awb_builder": "7759dc07ddaa7c8e2f574c4c96b4084ffa6a06e2d2e33a84c1ab3a38b6df7180",
@@ -105,12 +107,12 @@ REVIEWED_ROLE_BODY_SHA256 = {
         "awb_deep_worker": "18a5578c06186cf832134de9afead8bd072980fbdef4623ea6a38b506d29468a",
         "awb_fast_investigator": "e8a9890ce8b48a9e6f111ebf13c05e47e36b9c617a28b9261b785f70888fc518",
         "awb_migration_worker": "41816cc7928f1f4a3ffa5782424bf47585ad685a669d3bba6e2dd284037c8573",
-        "awb_operator": "7da543042668730f426b7a87b82d30927a400158bb793f9a9c96210c50c7768c",
+        "awb_operator": "d7513ccab0f5e497ce56835e99fcc8b97d716d24791cabeee6ab84557bd12d11",
         "awb_planner": "cc0a23e802e6ac575fe325a6eb7c9302a6b5e2a1c0578cd958cd723205723778",
         "awb_reviewer": "63eb168d067d22a749cce061289f69d51bf303aaac795865ab69a2fbe9512002",
         "awb_security_reviewer": "11c62ce41918094856bf71e8a29884ef2c06ca177ccedf0c4ee6fa3496529cd3",
         "awb_test_engineer": "039eea064255795f326f3e9bddd388b19ed776d039115b24a5b6cffad88b44a3",
-        "awb_verifier": "a3ec6c90fe471a9d87b7aba00ef5fd82cfc4755fb740d082948a749c12517051",
+        "awb_verifier": "8130558ab4ab5c5109fb021c96f437aee431f5951d3a0a347b0ef7a8a7df5079",
     },
 }
 
@@ -165,6 +167,8 @@ def safe_read_bytes(path: Path, limit: int = MAX_ARTIFACT_BYTES) -> bytes:
 
 
 def open_without_symlink_components(path: Path, file_flags: int) -> int:
+    if ".." in Path(os.fspath(path)).parts:
+        fail("artifact path must not contain parent path components")
     absolute = Path(os.path.abspath(os.fspath(path)))
     parts = absolute.parts[1:]
     if not parts:
@@ -328,6 +332,13 @@ def check_semantics(path: Path, role: str, instructions: str) -> None:
             fail(f"{relative(path)} is missing semantic requirement: {phrase}")
 
 
+def validate_authority_wording(path: Path, text: str, *, require_distinction: bool = False) -> None:
+    if OBSOLETE_AUTHORITY_WORDING in text:
+        fail(f"{relative(path)} contains obsolete generic mutation-authority wording")
+    if require_distinction and REQUIRED_AUTHORITY_DISTINCTION not in text:
+        fail(f"{relative(path)} must distinguish external/destructive operator authority from bounded local implementation authority")
+
+
 def canonical_role_policy(role: str) -> str:
     if role == "awb_operator":
         authorization = OPERATOR_AUTHORIZATION
@@ -477,6 +488,9 @@ def check_skill() -> None:
             fail(f"model-selection reference is missing: {phrase}")
     if "## Contents" not in model_reference:
         fail("long model-selection reference must contain a table of contents")
+    validate_authority_wording(skill_path, body)
+    validate_authority_wording(ROOT / "skills/orchestrate-task/references/portable-contract.md", portable)
+    validate_authority_wording(ROOT / "skills/orchestrate-task/references/model-selection.md", model_reference, require_distinction=True)
     replay_command = "python3 skills/orchestrate-task/scripts/route_subagent.py --replay skills/orchestrate-task/tests/routing-cases.json"
     if replay_command not in " ".join(model_reference.split()):
         fail("model-selection reference must use the repository-root replay command and path")
@@ -543,7 +557,10 @@ def check_claude_profiles() -> None:
         unknown_tools = sorted(tools - CLAUDE_TOOL_KEYS)
         if unknown_tools:
             fail(f"{relative(path)} exposes unknown tools: {safe_diagnostic(unknown_tools)}")
-        if tools != ({"Read", "Edit", "Write", "Grep", "Glob", "Bash"} if not behaviorally_read_only else {"Read", "Grep", "Glob", "Bash"}):
+        expected_tools = {"Read", "Edit", "Write", "Grep", "Glob", "Bash"} if not behaviorally_read_only else {"Read", "Grep", "Glob", "Bash"}
+        if name == "awb-operator":
+            expected_tools = {"Read", "Grep", "Glob"}
+        if tools != expected_tools:
             fail(f"{relative(path)} does not use the least-authority role tool set")
         if behaviorally_read_only and tools.intersection({"Edit", "Write", "NotebookEdit"}):
             fail(f"{relative(path)} read-only role exposes an edit tool")

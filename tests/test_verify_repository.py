@@ -5,6 +5,7 @@ import io
 import importlib.util
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,33 @@ if SPEC is None or SPEC.loader is None:
     raise RuntimeError("could not load verify_repository.py")
 VERIFY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFY)
+
+
+def no_follow_export_ignore(directory: str, names: list[str]) -> set[str]:
+    ignored: set[str] = set()
+    for name in names:
+        path = Path(directory) / name
+        if name in {".git", "__pycache__"} or name.endswith(".pyc"):
+            ignored.add(name)
+            continue
+        try:
+            if stat.S_ISLNK(path.lstat().st_mode):
+                ignored.add(name)
+        except FileNotFoundError:
+            ignored.add(name)
+    return ignored
+
+
+def chmod_export_no_follow(root: Path, directory_mode: int, file_mode: int) -> None:
+    for directory, directory_names, file_names in os.walk(root, topdown=False, followlinks=False):
+        for name in (*directory_names, *file_names):
+            path = Path(directory) / name
+            metadata = path.lstat()
+            if stat.S_ISLNK(metadata.st_mode):
+                continue
+            path.chmod(directory_mode if stat.S_ISDIR(metadata.st_mode) else file_mode)
+    if not stat.S_ISLNK(root.lstat().st_mode):
+        root.chmod(directory_mode)
 
 
 class VerifyRepositoryNegativeTests(unittest.TestCase):
@@ -87,6 +115,30 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             external = Path(directory) / "valid.txt"
             external.write_text("valid", encoding="utf-8")
             self.assertEqual(VERIFY.safe_read_text(external), "valid")
+
+    def test_safe_reader_rejects_raw_parent_components_before_normalization(self) -> None:
+        with tempfile.TemporaryDirectory(dir=PLATFORM_TEMP) as directory:
+            root = Path(directory)
+            child = root / "child"
+            child.mkdir()
+            artifact = root / "artifact.txt"
+            artifact.write_text("safe", encoding="utf-8")
+            relative = Path(os.path.relpath(root, Path.cwd())) / "child" / ".." / "artifact.txt"
+            absolute = child / ".." / "artifact.txt"
+            for path in (relative, absolute):
+                stderr = io.StringIO()
+                with self.subTest(path=os.fspath(path)), contextlib.redirect_stderr(stderr), self.assertRaisesRegex(SystemExit, "1"):
+                    VERIFY.safe_read_text(path)
+                self.assertIn("artifact path must not contain parent path components", stderr.getvalue())
+
+    def test_authority_wording_rejects_obsolete_generic_grant_and_requires_local_distinction(self) -> None:
+        path = ROOT / "skills/orchestrate-task/references/model-selection.md"
+        valid = VERIFY.REQUIRED_AUTHORITY_DISTINCTION
+        VERIFY.validate_authority_wording(path, valid, require_distinction=True)
+        with self.assertRaisesRegex(SystemExit, "1"):
+            VERIFY.validate_authority_wording(path, VERIFY.OBSOLETE_AUTHORITY_WORDING, require_distinction=True)
+        with self.assertRaisesRegex(SystemExit, "1"):
+            VERIFY.validate_authority_wording(path, "bounded implementation authority omitted", require_distinction=True)
 
     def test_repository_json_loader_rejects_deep_and_excessive_nodes(self) -> None:
         with tempfile.TemporaryDirectory(dir=PLATFORM_TEMP) as directory:
@@ -254,10 +306,8 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
     def test_complete_suite_runs_from_read_only_export(self) -> None:
         with tempfile.TemporaryDirectory(dir=PLATFORM_TEMP) as directory:
             export = Path(directory) / "agent-workbench"
-            shutil.copytree(ROOT, export, ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"))
-            for path in sorted(export.rglob("*"), reverse=True):
-                path.chmod(0o555 if path.is_dir() else 0o444)
-            export.chmod(0o555)
+            shutil.copytree(ROOT, export, symlinks=True, ignore=no_follow_export_ignore)
+            chmod_export_no_follow(export, 0o555, 0o444)
             environment = dict(os.environ, AWB_READ_ONLY_EXPORT_TEST="1", PYTHONDONTWRITEBYTECODE="1")
             try:
                 result = subprocess.run(
@@ -269,10 +319,47 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
                     check=False,
                 )
             finally:
-                export.chmod(0o755)
-                for path in export.rglob("*"):
-                    path.chmod(0o755 if path.is_dir() else 0o644)
+                chmod_export_no_follow(export, 0o755, 0o644)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_read_only_export_ignores_all_source_symlinks_without_external_side_effects(self) -> None:
+        with tempfile.TemporaryDirectory(dir=PLATFORM_TEMP) as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "ordinary.txt").write_text("inside", encoding="utf-8")
+            external_file = root / "external.txt"
+            external_file.write_bytes(b"external-file-bytes")
+            external_file.chmod(0o640)
+            external_directory = root / "external-directory"
+            external_directory.mkdir()
+            external_directory.chmod(0o750)
+            external_nested = external_directory / "nested.txt"
+            external_nested.write_bytes(b"external-directory-bytes")
+            external_nested.chmod(0o600)
+            before = {
+                external_file: (external_file.read_bytes(), stat.S_IMODE(external_file.stat().st_mode)),
+                external_directory: (None, stat.S_IMODE(external_directory.stat().st_mode)),
+                external_nested: (external_nested.read_bytes(), stat.S_IMODE(external_nested.stat().st_mode)),
+            }
+            (source / "file-link").symlink_to(external_file)
+            (source / "directory-link").symlink_to(external_directory, target_is_directory=True)
+            (source / "loop").symlink_to(source, target_is_directory=True)
+            (source / ".git").symlink_to(external_directory, target_is_directory=True)
+
+            export = root / "export"
+            shutil.copytree(source, export, symlinks=True, ignore=no_follow_export_ignore)
+
+            self.assertEqual((export / "ordinary.txt").read_text(encoding="utf-8"), "inside")
+            for name in ("file-link", "directory-link", "loop", ".git"):
+                self.assertFalse((export / name).exists(), name)
+                self.assertFalse((export / name).is_symlink(), name)
+            after = {
+                external_file: (external_file.read_bytes(), stat.S_IMODE(external_file.stat().st_mode)),
+                external_directory: (None, stat.S_IMODE(external_directory.stat().st_mode)),
+                external_nested: (external_nested.read_bytes(), stat.S_IMODE(external_nested.stat().st_mode)),
+            }
+            self.assertEqual(after, before)
 
 
 if __name__ == "__main__":

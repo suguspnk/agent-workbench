@@ -4,6 +4,9 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 
 ## Unreleased
 
+- Corrected unsettled mapping/extraction to plan before terminal investigation, and disabled external operation/verification until a constrained SSRF-safe network adapter can provide mandatory independent verification.
+- Replaced the read-only test export with no-follow symlink exclusion and rejected raw parent path components in both router and repository-validator readers.
+- Clarified that only external/destructive mutation authority is operator-specific while bounded implementations may own local paths or shared contracts; reserved operator/verifier schemas now fail with a stable unavailable-adapter error.
 - Added cumulative contract-boundary and evidence routing, a terminal deep investigator, and a fail-closed least-authority operator for exact authorized actions.
 - Hardened routing input/replay validation, profile parity and least authority, secret-safe handoffs, isolation disclosure, identity-led independence, and repository negative checks.
 - Added separately authorized public read-only external verification, strict work-shape/authority compatibility, unconditional migration and impact overlays, interpreter-independent JSON resource bounds, and no-follow bounded repository reads.

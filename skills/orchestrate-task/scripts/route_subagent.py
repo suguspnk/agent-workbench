@@ -66,8 +66,8 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
     "awb_builder": frozenset({"read", "write", "test"}),
     "awb_deep_worker": frozenset({"read", "write", "test"}),
     "awb_migration_worker": frozenset({"read", "write", "test", "migration"}),
-    "awb_operator": frozenset({"read", "external-operation"}),
-    "awb_verifier": frozenset({"read", "test", "external-verification"}),
+    "awb_operator": frozenset({"read"}),
+    "awb_verifier": frozenset({"read", "test"}),
     "awb_test_engineer": frozenset({"read", "test"}),
     "awb_reviewer": frozenset({"read", "review"}),
     "awb_security_reviewer": frozenset({"read", "review", "security-review"}),
@@ -78,8 +78,7 @@ ROLE_TOOLS: dict[str, frozenset[str]] = {
 }
 for _role in ("awb_builder", "awb_deep_worker", "awb_migration_worker"):
     ROLE_TOOLS[_role] = frozenset({"file-read", "file-write", "shell"})
-ROLE_TOOLS["awb_operator"] = frozenset({"file-read", "shell", "network"})
-ROLE_TOOLS["awb_verifier"] = frozenset({"file-read", "shell", "network"})
+ENABLED_ROLES = frozenset(set(ROLE_PROFILE) - {"awb_operator"})
 
 OUTPUT_KEYS = {
     "primary_role", "task_class", "capability_tier", "effort", "required_followups",
@@ -99,6 +98,7 @@ _SECURE_OPEN_DIAGNOSTIC = (
     "secure file reading is unsupported on this platform; requires POSIX os.open "
     "dir_fd support and O_DIRECTORY, O_NOFOLLOW, and O_NONBLOCK"
 )
+EXTERNAL_EXECUTION_UNAVAILABLE = "external execution unavailable: no constrained network adapter is configured"
 
 
 class RoutingError(ValueError):
@@ -400,8 +400,11 @@ def validate_card(value: Any) -> dict[str, Any]:
             raise RoutingError("verify-external requires external-verification capability and network and shell tools")
         if card["tool_loop"] != "repeated external tools":
             raise RoutingError("verify-external requires repeated external tools")
+        raise RoutingError(EXTERNAL_EXECUTION_UNAVAILABLE)
     elif card["external_verification"] is not None:
         raise RoutingError("external_verification is only valid for work_shape=verify-external")
+    if shape == "operate":
+        raise RoutingError(EXTERNAL_EXECUTION_UNAVAILABLE)
     return card
 
 
@@ -447,7 +450,10 @@ def route(card_value: Any) -> dict[str, Any]:
     persistent_boundary = "persistent data" in boundaries
     public_boundary = "public API" in boundaries
     migration_change = shape == "migrate" or (shape == "implement" and persistent_boundary)
-    needs_planning = shape == "plan" or card["router_confidence"] == "unresolved" or card["ambiguity"] == "open-ended"
+    unsettled_read = shape in {"map", "extract"} and (
+        card["ambiguity"] != "settled" or card["router_confidence"] != "high"
+    )
+    needs_planning = shape == "plan" or unsettled_read or card["router_confidence"] == "unresolved" or card["ambiguity"] == "open-ended"
     reasons: list[str] = []
 
     if shape == "operate":
@@ -458,7 +464,7 @@ def route(card_value: Any) -> dict[str, Any]:
         reasons.append("separately authorized public read-only external verification requires direct independent observation")
     elif needs_planning:
         role = "awb_planner"
-        reasons.append("architecture, packet boundaries, or routing remain unresolved")
+        reasons.append("read-only evidence or routing remains unsettled" if unsettled_read else "architecture, packet boundaries, or routing remain unresolved")
     elif shape == "review":
         role = "awb_security_reviewer" if security_boundary else "awb_reviewer"
         reasons.append("review packets use an independent findings-only role")
@@ -603,9 +609,12 @@ def check_replay(path: Path) -> int:
         if not isinstance(case, dict):
             failures.append(f"{label}: must be an object")
             continue
-        missing, extra = sorted({"id", "card", "expected"} - set(case)), sorted(set(case) - {"id", "card", "expected"})
-        if missing or extra:
-            failures.append(f"{label}: invalid keys (missing={_display(missing)}, unknown={_display(extra)})")
+        required = {"id", "card"}
+        allowed = required | {"expected", "expected_error"}
+        missing, extra = sorted(required - set(case)), sorted(set(case) - allowed)
+        expectation_count = sum(name in case for name in ("expected", "expected_error"))
+        if missing or extra or expectation_count != 1:
+            failures.append(f"{label}: invalid keys or expectation (missing={_display(missing)}, unknown={_display(extra)})")
             continue
         case_id = case["id"]
         if not isinstance(case_id, str) or not REPLAY_ID.fullmatch(case_id):
@@ -615,20 +624,28 @@ def check_replay(path: Path) -> int:
             failures.append(f"{_display(case_id)}: duplicate id")
             continue
         seen_ids.add(case_id)
-        expected = case["expected"]
-        if not isinstance(expected, dict):
-            failures.append(f"{case_id}: expected must be an object")
-            continue
-        missing_expected, unknown_expected = sorted(OUTPUT_KEYS - set(expected)), sorted(set(expected) - OUTPUT_KEYS)
-        if missing_expected or unknown_expected:
-            failures.append(f"{_display(case_id)}: invalid expected keys (missing={_display(missing_expected)}, unknown={_display(unknown_expected)})")
+        expected = case.get("expected")
+        expected_error = case.get("expected_error")
+        if expected is not None:
+            if not isinstance(expected, dict):
+                failures.append(f"{case_id}: expected must be an object")
+                continue
+            missing_expected, unknown_expected = sorted(OUTPUT_KEYS - set(expected)), sorted(set(expected) - OUTPUT_KEYS)
+            if missing_expected or unknown_expected:
+                failures.append(f"{_display(case_id)}: invalid expected keys (missing={_display(missing_expected)}, unknown={_display(unknown_expected)})")
+                continue
+        elif not _is_clean_text(expected_error):
+            failures.append(f"{case_id}: expected_error must be an exact trimmed non-control string")
             continue
         try:
             actual = route(case["card"])
         except (RoutingError, KeyError) as error:
-            failures.append(f"{_display(case_id)}: routing failed: {error}")
+            if expected_error is None or str(error) != expected_error:
+                failures.append(f"{_display(case_id)}: routing failed: {error}")
             continue
-        if actual != expected:
+        if expected_error is not None:
+            failures.append(f"{_display(case_id)}: expected routing error {_display(expected_error)}, got successful output")
+        elif actual != expected:
             failures.append(f"{_display(case_id)}: expected {_display(expected)}, got {_display(actual)}")
     if failures:
         for failure in failures:
