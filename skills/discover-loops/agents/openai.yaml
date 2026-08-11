@@ -1,0 +1,4 @@
+interface:
+  display_name: "Discover Loops"
+  short_description: "Find and draft evidence-backed agent loops"
+  default_prompt: "Use $discover-loops to find recurring work and draft safe, evidence-backed loop proposals."

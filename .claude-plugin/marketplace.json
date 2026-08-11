@@ -3,12 +3,16 @@
   "owner": {
     "name": "suguspnk"
   },
-  "description": "Portable orchestration-only workflows with bounded subagent routing.",
+  "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, while proposal-only discover-loops drafts evidence-backed loop proposals without activation or scheduling.",
+  "metadata": {
+    "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, while proposal-only discover-loops drafts evidence-backed loop proposals without activation or scheduling."
+  },
   "plugins": [
     {
       "name": "agent-workbench",
       "source": "./",
-      "description": "Portable orchestration-only coordination with automatic subagent routing and independent verification.",
+      "version": "0.7.0",
+      "description": "Portable task orchestration and evidence-backed agent loop discovery with independent verification.",
       "author": {
         "name": "suguspnk"
       },
@@ -17,12 +21,16 @@
       "license": "Apache-2.0",
       "keywords": [
         "orchestration",
+        "loop-discovery",
+        "agent-loop",
         "verification",
         "agent-skills"
       ],
       "category": "Productivity",
       "tags": [
         "orchestration",
+        "loop-discovery",
+        "agent-loop",
         "workflow",
         "portable"
       ]

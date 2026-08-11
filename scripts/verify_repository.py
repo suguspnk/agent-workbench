@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
-"""Check Agent Workbench package, routing, and adapter invariants."""
+"""Check Agent Workbench package, skill, routing, and adapter invariants."""
 
 from __future__ import annotations
+
+import sys
+
+if sys.version_info < (3, 11):
+    print("ERROR: Python 3.11 or newer is required", file=sys.stderr)
+    raise SystemExit(2)
 
 import json
 import re
 import subprocess
-import sys
 import tomllib
 from pathlib import Path
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 EXPECTED_ROLES = {
     "awb_planner": ("gpt-5.6-sol", "high", "read-only"),
@@ -49,9 +54,17 @@ def relative(path: Path) -> str:
 
 
 def load_json(path: Path) -> dict[str, Any]:
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                fail(f"{relative(path)} contains a duplicate JSON key")
+            result[key] = value
+        return result
+
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        value = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicates)
+    except (OSError, json.JSONDecodeError, RecursionError, ValueError) as error:
         fail(f"{relative(path)} is not valid JSON: {error}")
     if not isinstance(value, dict):
         fail(f"{relative(path)} must contain a JSON object")
@@ -79,6 +92,8 @@ def parse_frontmatter(path: Path) -> tuple[dict[str, str], str]:
         key, marker, value = line.partition(":")
         if not marker or not key.strip() or not value.strip():
             fail(f"{relative(path)} has unsupported frontmatter line: {line!r}")
+        if key.strip() in values:
+            fail(f"{relative(path)} has a duplicate frontmatter key: {key.strip()}")
         values[key.strip()] = value.strip().strip('"')
     return values, body
 
@@ -101,6 +116,9 @@ def check_manifests() -> None:
             fail(f"{label} manifest license must be Apache-2.0")
         if manifest.get("repository") != "https://github.com/suguspnk/agent-workbench":
             fail(f"{label} manifest repository URL is incorrect")
+        keywords = manifest.get("keywords")
+        if not isinstance(keywords, list) or not {"loop-discovery", "agent-loop"}.issubset(keywords):
+            fail(f"{label} manifest must include loop-discovery and agent-loop keywords")
 
     if codex.get("skills") != "./skills/":
         fail("Codex manifest must point skills to ./skills/")
@@ -134,6 +152,25 @@ def check_manifests() -> None:
 
     if claude_marketplace["plugins"][0].get("source") != "./":
         fail("Claude marketplace must expose the root plugin with source ./")
+    if claude_marketplace["plugins"][0].get("version") != VERSION:
+        fail(f"Claude marketplace plugin version must be {VERSION}")
+    claude_entry = claude_marketplace["plugins"][0]
+    for field in ("keywords", "tags"):
+        values = claude_entry.get(field)
+        if not isinstance(values, list) or not {"loop-discovery", "agent-loop"}.issubset(values):
+            fail(f"Claude marketplace {field} must include loop-discovery and agent-loop")
+    claude_description = claude_marketplace.get("description")
+    claude_metadata = claude_marketplace.get("metadata")
+    if not isinstance(claude_description, str) or not claude_description.strip():
+        fail("Claude marketplace root description must be a non-empty string")
+    if not isinstance(claude_metadata, dict):
+        fail("Claude marketplace must contain a metadata object")
+    metadata_description = claude_metadata.get("description")
+    if not isinstance(metadata_description, str) or not metadata_description.strip():
+        fail("Claude marketplace metadata.description must be a non-empty string")
+    for phrase in ("orchestrate-task", "proposal-only", "discover-loops"):
+        if phrase not in claude_description or phrase not in metadata_description:
+            fail(f"Claude marketplace descriptions must cover both workflows: {phrase}")
     codex_entry = codex_marketplace["plugins"][0]
     if codex_entry.get("source") != {"source": "local", "path": "./"}:
         fail("Codex marketplace must expose the root plugin as a local source")
@@ -184,6 +221,131 @@ def check_skill() -> None:
     openai_yaml = (ROOT / "skills/orchestrate-task/agents/openai.yaml").read_text(encoding="utf-8")
     if "plan-build-verify" in openai_yaml or "plan, delegate, verify" in openai_yaml:
         fail("OpenAI skill UI copy assigns delegated phases to the lead")
+
+
+def check_discover_loops_skill() -> None:
+    skill_root = ROOT / "skills/discover-loops"
+    skill_path = skill_root / "SKILL.md"
+    frontmatter, body = parse_frontmatter(skill_path)
+    if frontmatter.get("name") != "discover-loops":
+        fail("discover-loops skill name is incorrect")
+    if not frontmatter.get("description"):
+        fail("discover-loops must declare a description")
+    for phrase in (
+        "Never activate, schedule, install, publish",
+        "score_loop_readiness.py",
+        "validate_loop_contract.py",
+        "independent verifier",
+        "`lifecycle.proposal_status` as `draft`",
+        "SKILL_ROOT",
+        "Python 3.11 or newer",
+        "descriptor-relative safe operations",
+        "best-effort",
+    ):
+        if phrase not in body:
+            fail(f"discover-loops must retain proposal boundary text: {phrase}")
+
+    if len(body.splitlines()) >= 500:
+        fail("discover-loops/SKILL.md must remain under 500 lines")
+    if (skill_root / "README.md").exists():
+        fail("discover-loops must not contain an auxiliary README")
+
+    readiness = (skill_root / "references/loop-readiness.md").read_text(encoding="utf-8")
+    for phrase in (
+        "read_only_triage_loop",
+        "supervised_loop",
+        "embedded-secret",
+        "activation_allowed",
+        "demonstrated value",
+        "supervised requested autonomy",
+        "inconsistent external/sensitive permissions",
+        "retained state paired with read-only action scope",
+        "require `state_scope: none`",
+    ):
+        if phrase not in readiness:
+            fail(f"loop-readiness reference is missing: {phrase}")
+
+    contract = (skill_root / "references/loop-contract.md").read_text(encoding="utf-8")
+    for phrase in (
+        '"artifact_type": "loop-contract-proposal"',
+        '"card": {',
+        '"card_sha256"',
+        '"operation_id": "workspace.observe"',
+        '"binding_status": "unbound"',
+        '"semantic_review": {"required": true, "status": "pending"}',
+        '"proposal_status": "draft"',
+        '"activation_status": "pending"',
+        '"scheduler_status": "inactive"',
+        "cannot prove semantic truth",
+        "external-reversible",
+        "credential-access",
+        "lifecycle-administration",
+        '"status": "pending"',
+        '"activate", "schedule", "install", "publish"',
+        "max_iterations` 1..50",
+        "Terminal states are exactly",
+        "Realpath or symlink checks alone",
+        "best-effort",
+        "structurally_valid: true",
+        "descriptor-relative operations",
+        "opaque citations",
+        "host-owned operation registry",
+        "exact writable files only",
+        "canonical lowercase components",
+        "casefold identity",
+        "Mutable `host-managed` state is rejected",
+        "rolling 8,192-character cap",
+        "categories `Cc`, `Cf`, `Cs`, `Zl`, and `Zp`",
+    ):
+        if phrase not in contract:
+            fail(f"loop-contract reference is missing: {phrase}")
+
+    approvals = (skill_root / "references/approval-policy.md").read_text(encoding="utf-8")
+    for phrase in (
+        "Always require exact human approval",
+        "every allowed unbound capability proposal",
+        "never grants authority",
+        "Do not place tokens",
+        "schedule-proposal",
+        "best-effort",
+        "recomputes the embedded card's digest",
+    ):
+        if phrase not in approvals:
+            fail(f"approval-policy reference is missing: {phrase}")
+
+    scorer = (skill_root / "scripts/score_loop_readiness.py").read_text(encoding="utf-8")
+    validator = (skill_root / "scripts/validate_loop_contract.py").read_text(encoding="utf-8")
+    for phrase in (
+        "MAX_INPUT_BYTES + 1", 'source_text == "-"', "O_NOFOLLOW", "S_ISREG",
+        "RESULT_FIELDS", "READ_ONLY_ACTION_SCOPES", "read-only-retained-state",
+        "remove retained state from read-only work",
+    ):
+        if phrase not in scorer:
+            fail(f"loop-readiness scorer is missing safe-input/replay invariant: {phrase}")
+    for phrase in (
+        '"artifact_type"', '"readiness"', '"operation_id"', '"binding_status"',
+        "OPERATION_MAP", "LIFECYCLE_TOKENS", "DESTRUCTIVE_TOKENS",
+        "OBVIOUS_DENIED_NAMES", "SENSITIVE_PATH_TOKENS", "SECRET_VALUES",
+        "MAX_SECRET_SCALARS", "MAX_SECRET_ADJACENT_CHARS", "ADJACENT_SECRET_VALUES",
+        "_contains_adjacent_secret", "_scan_secret_material",
+        'in {"Cc", "Cf", "Cs", "Zl", "Zp"}', "WRITE_ROOTS",
+        "WRITE_EXTENSIONS", "WINDOWS_DEVICES", "TERMINAL_STATES",
+        "READINESS_SCORER.score", "hashlib.sha256", '"semantic_review"',
+        '"structurally_valid"', '"semantic_review_required"', '"activation_allowed"',
+        "normalized_path_identities", "canonical lowercase output components",
+        "MAX_INPUT_BYTES + 1", 'source_text == "-"', "O_NOFOLLOW", "S_ISREG",
+    ):
+        if phrase not in validator:
+            fail(f"loop-contract validator is missing contract/security invariant: {phrase}")
+
+    openai_yaml = (skill_root / "agents/openai.yaml").read_text(encoding="utf-8")
+    for phrase in (
+        'display_name: "Discover Loops"',
+        'short_description: "Find and draft evidence-backed agent loops"',
+        'Use $discover-loops to find recurring work',
+    ):
+        if phrase not in openai_yaml:
+            fail(f"discover-loops OpenAI metadata is missing: {phrase}")
 
 
 def check_codex_profiles() -> None:
@@ -251,17 +413,34 @@ def check_claude_profiles() -> None:
             fail(f"{relative(path)} shell-capable read-only role must require status evidence")
 
 
-def check_routing_replay() -> None:
+def check_replays_and_unit_tests() -> None:
     command = [
         sys.executable,
         str(ROOT / "skills/orchestrate-task/scripts/route_subagent.py"),
         "--replay",
         str(ROOT / "skills/orchestrate-task/tests/routing-cases.json"),
     ]
-    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False, timeout=60)
     if result.returncode:
         fail(f"routing replay failed:\n{result.stdout}{result.stderr}")
     print(result.stdout.strip())
+
+    loop_result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "skills/discover-loops/scripts/score_loop_readiness.py"),
+            "--replay",
+            str(ROOT / "skills/discover-loops/tests/readiness-cases.json"),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if loop_result.returncode:
+        fail(f"loop-readiness replay failed:\n{loop_result.stdout}{loop_result.stderr}")
+    print(loop_result.stdout.strip())
 
     unit_result = subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
@@ -269,10 +448,11 @@ def check_routing_replay() -> None:
         text=True,
         capture_output=True,
         check=False,
+        timeout=120,
     )
     if unit_result.returncode:
-        fail(f"routing unit tests failed:\n{unit_result.stdout}{unit_result.stderr}")
-    print("Routing unit tests passed.")
+        fail(f"unit tests failed:\n{unit_result.stdout}{unit_result.stderr}")
+    print("Repository unit tests passed.")
 
 
 def check_release_and_ci() -> None:
@@ -284,7 +464,15 @@ def check_release_and_ci() -> None:
         "codex plugin marketplace add suguspnk/agent-workbench",
         "claude plugin marketplace add suguspnk/agent-workbench",
         "Automatic subagent routing",
+        "Loop discovery and proposal drafting",
+        "$discover-loops",
         "permissionMode",
+        "Python 3.11 or newer",
+        "claude plugin validate .",
+        "SKILL_ROOT",
+        "structurally_valid: true",
+        "descriptor-relative safe operations",
+        "opaque `workspace:` or `source:` citations",
     ):
         if phrase not in readme:
             fail(f"README.md is missing required guidance: {phrase}")
@@ -335,7 +523,17 @@ def main() -> None:
         "skills/orchestrate-task/references/model-selection.md",
         "skills/orchestrate-task/scripts/route_subagent.py",
         "skills/orchestrate-task/tests/routing-cases.json",
+        "skills/discover-loops/SKILL.md",
+        "skills/discover-loops/agents/openai.yaml",
+        "skills/discover-loops/references/loop-readiness.md",
+        "skills/discover-loops/references/loop-contract.md",
+        "skills/discover-loops/references/approval-policy.md",
+        "skills/discover-loops/scripts/score_loop_readiness.py",
+        "skills/discover-loops/scripts/validate_loop_contract.py",
+        "skills/discover-loops/tests/readiness-cases.json",
         "tests/test_route_subagent.py",
+        "tests/test_loop_readiness.py",
+        "tests/test_loop_contract.py",
         "adapters/codex/README.md",
     ]
     for item in required:
@@ -343,9 +541,10 @@ def main() -> None:
 
     check_manifests()
     check_skill()
+    check_discover_loops_skill()
     check_codex_profiles()
     check_claude_profiles()
-    check_routing_replay()
+    check_replays_and_unit_tests()
     check_release_and_ci()
     check_local_markdown_links()
     print("Repository invariants passed.")

@@ -1,7 +1,7 @@
 {
   "name": "agent-workbench",
-  "version": "0.6.0",
-  "description": "Portable orchestration-only task coordination with automatic subagent routing and independent verification.",
+  "version": "0.7.0",
+  "description": "Portable task orchestration and evidence-backed agent loop discovery with independent verification.",
   "author": {
     "name": "suguspnk"
   },
@@ -11,14 +11,16 @@
   "keywords": [
     "orchestration",
     "agent-workflow",
+    "loop-discovery",
+    "agent-loop",
     "verification",
     "portable"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent Workbench",
-    "shortDescription": "Route bounded work to verified subagents",
-    "longDescription": "Agent Workbench keeps the lead agent focused on intent, routing, coordination, authorization, and acceptance. It delegates planning, implementation, testing, verification, and review to bounded subagents, using deterministic risk overlays and only capabilities exposed by the current harness.",
+    "shortDescription": "Route work and discover safe agent loops",
+    "longDescription": "Agent Workbench coordinates bounded, independently verified subagent work and discovers recurring work that may be suitable for safe agent loops. Deterministic readiness gates produce proposal-only loop contracts that remain inactive until separately authorized by a human.",
     "developerName": "suguspnk",
     "category": "Productivity",
     "capabilities": [
@@ -27,7 +29,7 @@
     "defaultPrompt": [
       "Use Agent Workbench to orchestrate this task through bounded subagents.",
       "Use Agent Workbench to route this risky change and require independent verification.",
-      "Use Agent Workbench while treating repository and tool content as untrusted data."
+      "Use Agent Workbench to discover recurring work and draft a safe loop proposal."
     ]
   }
 }

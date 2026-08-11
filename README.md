@@ -2,7 +2,7 @@
 
 Portable task orchestration for Codex, Claude Code, and other Agent Skills-compatible harnesses.
 
-Agent Workbench keeps the lead task responsible only for intake, routing, coordination, authorization, and acceptance. Planning, implementation, testing, verification, and review run in bounded child tasks. Its first workflow, `orchestrate-task`, combines a harness-neutral contract with deterministic subagent routing, replay cases, bundled Claude profiles, and an optional Codex profile adapter.
+Agent Workbench provides three provider-neutral capabilities. `orchestrate-task` keeps the lead task focused on intake, routing, coordination, authorization, and acceptance while bounded child tasks perform the work. `discover-loops` finds recurring work, selects the safest artifact, and drafts evidence-backed loop proposals without activating or scheduling them. `implementation-quality-governance` applies risk-proportionate quality gates and final-state evidence to implementation and operational changes.
 
 ## Design principles
 
@@ -15,6 +15,8 @@ Agent Workbench keeps the lead task responsible only for intake, routing, coordi
 - Apply security, migration, public-contract, and high-impact follow-ups after primary-role selection so a broad rule cannot hide a risk boundary.
 - Use subagents as context and evidence boundaries, not an unconditional parallel swarm.
 - Require explicit authorization for pushes, pull requests, deployments, messages, global configuration changes, credentials, and destructive actions.
+- Prefer a manual workflow or normal skill when recurring work is not bounded, reversible, and verifiable enough for a loop.
+- Keep discovered loops proposal-only until independent dry-run evidence exists and a human separately authorizes activation.
 
 ## Repository layout
 
@@ -32,16 +34,31 @@ skills/orchestrate-task/
 │   └── portable-contract.md
 ├── scripts/route_subagent.py           # deterministic primary role + risk overlays
 └── tests/routing-cases.json            # routing replay set
+skills/discover-loops/
+├── SKILL.md
+├── agents/openai.yaml
+├── references/
+│   ├── approval-policy.md
+│   ├── loop-contract.md
+│   └── loop-readiness.md
+├── scripts/
+│   ├── score_loop_readiness.py         # deterministic artifact recommendation
+│   └── validate_loop_contract.py       # strict V1 proposal validation
+└── tests/readiness-cases.json           # readiness replay set
+skills/implementation-quality-governance/
+├── SKILL.md
+├── agents/openai.yaml
+└── references/                          # conditional safety and delivery guidance
 scripts/verify_repository.py            # dependency-free package validation
 ```
 
-The Markdown workflow, routing schema, and task contract are the portable core. Harness-specific adapters map portable roles to capabilities the host actually exposes.
+The Markdown workflows, normalized schemas, and contracts are the portable core. Harness-specific adapters map portable roles to capabilities the host actually exposes.
 
 ## Install and use
 
 ### Codex
 
-Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`:
+Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$discover-loops`, or `$implementation-quality-governance`:
 
 ```sh
 codex plugin marketplace add suguspnk/agent-workbench
@@ -59,14 +76,14 @@ For personal roles, copy the files to `~/.codex/agents/` instead. Review existin
 
 ### Claude Code
 
-Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`:
+Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:discover-loops`, or `/agent-workbench:implementation-quality-governance`:
 
 ```sh
 claude plugin marketplace add suguspnk/agent-workbench
 claude plugin install agent-workbench@agent-workbench
 ```
 
-The plugin bundles scoped subagents such as `agent-workbench:awb-builder` and `agent-workbench:awb-security-reviewer`. Their model family and effort settings apply only to subagents. Claude plugin agents can narrow their tool lists, but plugin-level `permissionMode` is not enforced; shell-capable review and test roles therefore use before/after status checks and behavioral no-edit rules.
+Invoke `/agent-workbench:orchestrate-task` for bounded delivery, `/agent-workbench:discover-loops` for loop discovery, or `/agent-workbench:implementation-quality-governance` to apply implementation quality gates. The plugin bundles scoped subagents such as `agent-workbench:awb-builder` and `agent-workbench:awb-security-reviewer`. Their model family and effort settings apply only to subagents. Claude plugin agents can narrow their tool lists, but plugin-level `permissionMode` is not enforced; shell-capable review and test roles therefore use before/after status checks and behavioral no-edit rules.
 
 Test a checkout without installing it:
 
@@ -76,7 +93,33 @@ claude --plugin-dir /absolute/path/to/agent-workbench
 
 ### Other harnesses
 
-Load `skills/orchestrate-task/SKILL.md` and its linked references as an Agent Skill or project instruction. Map only observed native child-task, model, effort, tool, and isolation controls. If stable delegation is unavailable, the workflow blocks instead of silently running child phases in the lead.
+Load the relevant `skills/*/SKILL.md` and its linked references as an Agent Skill or project instruction. For orchestration, map only observed native child-task, model, effort, tool, and isolation controls. If stable delegation is unavailable, that workflow blocks instead of silently running child phases in the lead. Loop discovery remains useful without delegation, but readiness cannot advance beyond draft when independent verification is unavailable.
+
+## Loop discovery and proposal drafting
+
+Invoke `$discover-loops` with evidence of repeated work or ask it to inspect authorized local sources. The skill fills a normalized readiness card and deterministically recommends one of five artifacts: rejection, a manual workflow, a normal skill, a read-only triage loop, or a supervised loop.
+
+Use Python 3.11 or newer. From a trusted checkout:
+
+```sh
+python3.11 skills/discover-loops/scripts/score_loop_readiness.py \
+  --card /path/to/readiness-card.json
+
+python3.11 skills/discover-loops/scripts/validate_loop_contract.py \
+  --contract /path/to/loop-contract.json
+```
+
+For an installed skill, derive `SKILL_ROOT` from the directory containing its loaded `discover-loops/SKILL.md` and invoke `"$SKILL_ROOT/scripts/..."` by absolute path. Never resolve bundled scripts from caller cwd or accept an untrusted `SKILL_ROOT`. Both CLIs accept `-` for bounded stdin and work from an unrelated current directory.
+
+The scorer always returns `activation_allowed: false`. Contracts embed the exact readiness card; the validator invokes the bundled scorer and recomputes its canonical SHA-256 and outcome. Source provenance remains externally reviewed. Capabilities use only closed provider-neutral operations (`workspace.observe`, `workspace.write`, `external.read`, `external.write`, or `credential.read`) with a non-authoritative display name and exact `binding_status: unbound`. Derived scope comes only from the operation ID; callers cannot supply category/effect or runtime bindings. Every capability ID needs exact human approval.
+
+All structurally accepted capabilities are non-executable. A separate out-of-scope activation workflow must resolve an approved proposal against a host-owned registry and revalidate its authority and exact target. V1 rejects lifecycle/irreversible operations, obvious unsafe aliases, unsafe Unicode, and sensitive/control-plane outputs. Evidence references are opaque `workspace:` or `source:` citations, never read authorization. Writable paths are exact allowlisted files at `loop-data/<proposal_id>/<filename>` or `reports/loop-output/<proposal_id>/<filename>`, with canonical lowercase components and casefold duplicate rejection, never directory/descendant grants. Mutable state is none or an exact listed workspace file; host-managed mutable state is prohibited. Read-only and external-read-only readiness scopes require no state.
+
+Successful validation reports `structurally_valid: true`, `semantic_review_required: true`, and `activation_allowed: false`, never a generic authorization-like `valid`. The lifecycle remains draft/pending/inactive. Structural validation cannot prove display-name meaning, source provenance, registry bindings, future filesystem safety, or verifier independence. Secret detection uses an 8,192-character rolling cap across canonical adjacent scalar strings but remains best-effort; host secret scanning and independent human review remain required. Contract text rejects Unicode `Cc`, `Cf`, `Cs`, `Zl`, and `Zp` categories. A future executor must revalidate the exact target and use descriptor-relative safe operations from a trusted root, no-follow, regular-file/ownership/link-count checks, atomic create/replace, and pre/post `fstat`; realpath/symlink checks alone are insufficient. Neither script calls a provider, modifies configuration, binds a capability, schedules work, or performs an external action.
+
+## Implementation quality governance
+
+For an implementation or operational change, explicitly invoke `$implementation-quality-governance`. It selects risk-proportionate architecture, security, accessibility, data-integrity, dependency, testing, rollout, documentation, and final-evidence gates; read only its conditional references that apply to the change.
 
 ## Automatic subagent routing
 
@@ -91,23 +134,25 @@ The router is deterministic and provider-neutral. It does not spawn agents, modi
 
 ## Current scope
 
-Agent Workbench includes one orchestration workflow, deterministic routing, replay tests, Claude subagent profiles, and optional Codex profiles. It contains no MCP server, lifecycle hooks, credential handling, telemetry upload, deployment logic, or automatic GitHub side effects.
+Agent Workbench includes orchestration, proposal-only loop discovery, and `implementation-quality-governance` capabilities; deterministic routing and readiness scoring; replay and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, credential handling, telemetry upload, deployment logic, loop activation or scheduling, or automatic GitHub side effects.
 
 ## Development
 
 Run all dependency-free repository and routing checks:
 
+Repository checks require Python 3.11 or newer; CI and release verification use Python 3.12 where available:
+
 ```sh
-python3 scripts/verify_repository.py
+python3.12 scripts/verify_repository.py
 ```
 
 When Claude Code is installed, also run:
 
 ```sh
-claude plugin validate . --strict
+claude plugin validate .
 ```
 
-Older Claude Code releases may not support `--strict`; run `claude plugin validate .` and review warnings manually in that case.
+`claude plugin validate .` is the supported compatibility check used by this project. Some installed Claude Code releases do not implement a `--strict` option, so repository guidance does not depend on it; validation warnings must still be reviewed and reported.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for change and replay requirements and [CHANGELOG.md](CHANGELOG.md) for releases.
 
