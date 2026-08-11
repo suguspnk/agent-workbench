@@ -99,6 +99,8 @@ Agent Workbench includes one orchestration workflow, deterministic routing, repl
 
 Run all dependency-free repository and routing checks with Python 3.11 or newer. The repository validator uses standard-library `tomllib` and exits with a clear diagnostic on older Python:
 
+Secure artifact and routing-card reads require POSIX `os.open` directory-descriptor support plus `O_DIRECTORY`, `O_NOFOLLOW`, and `O_NONBLOCK`. Platforms without every capability, including native Windows Python, are not supported for repository validation or routing-card file input; these readers fail closed instead of weakening symlink or special-file defenses.
+
 ```sh
 python3 scripts/verify_repository.py
 ```

@@ -94,6 +94,11 @@ MAX_TEXT_FIELD = 512
 MAX_JSON_DEPTH = 128
 MAX_JSON_NODES = 100_000
 REPLAY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_ORIGINAL_OS_OPEN = os.open
+_SECURE_OPEN_DIAGNOSTIC = (
+    "secure file reading is unsupported on this platform; requires POSIX os.open "
+    "dir_fd support and O_DIRECTORY, O_NOFOLLOW, and O_NONBLOCK"
+)
 
 
 class RoutingError(ValueError):
@@ -184,13 +189,10 @@ def _check_json_nodes(value: Any) -> None:
 
 def load_json(path: Path) -> Any:
     """Open once, reject final symlinks/special files, and read at most MAX+1 bytes."""
-    flags = os.O_RDONLY
+    _require_secure_open_support()
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    if hasattr(os, "O_NONBLOCK"):
-        flags |= os.O_NONBLOCK
     descriptor = _open_with_pinned_directories(path, flags)
     try:
         metadata = os.fstat(descriptor)
@@ -214,32 +216,47 @@ def load_json(path: Path) -> Any:
 
 
 def _open_with_pinned_directories(path: Path, file_flags: int) -> int:
+    if ".." in Path(os.fspath(path)).parts:
+        raise RoutingError("input path must not contain parent path components")
     absolute = Path(os.path.abspath(os.fspath(path)))
     parts = absolute.parts[1:]
     if not parts:
         raise RoutingError("input path must name a file")
-    directory_flags = os.O_RDONLY
-    if hasattr(os, "O_DIRECTORY"):
-        directory_flags |= os.O_DIRECTORY
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY
     if hasattr(os, "O_CLOEXEC"):
         directory_flags |= os.O_CLOEXEC
     # Follow directory aliases, but pin each resolved directory by descriptor;
     # file_flags still rejects a symlink swapped into the final component.
-    directory_fd = os.open(os.sep, directory_flags)
+    try:
+        directory_fd = os.open(os.sep, directory_flags)
+    except (NotImplementedError, TypeError) as error:
+        raise RoutingError(_SECURE_OPEN_DIAGNOSTIC) from error
     try:
         for component in parts[:-1]:
             try:
                 next_fd = os.open(component, directory_flags, dir_fd=directory_fd)
+            except (NotImplementedError, TypeError) as error:
+                raise RoutingError(_SECURE_OPEN_DIAGNOSTIC) from error
             except OSError as error:
                 raise RoutingError("input path has a missing, non-directory, or inaccessible ancestor") from error
             os.close(directory_fd)
             directory_fd = next_fd
         try:
             return os.open(parts[-1], file_flags, dir_fd=directory_fd)
+        except (NotImplementedError, TypeError) as error:
+            raise RoutingError(_SECURE_OPEN_DIAGNOSTIC) from error
         except OSError as error:
             raise RoutingError("input path is a symlink, missing, or inaccessible") from error
     finally:
         os.close(directory_fd)
+
+
+def _require_secure_open_support() -> None:
+    required_flags = ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK")
+    if any(not isinstance(getattr(os, name, None), int) for name in required_flags):
+        raise RoutingError(_SECURE_OPEN_DIAGNOSTIC)
+    if _ORIGINAL_OS_OPEN not in getattr(os, "supports_dir_fd", ()):
+        raise RoutingError(_SECURE_OPEN_DIAGNOSTIC)
 
 
 def _validate_string_list(name: str, value: Any, allowed: tuple[str, ...] | None) -> list[str]:
@@ -495,25 +512,30 @@ def route(card_value: Any) -> dict[str, Any]:
     requirement_card = dict(card, **current_requirements)
     _validate_role_requirements(role, requirement_card)
     implementation_roles = {"awb_builder", "awb_deep_worker", "awb_migration_worker"}
-    followups: list[str] = []
+    followups: set[str] = set()
     if role in implementation_roles or role == "awb_operator":
-        followups.append("awb_verifier")
+        followups.add("awb_verifier")
     if role in implementation_roles and card["evidence_bar"] in {"integration/regression", "independent review"}:
-        followups.append("awb_test_engineer")
+        followups.add("awb_test_engineer")
     if role in implementation_roles and card["impact"] in {"shared system", "production-critical"}:
-        followups.append("awb_test_engineer")
+        followups.add("awb_test_engineer")
     if role in implementation_roles and card["evidence_bar"] == "independent review":
-        followups.append("awb_reviewer")
+        followups.add("awb_reviewer")
     if persistent_boundary and role in implementation_roles:
-        followups.extend(("awb_test_engineer", "awb_reviewer"))
+        followups.update(("awb_test_engineer", "awb_reviewer"))
     if role == "awb_migration_worker":
-        followups.extend(("awb_test_engineer", "awb_reviewer"))
+        followups.update(("awb_test_engineer", "awb_reviewer"))
     if public_boundary and role in implementation_roles:
-        followups.append("awb_reviewer")
+        followups.add("awb_reviewer")
     if security_boundary and role not in {"awb_planner", "awb_security_reviewer"}:
-        followups.append("awb_security_reviewer")
+        followups.add("awb_security_reviewer")
     if role == "awb_operator":
-        followups.append("awb_security_reviewer")
+        followups.add("awb_security_reviewer")
+    ordered_followups = [
+        followup
+        for followup in ("awb_test_engineer", "awb_verifier", "awb_reviewer", "awb_security_reviewer")
+        if followup in followups
+    ]
 
     critical = security_boundary or persistent_boundary or role in {"awb_operator", "awb_migration_worker"} or card["impact"] == "production-critical"
     if critical:
@@ -553,7 +575,7 @@ def route(card_value: Any) -> dict[str, Any]:
         "task_class": task_class,
         "capability_tier": tier,
         "effort": effort,
-        "required_followups": _unique(followups),
+        "required_followups": ordered_followups,
         "reroute_after_planning": role == "awb_planner",
         "must_not_downgrade": critical or public_boundary,
         "required_capabilities": current_requirements["required_capabilities"],

@@ -192,8 +192,8 @@
       "capability_tier": "frontier",
       "effort": "high",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer"
       ],
       "reroute_after_planning": false,
@@ -296,8 +296,8 @@
       "capability_tier": "frontier",
       "effort": "high",
       "required_followups": [
-        "awb_verifier",
-        "awb_test_engineer"
+        "awb_test_engineer",
+        "awb_verifier"
       ],
       "reroute_after_planning": false,
       "must_not_downgrade": false,
@@ -342,8 +342,8 @@
       "capability_tier": "frontier",
       "effort": "maximum",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer"
       ],
       "reroute_after_planning": false,
@@ -389,8 +389,8 @@
       "capability_tier": "frontier",
       "effort": "high",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer",
         "awb_security_reviewer"
       ],
@@ -812,8 +812,8 @@
       "capability_tier": "frontier",
       "effort": "maximum",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer"
       ],
       "reroute_after_planning": false,
@@ -863,8 +863,8 @@
       "capability_tier": "frontier",
       "effort": "high",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer",
         "awb_security_reviewer"
       ],
@@ -915,8 +915,8 @@
       "capability_tier": "frontier",
       "effort": "high",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer",
         "awb_security_reviewer"
       ],
@@ -967,8 +967,8 @@
       "capability_tier": "frontier",
       "effort": "maximum",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer",
         "awb_security_reviewer"
       ],
@@ -1015,8 +1015,8 @@
       "capability_tier": "balanced",
       "effort": "medium",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer"
       ],
       "reroute_after_planning": false,
@@ -1062,8 +1062,8 @@
       "capability_tier": "balanced",
       "effort": "medium",
       "required_followups": [
-        "awb_verifier",
-        "awb_test_engineer"
+        "awb_test_engineer",
+        "awb_verifier"
       ],
       "reroute_after_planning": false,
       "must_not_downgrade": false,
@@ -1108,8 +1108,8 @@
       "capability_tier": "frontier",
       "effort": "high",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer"
       ],
       "reroute_after_planning": false,
@@ -1155,8 +1155,8 @@
       "capability_tier": "frontier",
       "effort": "maximum",
       "required_followups": [
-        "awb_verifier",
         "awb_test_engineer",
+        "awb_verifier",
         "awb_reviewer"
       ],
       "reroute_after_planning": false,
@@ -1341,8 +1341,8 @@
       "capability_tier": "frontier",
       "effort": "high",
       "required_followups": [
-        "awb_verifier",
-        "awb_test_engineer"
+        "awb_test_engineer",
+        "awb_verifier"
       ],
       "reroute_after_planning": false,
       "must_not_downgrade": false,
@@ -1387,8 +1387,8 @@
       "capability_tier": "frontier",
       "effort": "high",
       "required_followups": [
-        "awb_verifier",
-        "awb_test_engineer"
+        "awb_test_engineer",
+        "awb_verifier"
       ],
       "reroute_after_planning": false,
       "must_not_downgrade": true,

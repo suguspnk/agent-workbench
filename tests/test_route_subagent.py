@@ -42,19 +42,24 @@ class RouteSubagentTests(unittest.TestCase):
 
     def test_all_evidence_and_boundary_overlays_are_independent(self) -> None:
         by_id = {case["id"]: case["expected"] for case in self.cases}
-        self.assertEqual(by_id["bounded-integration-regression"]["required_followups"], ["awb_verifier", "awb_test_engineer"])
-        self.assertEqual(by_id["bounded-independent-review"]["required_followups"], ["awb_verifier", "awb_test_engineer", "awb_reviewer"])
-        self.assertEqual(by_id["persistent-debugging-overlays"]["required_followups"], ["awb_verifier", "awb_test_engineer", "awb_reviewer"])
-        self.assertEqual(by_id["all-contract-boundaries"]["required_followups"], ["awb_verifier", "awb_test_engineer", "awb_reviewer", "awb_security_reviewer"])
-        self.assertEqual(by_id["shared-impact-sole-test-trigger"]["required_followups"], ["awb_verifier", "awb_test_engineer"])
-        self.assertEqual(by_id["production-impact-sole-test-trigger"]["required_followups"], ["awb_verifier", "awb_test_engineer"])
+        self.assertEqual(by_id["bounded-integration-regression"]["required_followups"], ["awb_test_engineer", "awb_verifier"])
+        self.assertEqual(by_id["bounded-independent-review"]["required_followups"], ["awb_test_engineer", "awb_verifier", "awb_reviewer"])
+        self.assertEqual(by_id["persistent-debugging-overlays"]["required_followups"], ["awb_test_engineer", "awb_verifier", "awb_reviewer"])
+        self.assertEqual(by_id["all-contract-boundaries"]["required_followups"], ["awb_test_engineer", "awb_verifier", "awb_reviewer", "awb_security_reviewer"])
+        self.assertEqual(by_id["shared-impact-sole-test-trigger"]["required_followups"], ["awb_test_engineer", "awb_verifier"])
+        self.assertEqual(by_id["production-impact-sole-test-trigger"]["required_followups"], ["awb_test_engineer", "awb_verifier"])
+        order = {role: index for index, role in enumerate(("awb_test_engineer", "awb_verifier", "awb_reviewer", "awb_security_reviewer"))}
+        for case in self.cases:
+            followups = case["expected"]["required_followups"]
+            with self.subTest(order=case["id"]):
+                self.assertEqual(followups, sorted(set(followups), key=order.__getitem__))
 
     def test_migration_is_always_critical_and_reviewed(self) -> None:
         expected = next(case["expected"] for case in self.cases if case["id"] == "migration-never-routine")
         self.assertEqual(expected["primary_role"], "awb_migration_worker")
         self.assertEqual(expected["task_class"], "critical")
         self.assertTrue(expected["must_not_downgrade"])
-        self.assertEqual(expected["required_followups"], ["awb_verifier", "awb_test_engineer", "awb_reviewer"])
+        self.assertEqual(expected["required_followups"], ["awb_test_engineer", "awb_verifier", "awb_reviewer"])
 
     def test_operator_to_external_verifier_to_security_review_flow(self) -> None:
         by_id = {case["id"]: case["expected"] for case in self.cases}
@@ -325,6 +330,56 @@ class RouteSubagentTests(unittest.TestCase):
                 with self.assertRaisesRegex(ROUTER.RoutingError, "symlink"):
                     ROUTER.load_json(final_path)
             self.assertTrue(final_swapped)
+
+    def test_load_rejects_alias_parent_components_before_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original_parent = root / "original-parent"
+            original_parent.mkdir()
+            alternate_parent = root / "alternate-parent"
+            alternate_parent.mkdir()
+            (root / "card.json").write_text('{"source": "lexically-collapsed"}', encoding="utf-8")
+            linked_parent = root / "linked-parent"
+            linked_parent.symlink_to(original_parent, target_is_directory=True)
+
+            absolute = linked_parent / ".." / "card.json"
+            relative = Path(os.path.relpath(root, Path.cwd())) / "linked-parent" / ".." / "card.json"
+            for path in (absolute, relative):
+                with self.subTest(path=os.fspath(path)), self.assertRaisesRegex(ROUTER.RoutingError, "parent path components"):
+                    ROUTER.load_json(path)
+
+            linked_parent.unlink()
+            linked_parent.symlink_to(alternate_parent, target_is_directory=True)
+            with self.assertRaisesRegex(ROUTER.RoutingError, "parent path components"):
+                ROUTER.load_json(absolute)
+            (original_parent / "safe.json").write_text('{"source": "safe-alias"}', encoding="utf-8")
+            linked_parent.unlink()
+            linked_parent.symlink_to(original_parent, target_is_directory=True)
+            self.assertEqual(ROUTER.load_json(linked_parent / "safe.json"), {"source": "safe-alias"})
+
+    def test_load_fails_closed_when_secure_posix_features_are_missing_or_partial(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "card.json"
+            path.write_text("{}", encoding="utf-8")
+            for feature in ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK"):
+                with self.subTest(feature=feature), mock.patch.object(ROUTER.os, feature, None):
+                    with self.assertRaisesRegex(ROUTER.RoutingError, "secure file reading is unsupported"):
+                        ROUTER.load_json(path)
+            with mock.patch.object(ROUTER.os, "supports_dir_fd", frozenset()):
+                with self.assertRaisesRegex(ROUTER.RoutingError, "secure file reading is unsupported"):
+                    ROUTER.load_json(path)
+
+            real_open = os.open
+
+            def unsupported_dir_fd(component: str, flags: int, *, dir_fd: int | None = None) -> int:
+                if dir_fd is not None:
+                    raise NotImplementedError("unsafe\n\x1b\x07details")
+                return real_open(component, flags)
+
+            with mock.patch.object(ROUTER.os, "open", side_effect=unsupported_dir_fd):
+                with self.assertRaisesRegex(ROUTER.RoutingError, "secure file reading is unsupported") as raised:
+                    ROUTER.load_json(path)
+            self.assertNotIn("unsafe", str(raised.exception))
 
     def test_json_nesting_ignores_brackets_inside_strings(self) -> None:
         value = "[" * (ROUTER.MAX_JSON_DEPTH + 10)

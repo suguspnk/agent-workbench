@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -77,6 +78,41 @@ ROLE_SEMANTICS = {
     "awb_reviewer": ("complete diff", "no actionable findings remain"),
     "awb_security_reviewer": ("complete diff", "no actionable findings remain", "ordinary"),
 }
+_ORIGINAL_OS_OPEN = os.open
+_SECURE_OPEN_DIAGNOSTIC = (
+    "secure file reading is unsupported on this platform; requires POSIX os.open "
+    "dir_fd support and O_DIRECTORY, O_NOFOLLOW, and O_NONBLOCK"
+)
+# These digests bind every reviewed instruction body, including all text outside
+# the canonical policy block, without duplicating 22 complete bodies here.
+REVIEWED_ROLE_BODY_SHA256 = {
+    "codex": {
+        "awb_builder": "83250b0bd4a810fc5dcc45fce149047ae3215e613c4c3a80aed9d51439559a8e",
+        "awb_deep_investigator": "06e99005aeecf33c99a382e43e069e6568a220a5777a963d3e3c39d62236b448",
+        "awb_deep_worker": "ae607646642d55d22c37c89391360059525c7a8673ac908bc6c18b19a067fa40",
+        "awb_fast_investigator": "d30e6dbcd5ff921eaf21e6caee923a0c3a92d9ebecdf2082c259525fa3b1d83d",
+        "awb_migration_worker": "27a633e67f03671b7b6e73b8ef1a9bc00c69c9fc55f74f2ed35beeaeb60ba196",
+        "awb_operator": "b46dca21fae785ad2c8a0f7e10e108af38f3f3305698585a8a92cb1658e4cc14",
+        "awb_planner": "9e2a8450629ab36e141f4b86f4db1c972ec9c2b47e54faadeddb109cbda6992b",
+        "awb_reviewer": "a34115a9e819541f2790148a7e3cbdd196fc16d09f5e45bc50122fa22a34122b",
+        "awb_security_reviewer": "1cdfb5e4bc070b22ed336ced00062504d13dc54311d42f60decbc59a8bbd3f4a",
+        "awb_test_engineer": "44e78e326e2d2df273d33229023af14bee89161dacfc7901072fe429a24f02ad",
+        "awb_verifier": "ae5dc752e8b1f4d9ac6fbb4875dd282f2126843e4f7e16f5bf19833baaa188cc",
+    },
+    "claude": {
+        "awb_builder": "7759dc07ddaa7c8e2f574c4c96b4084ffa6a06e2d2e33a84c1ab3a38b6df7180",
+        "awb_deep_investigator": "4bd5e20be3a0c41ffeed521fe5fbfc36db8cb9283575be1b5d8fdd0e3903e227",
+        "awb_deep_worker": "18a5578c06186cf832134de9afead8bd072980fbdef4623ea6a38b506d29468a",
+        "awb_fast_investigator": "e8a9890ce8b48a9e6f111ebf13c05e47e36b9c617a28b9261b785f70888fc518",
+        "awb_migration_worker": "41816cc7928f1f4a3ffa5782424bf47585ad685a669d3bba6e2dd284037c8573",
+        "awb_operator": "7da543042668730f426b7a87b82d30927a400158bb793f9a9c96210c50c7768c",
+        "awb_planner": "cc0a23e802e6ac575fe325a6eb7c9302a6b5e2a1c0578cd958cd723205723778",
+        "awb_reviewer": "63eb168d067d22a749cce061289f69d51bf303aaac795865ab69a2fbe9512002",
+        "awb_security_reviewer": "11c62ce41918094856bf71e8a29884ef2c06ca177ccedf0c4ee6fa3496529cd3",
+        "awb_test_engineer": "039eea064255795f326f3e9bddd388b19ed776d039115b24a5b6cffad88b44a3",
+        "awb_verifier": "a3ec6c90fe471a9d87b7aba00ef5fd82cfc4755fb740d082948a749c12517051",
+    },
+}
 
 
 def fail(message: str) -> None:
@@ -84,21 +120,32 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def safe_diagnostic(value: Any) -> str:
+    rendered = json.dumps(value, ensure_ascii=True, sort_keys=True, default=str)
+    return rendered[1:-1] if isinstance(value, str) else rendered
+
+
 def relative(path: Path) -> str:
     try:
-        return str(path.relative_to(ROOT))
+        value = str(path.relative_to(ROOT))
     except ValueError:
-        return str(path)
+        value = str(path)
+    return safe_diagnostic(value)
+
+
+def require_secure_open_support() -> None:
+    required_flags = ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK")
+    if any(not isinstance(getattr(os, name, None), int) for name in required_flags):
+        fail(_SECURE_OPEN_DIAGNOSTIC)
+    if _ORIGINAL_OS_OPEN not in getattr(os, "supports_dir_fd", ()):
+        fail(_SECURE_OPEN_DIAGNOSTIC)
 
 
 def safe_read_bytes(path: Path, limit: int = MAX_ARTIFACT_BYTES) -> bytes:
-    flags = os.O_RDONLY
+    require_secure_open_support()
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    if hasattr(os, "O_NONBLOCK"):
-        flags |= os.O_NONBLOCK
     descriptor = open_without_symlink_components(path, flags)
     try:
         metadata = os.fstat(descriptor)
@@ -122,24 +169,28 @@ def open_without_symlink_components(path: Path, file_flags: int) -> int:
     parts = absolute.parts[1:]
     if not parts:
         fail("artifact path must name a file")
-    directory_flags = os.O_RDONLY
-    if hasattr(os, "O_DIRECTORY"):
-        directory_flags |= os.O_DIRECTORY
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY
     if hasattr(os, "O_CLOEXEC"):
         directory_flags |= os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        directory_flags |= os.O_NOFOLLOW
-    directory_fd = os.open(os.sep, directory_flags)
+    directory_flags |= os.O_NOFOLLOW
+    try:
+        directory_fd = os.open(os.sep, directory_flags)
+    except (NotImplementedError, TypeError):
+        fail(_SECURE_OPEN_DIAGNOSTIC)
     try:
         for component in parts[:-1]:
             try:
                 next_fd = os.open(component, directory_flags, dir_fd=directory_fd)
+            except (NotImplementedError, TypeError):
+                fail(_SECURE_OPEN_DIAGNOSTIC)
             except OSError:
                 fail(f"{relative(path)} has a symlink, missing, or inaccessible ancestor")
             os.close(directory_fd)
             directory_fd = next_fd
         try:
             return os.open(parts[-1], file_flags, dir_fd=directory_fd)
+        except (NotImplementedError, TypeError):
+            fail(_SECURE_OPEN_DIAGNOSTIC)
         except OSError:
             fail(f"{relative(path)} is a symlink, missing, or inaccessible")
     finally:
@@ -150,7 +201,7 @@ def safe_read_text(path: Path, limit: int = MAX_ARTIFACT_BYTES) -> str:
     try:
         return safe_read_bytes(path, limit).decode("utf-8")
     except UnicodeDecodeError as error:
-        fail(f"{relative(path)} must be UTF-8: {error}")
+        fail(f"{relative(path)} must be UTF-8: {safe_diagnostic(str(error))}")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -158,7 +209,7 @@ def load_json(path: Path) -> dict[str, Any]:
         value: dict[str, Any] = {}
         for key, item in pairs:
             if key in value:
-                fail(f"{relative(path)} has duplicate JSON key: {key}")
+                fail(f"{relative(path)} has duplicate JSON key: {safe_diagnostic(key)}")
             value[key] = item
         return value
     try:
@@ -167,7 +218,7 @@ def load_json(path: Path) -> dict[str, Any]:
         value = json.loads(text, object_pairs_hook=reject_duplicates)
         check_json_nodes(value)
     except (OSError, json.JSONDecodeError, RecursionError, MemoryError) as error:
-        fail(f"{relative(path)} is not valid JSON: {error}")
+        fail(f"{relative(path)} is not valid JSON: {safe_diagnostic(str(error))}")
     if not isinstance(value, dict):
         fail(f"{relative(path)} must contain a JSON object")
     return value
@@ -227,12 +278,12 @@ def parse_frontmatter(path: Path, allowed_keys: set[str] | None = None) -> tuple
             continue
         key, marker, value = line.partition(":")
         if not marker or not key.strip() or not value.strip():
-            fail(f"{relative(path)} has unsupported frontmatter line: {line!r}")
+            fail(f"{relative(path)} has unsupported frontmatter line: {safe_diagnostic(line)}")
         normalized_key = key.strip()
         if normalized_key in values:
-            fail(f"{relative(path)} has duplicate frontmatter key: {normalized_key}")
+            fail(f"{relative(path)} has duplicate frontmatter key: {safe_diagnostic(normalized_key)}")
         if allowed_keys is not None and normalized_key not in allowed_keys:
-            fail(f"{relative(path)} has unknown frontmatter key: {normalized_key}")
+            fail(f"{relative(path)} has unknown frontmatter key: {safe_diagnostic(normalized_key)}")
         values[normalized_key] = value.strip().strip('"')
     return values, body
 
@@ -240,20 +291,20 @@ def parse_frontmatter(path: Path, allowed_keys: set[str] | None = None) -> tuple
 def require_exact_keys(path: Path, value: dict[str, Any], expected: set[str]) -> None:
     missing, extra = sorted(expected - set(value)), sorted(set(value) - expected)
     if missing or extra:
-        fail(f"{relative(path)} has invalid keys (missing={missing}, unknown={extra})")
+        fail(f"{relative(path)} has invalid keys (missing={safe_diagnostic(missing)}, unknown={safe_diagnostic(extra)})")
 
 
 def require_keys(path: Path, value: dict[str, Any], required: set[str]) -> None:
     missing = sorted(required - set(value))
     if missing:
-        fail(f"{relative(path)} is missing required keys: {', '.join(missing)}")
+        fail(f"{relative(path)} is missing required keys: {safe_diagnostic(missing)}")
 
 
 def parse_codex_profile(path: Path) -> dict[str, Any]:
     try:
         profile = tomllib.loads(safe_read_text(path))
     except (OSError, tomllib.TOMLDecodeError) as error:
-        fail(f"{relative(path)} is not valid TOML: {error}")
+        fail(f"{relative(path)} is not valid TOML: {safe_diagnostic(str(error))}")
     if not isinstance(profile, dict):
         fail(f"{relative(path)} must contain a TOML table")
     require_exact_keys(path, profile, CODEX_PROFILE_KEYS)
@@ -307,13 +358,17 @@ def validate_role_policy(path: Path, role: str, instructions: str) -> None:
     if instructions[start:end] != canonical_role_policy(role):
         fail(f"{relative(path)} canonical role policy differs from the reviewed template")
 
-    outside = instructions[:start] + instructions[end:]
-    privilege = re.compile(
-        r"(?is)(?:\b(?:network|internet|credentials?|tokens?|secrets?|push|deploy|messages?|delet\w*|destructive|external action)\b.{0,80}\b(?:allowed|permitted|enabled|granted|performed)\b"
-        r"|\b(?:may|can|permit\w*|allow\w*|grant\w*)\b.{0,80}\b(?:network|internet|credentials?|tokens?|secrets?|push|deploy|messages?|delet\w*|destructive|external action)\b)"
-    )
-    if privilege.search(outside):
-        fail(f"{relative(path)} contains a privilege grant outside the canonical policy")
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    if absolute.parent == ROOT / "adapters/codex/.codex/agents":
+        harness = "codex"
+    elif absolute.parent == ROOT / "agents":
+        harness = "claude"
+    else:
+        fail(f"{relative(path)} is outside the reviewed role profile locations")
+    expected_digest = REVIEWED_ROLE_BODY_SHA256.get(harness, {}).get(role)
+    actual_digest = hashlib.sha256(instructions.encode("utf-8")).hexdigest()
+    if expected_digest is None or actual_digest != expected_digest:
+        fail(f"{relative(path)} complete instruction body differs from the reviewed {harness} template")
     if role == "awb_operator" and "Do not edit source" not in instructions:
         fail(f"{relative(path)} operator must forbid source edits")
 
@@ -443,10 +498,10 @@ def check_codex_profiles() -> None:
         if not isinstance(name, str) or name not in EXPECTED_ROLES:
             fail(f"{relative(path)} has an unknown name")
         if name in seen:
-            fail(f"duplicate Codex profile name: {name}")
+            fail(f"duplicate Codex profile name: {safe_diagnostic(name)}")
         seen.add(name)
         if path.stem != name.replace("_", "-"):
-            fail(f"{relative(path)} filename does not match profile name {name}")
+            fail(f"{relative(path)} filename does not match profile name {safe_diagnostic(name)}")
         expected_model, expected_effort, expected_sandbox = EXPECTED_ROLES[name]
         if name == "awb_operator" and profile.get("sandbox_mode") != "read-only":
             fail(f"{relative(path)} operator must use read-only sandbox mode")
@@ -475,10 +530,10 @@ def check_claude_profiles() -> None:
         if name not in CLAUDE_PROFILES:
             fail(f"{relative(path)} has an unknown name")
         if name in seen:
-            fail(f"duplicate Claude profile name: {name}")
+            fail(f"duplicate Claude profile name: {safe_diagnostic(name)}")
         seen.add(name)
         if path.stem != name:
-            fail(f"{relative(path)} filename does not match profile name {name}")
+            fail(f"{relative(path)} filename does not match profile name {safe_diagnostic(name)}")
         expected_model, expected_effort, behaviorally_read_only = CLAUDE_PROFILES[name]
         if (frontmatter.get("model"), frontmatter.get("effort")) != (expected_model, expected_effort):
             fail(f"{relative(path)} model or effort differs from the routing policy")
@@ -487,7 +542,7 @@ def check_claude_profiles() -> None:
         tools = {item.strip() for item in frontmatter.get("tools", "").split(",") if item.strip()}
         unknown_tools = sorted(tools - CLAUDE_TOOL_KEYS)
         if unknown_tools:
-            fail(f"{relative(path)} exposes unknown tools: {', '.join(unknown_tools)}")
+            fail(f"{relative(path)} exposes unknown tools: {safe_diagnostic(unknown_tools)}")
         if tools != ({"Read", "Edit", "Write", "Grep", "Glob", "Bash"} if not behaviorally_read_only else {"Read", "Grep", "Glob", "Bash"}):
             fail(f"{relative(path)} does not use the least-authority role tool set")
         if behaviorally_read_only and tools.intersection({"Edit", "Write", "NotebookEdit"}):
@@ -507,8 +562,8 @@ def check_routing_replay() -> None:
     ]
     result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
     if result.returncode:
-        fail(f"routing replay failed:\n{result.stdout}{result.stderr}")
-    print(result.stdout.strip())
+        fail(f"routing replay failed: {safe_diagnostic(result.stdout + result.stderr)}")
+    print(safe_diagnostic(result.stdout.strip()))
 
     unit_result = subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
@@ -518,7 +573,7 @@ def check_routing_replay() -> None:
         check=False,
     )
     if unit_result.returncode:
-        fail(f"routing unit tests failed:\n{unit_result.stdout}{unit_result.stderr}")
+        fail(f"routing unit tests failed: {safe_diagnostic(unit_result.stdout + unit_result.stderr)}")
     print("Routing unit tests passed.")
 
 
@@ -563,9 +618,9 @@ def check_local_markdown_links() -> None:
             try:
                 resolved.relative_to(ROOT.resolve())
             except ValueError:
-                fail(f"{relative(path)} links outside the package: {target}")
+                fail(f"{relative(path)} links outside the package: {safe_diagnostic(target)}")
             if not resolved.exists():
-                fail(f"{relative(path)} has a broken local link: {target}")
+                fail(f"{relative(path)} has a broken local link: {safe_diagnostic(target)}")
 
 
 def main() -> None:
