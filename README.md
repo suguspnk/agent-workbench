@@ -2,7 +2,7 @@
 
 Portable task orchestration for Codex, Claude Code, and other Agent Skills-compatible harnesses.
 
-Agent Workbench keeps the lead task responsible only for intake, routing, coordination, authorization, and acceptance. Planning, implementation, testing, verification, review, and exact authorized operations run in bounded child tasks. Its first workflow, `orchestrate-task`, combines a harness-neutral contract with deterministic subagent routing, replay cases, 11 roles in each harness, bundled Claude profiles, and an optional Codex profile adapter.
+Agent Workbench keeps the lead task responsible only for intake, routing, coordination, authorization, and acceptance. When the harness exposes stable child delegation, planning, implementation, testing, verification, and review run in bounded child tasks; otherwise the workflow blocks. External and destructive operations always fail closed in the current release because no constrained execution and independent external-verification adapter is configured. Its first workflow, `orchestrate-task`, combines a harness-neutral contract with deterministic subagent routing, replay cases, 11 roles in each harness, bundled Claude profiles, and an optional Codex profile adapter.
 
 ## Design principles
 
@@ -35,6 +35,7 @@ skills/orchestrate-task/
 ├── scripts/route_subagent.py           # deterministic primary role + risk overlays
 └── tests/routing-cases.json            # routing replay set
 scripts/verify_repository.py            # dependency-free package validation
+.github/ci/run_sandboxed_validation.py  # trusted bounded PR-validation launcher
 ```
 
 The Markdown workflow, routing schema, and task contract are the portable core. Harness-specific adapters map portable roles to capabilities the host actually exposes.
@@ -106,6 +107,8 @@ Secure artifact and routing-card reads require POSIX `os.open` directory-descrip
 ```sh
 python3 scripts/verify_repository.py
 ```
+
+Pull-request validation uses a trusted base-branch `pull_request_target` workflow. Candidate code runs only in exact-digest Python containers with no network, no credentials, a read-only source mount, hidden Git metadata, and process, memory, CPU, time, and output bounds. Local unit tests exercise the command and failure contracts without launching Docker. A live controlled-fork and same-repository PR test is still required before activating this workflow; that external bootstrap is deliberately outside ordinary local development authorization.
 
 When Claude Code is installed, also run:
 

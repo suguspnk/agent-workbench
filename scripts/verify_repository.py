@@ -7,9 +7,13 @@ import hashlib
 import json
 import os
 import re
+import signal
 import stat
 import subprocess
 import sys
+import threading
+from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -23,31 +27,31 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.6.0"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
-EXPECTED_ROLES = {
-    "awb_planner": ("gpt-5.6-sol", "high", "read-only"),
-    "awb_fast_investigator": ("gpt-5.6-luna", "low", "read-only"),
-    "awb_deep_investigator": ("gpt-5.6-sol", "high", "read-only"),
-    "awb_builder": ("gpt-5.6-terra", "medium", "workspace-write"),
-    "awb_deep_worker": ("gpt-5.6-sol", "high", "workspace-write"),
-    "awb_migration_worker": ("gpt-5.6-sol", "xhigh", "workspace-write"),
-    "awb_operator": ("gpt-5.6-sol", "xhigh", "read-only"),
-    "awb_verifier": ("gpt-5.6-terra", "medium", "workspace-write"),
-    "awb_test_engineer": ("gpt-5.6-terra", "high", "workspace-write"),
-    "awb_reviewer": ("gpt-5.6-sol", "high", "read-only"),
-    "awb_security_reviewer": ("gpt-5.6-sol", "xhigh", "read-only"),
+CODEX_PROFILES = {
+    "awb_planner": ("awb_planner", "Read-only planner for Agent Workbench child-task discovery and implementation plans.", "gpt-5.6-sol", "high", "read-only", "9e2a8450629ab36e141f4b86f4db1c972ec9c2b47e54faadeddb109cbda6992b"),
+    "awb_fast_investigator": ("awb_fast_investigator", "Fast read-only investigator for narrow, repeatable Agent Workbench evidence gathering.", "gpt-5.6-luna", "low", "read-only", "d30e6dbcd5ff921eaf21e6caee923a0c3a92d9ebecdf2082c259525fa3b1d83d"),
+    "awb_deep_investigator": ("awb_deep_investigator", "Frontier read-only investigator for consequential settled mapping and extraction.", "gpt-5.6-sol", "high", "read-only", "06e99005aeecf33c99a382e43e069e6568a220a5777a963d3e3c39d62236b448"),
+    "awb_builder": ("awb_builder", "Bounded implementation worker for Agent Workbench tasks with clear ownership and tests.", "gpt-5.6-terra", "medium", "workspace-write", "83250b0bd4a810fc5dcc45fce149047ae3215e613c4c3a80aed9d51439559a8e"),
+    "awb_deep_worker": ("awb_deep_worker", "High-reasoning worker for difficult Agent Workbench debugging and design tasks.", "gpt-5.6-sol", "high", "workspace-write", "ae607646642d55d22c37c89391360059525c7a8673ac908bc6c18b19a067fa40"),
+    "awb_migration_worker": ("awb_migration_worker", "Extra-high-reasoning worker for bounded schema, persistence, and compatibility migrations.", "gpt-5.6-sol", "xhigh", "workspace-write", "27a633e67f03671b7b6e73b8ef1a9bc00c69c9fc55f74f2ed35beeaeb60ba196"),
+    "awb_operator": ("awb_operator", "Reserved unavailable operator profile; external and destructive execution is blocked without a constrained adapter.", "gpt-5.6-sol", "xhigh", "read-only", "80af1575db93d350251f307488ff26a4155e02c768701c2af2398799b1c96fa1"),
+    "awb_verifier": ("awb_verifier", "Independent verifier for Agent Workbench scope, diff, and test evidence.", "gpt-5.6-terra", "medium", "workspace-write", "3e165104373fbbf7ffbf8f486cc656e59f1235dd914365cccd82597444edaf8f"),
+    "awb_test_engineer": ("awb_test_engineer", "Independent test engineer for Agent Workbench integration, regression, and failure-path validation.", "gpt-5.6-terra", "high", "workspace-write", "44e78e326e2d2df273d33229023af14bee89161dacfc7901072fe429a24f02ad"),
+    "awb_reviewer": ("awb_reviewer", "Independent high-reasoning reviewer for consequential Agent Workbench changes.", "gpt-5.6-sol", "high", "read-only", "a34115a9e819541f2790148a7e3cbdd196fc16d09f5e45bc50122fa22a34122b"),
+    "awb_security_reviewer": ("awb_security_reviewer", "Extra-high-reasoning read-only reviewer for security-sensitive Agent Workbench changes.", "gpt-5.6-sol", "xhigh", "read-only", "1cdfb5e4bc070b22ed336ced00062504d13dc54311d42f60decbc59a8bbd3f4a"),
 }
 CLAUDE_PROFILES = {
-    "awb-planner": ("opus", "high", True),
-    "awb-fast-investigator": ("haiku", "low", True),
-    "awb-deep-investigator": ("opus", "high", True),
-    "awb-builder": ("sonnet", "medium", False),
-    "awb-deep-worker": ("opus", "high", False),
-    "awb-migration-worker": ("opus", "xhigh", False),
-    "awb-operator": ("opus", "xhigh", True),
-    "awb-verifier": ("sonnet", "medium", True),
-    "awb-test-engineer": ("sonnet", "high", True),
-    "awb-reviewer": ("opus", "high", True),
-    "awb-security-reviewer": ("opus", "xhigh", True),
+    "awb-planner": ("awb-planner", "Read-only planner for unsettled architecture, ownership, dependency order, acceptance criteria, or child-task boundaries.", "opus", "high", frozenset({"Read", "Grep", "Glob", "Bash"}), "cc0a23e802e6ac575fe325a6eb7c9302a6b5e2a1c0578cd958cd723205723778"),
+    "awb-fast-investigator": ("awb-fast-investigator", "Fast read-only investigator for settled maps, fixed-schema extraction, classification, and narrow evidence gathering.", "haiku", "low", frozenset({"Read", "Grep", "Glob", "Bash"}), "e8a9890ce8b48a9e6f111ebf13c05e47e36b9c617a28b9261b785f70888fc518"),
+    "awb-deep-investigator": ("awb-deep-investigator", "Frontier read-only investigator for consequential settled mapping and extraction.", "opus", "high", frozenset({"Read", "Grep", "Glob", "Bash"}), "4bd5e20be3a0c41ffeed521fe5fbfc36db8cb9283575be1b5d8fdd0e3903e227"),
+    "awb-builder": ("awb-builder", "Bounded implementation worker for settled internal interfaces, owned paths, reversible changes, and focused tests.", "sonnet", "medium", frozenset({"Read", "Edit", "Write", "Grep", "Glob", "Bash"}), "7759dc07ddaa7c8e2f574c4c96b4084ffa6a06e2d2e33a84c1ab3a38b6df7180"),
+    "awb-deep-worker": ("awb-deep-worker", "High-reasoning worker for hard debugging, cross-component implementation, public contracts, and consequential changes.", "opus", "high", frozenset({"Read", "Edit", "Write", "Grep", "Glob", "Bash"}), "18a5578c06186cf832134de9afead8bd072980fbdef4623ea6a38b506d29468a"),
+    "awb-migration-worker": ("awb-migration-worker", "Maximum-effort worker for bounded schema, persistence, compatibility, backfill, rollout, and rollback changes.", "opus", "xhigh", frozenset({"Read", "Edit", "Write", "Grep", "Glob", "Bash"}), "41816cc7928f1f4a3ffa5782424bf47585ad685a669d3bba6e2dd284037c8573"),
+    "awb-operator": ("awb-operator", "Reserved unavailable operator profile; external and destructive execution is blocked without a constrained adapter.", "opus", "xhigh", frozenset({"Read", "Grep", "Glob"}), "d7513ccab0f5e497ce56835e99fcc8b97d716d24791cabeee6ab84557bd12d11"),
+    "awb-verifier": ("awb-verifier", "Independent verifier for scope, complete diff, working-tree state, focused checks, and acceptance evidence.", "sonnet", "medium", frozenset({"Read", "Grep", "Glob", "Bash"}), "8130558ab4ab5c5109fb021c96f437aee431f5951d3a0a347b0ef7a8a7df5079"),
+    "awb-test-engineer": ("awb-test-engineer", "Independent test engineer for integration, regression, concurrency, migration, and failure-path validation.", "sonnet", "high", frozenset({"Read", "Grep", "Glob", "Bash"}), "039eea064255795f326f3e9bddd388b19ed776d039115b24a5b6cffad88b44a3"),
+    "awb-reviewer": ("awb-reviewer", "Independent findings-only reviewer for consequential correctness, compatibility, maintainability, performance, and test risk.", "opus", "high", frozenset({"Read", "Grep", "Glob", "Bash"}), "63eb168d067d22a749cce061289f69d51bf303aaac795865ab69a2fbe9512002"),
+    "awb-security-reviewer": ("awb-security-reviewer", "Maximum-effort findings-only reviewer for authorization, secrets, untrusted input, isolation, and privilege boundaries.", "opus", "xhigh", frozenset({"Read", "Grep", "Glob", "Bash"}), "11c62ce41918094856bf71e8a29884ef2c06ca177ccedf0c4ee6fa3496529cd3"),
 }
 CODEX_PROFILE_KEYS = {"name", "description", "model", "model_reasoning_effort", "sandbox_mode", "developer_instructions"}
 CLAUDE_REQUIRED_FRONTMATTER_KEYS = {"name", "description", "tools", "model", "effort"}
@@ -80,41 +84,15 @@ ROLE_SEMANTICS = {
     "awb_reviewer": ("complete diff", "no actionable findings remain"),
     "awb_security_reviewer": ("complete diff", "no actionable findings remain", "ordinary"),
 }
+MAX_SUBPROCESS_OUTPUT_BYTES = 65_536
+ROUTING_REPLAY_TIMEOUT_SECONDS = 30
+UNIT_TEST_TIMEOUT_SECONDS = 180
+SUBPROCESS_KILL_GRACE_SECONDS = 2
 _ORIGINAL_OS_OPEN = os.open
 _SECURE_OPEN_DIAGNOSTIC = (
     "secure file reading is unsupported on this platform; requires POSIX os.open "
     "dir_fd support and O_DIRECTORY, O_NOFOLLOW, and O_NONBLOCK"
 )
-# These digests bind every reviewed instruction body, including all text outside
-# the canonical policy block, without duplicating 22 complete bodies here.
-REVIEWED_ROLE_BODY_SHA256 = {
-    "codex": {
-        "awb_builder": "83250b0bd4a810fc5dcc45fce149047ae3215e613c4c3a80aed9d51439559a8e",
-        "awb_deep_investigator": "06e99005aeecf33c99a382e43e069e6568a220a5777a963d3e3c39d62236b448",
-        "awb_deep_worker": "ae607646642d55d22c37c89391360059525c7a8673ac908bc6c18b19a067fa40",
-        "awb_fast_investigator": "d30e6dbcd5ff921eaf21e6caee923a0c3a92d9ebecdf2082c259525fa3b1d83d",
-        "awb_migration_worker": "27a633e67f03671b7b6e73b8ef1a9bc00c69c9fc55f74f2ed35beeaeb60ba196",
-        "awb_operator": "80af1575db93d350251f307488ff26a4155e02c768701c2af2398799b1c96fa1",
-        "awb_planner": "9e2a8450629ab36e141f4b86f4db1c972ec9c2b47e54faadeddb109cbda6992b",
-        "awb_reviewer": "a34115a9e819541f2790148a7e3cbdd196fc16d09f5e45bc50122fa22a34122b",
-        "awb_security_reviewer": "1cdfb5e4bc070b22ed336ced00062504d13dc54311d42f60decbc59a8bbd3f4a",
-        "awb_test_engineer": "44e78e326e2d2df273d33229023af14bee89161dacfc7901072fe429a24f02ad",
-        "awb_verifier": "3e165104373fbbf7ffbf8f486cc656e59f1235dd914365cccd82597444edaf8f",
-    },
-    "claude": {
-        "awb_builder": "7759dc07ddaa7c8e2f574c4c96b4084ffa6a06e2d2e33a84c1ab3a38b6df7180",
-        "awb_deep_investigator": "4bd5e20be3a0c41ffeed521fe5fbfc36db8cb9283575be1b5d8fdd0e3903e227",
-        "awb_deep_worker": "18a5578c06186cf832134de9afead8bd072980fbdef4623ea6a38b506d29468a",
-        "awb_fast_investigator": "e8a9890ce8b48a9e6f111ebf13c05e47e36b9c617a28b9261b785f70888fc518",
-        "awb_migration_worker": "41816cc7928f1f4a3ffa5782424bf47585ad685a669d3bba6e2dd284037c8573",
-        "awb_operator": "d7513ccab0f5e497ce56835e99fcc8b97d716d24791cabeee6ab84557bd12d11",
-        "awb_planner": "cc0a23e802e6ac575fe325a6eb7c9302a6b5e2a1c0578cd958cd723205723778",
-        "awb_reviewer": "63eb168d067d22a749cce061289f69d51bf303aaac795865ab69a2fbe9512002",
-        "awb_security_reviewer": "11c62ce41918094856bf71e8a29884ef2c06ca177ccedf0c4ee6fa3496529cd3",
-        "awb_test_engineer": "039eea064255795f326f3e9bddd388b19ed776d039115b24a5b6cffad88b44a3",
-        "awb_verifier": "8130558ab4ab5c5109fb021c96f437aee431f5951d3a0a347b0ef7a8a7df5079",
-    },
-}
 
 
 def fail(message: str) -> None:
@@ -371,17 +349,55 @@ def validate_role_policy(path: Path, role: str, instructions: str) -> None:
 
     absolute = Path(os.path.abspath(os.fspath(path)))
     if absolute.parent == ROOT / "adapters/codex/.codex/agents":
-        harness = "codex"
+        expected = CODEX_PROFILES.get(role)
     elif absolute.parent == ROOT / "agents":
-        harness = "claude"
+        expected = CLAUDE_PROFILES.get(role.replace("_", "-"))
     else:
         fail(f"{relative(path)} is outside the reviewed role profile locations")
-    expected_digest = REVIEWED_ROLE_BODY_SHA256.get(harness, {}).get(role)
+    expected_digest = expected[5] if expected is not None else None
     actual_digest = hashlib.sha256(instructions.encode("utf-8")).hexdigest()
     if expected_digest is None or actual_digest != expected_digest:
-        fail(f"{relative(path)} complete instruction body differs from the reviewed {harness} template")
+        fail(f"{relative(path)} complete instruction body differs from the reviewed template")
     if role == "awb_operator" and "Do not edit source" not in instructions:
         fail(f"{relative(path)} operator must forbid source edits")
+
+
+def validate_codex_profile_tuple(path: Path, profile: dict[str, Any]) -> None:
+    name = profile.get("name")
+    instructions = profile.get("developer_instructions")
+    if not isinstance(name, str) or name not in CODEX_PROFILES or not isinstance(instructions, str):
+        fail(f"{relative(path)} has an unknown name or non-string developer instructions")
+    actual = (
+        name,
+        profile.get("description"),
+        profile.get("model"),
+        profile.get("model_reasoning_effort"),
+        profile.get("sandbox_mode"),
+        hashlib.sha256(instructions.encode("utf-8")).hexdigest(),
+    )
+    if actual != CODEX_PROFILES[name]:
+        fail(f"{relative(path)} complete Codex profile tuple differs from the reviewed template")
+    check_semantics(path, name, instructions)
+    validate_role_policy(path, name, instructions)
+
+
+def validate_claude_profile_tuple(path: Path, frontmatter: dict[str, str], body: str) -> None:
+    name = frontmatter.get("name")
+    tools = frozenset(item.strip() for item in frontmatter.get("tools", "").split(",") if item.strip())
+    if name not in CLAUDE_PROFILES:
+        fail(f"{relative(path)} has an unknown name")
+    actual = (
+        name,
+        frontmatter.get("description"),
+        frontmatter.get("model"),
+        frontmatter.get("effort"),
+        tools,
+        hashlib.sha256(body.encode("utf-8")).hexdigest(),
+    )
+    if actual != CLAUDE_PROFILES[name]:
+        fail(f"{relative(path)} complete Claude profile tuple differs from the reviewed template")
+    check_semantics(path, name.replace("-", "_"), body)
+    validate_role_policy(path, name.replace("-", "_"), body)
 
 
 def check_manifests() -> None:
@@ -503,33 +519,20 @@ def check_skill() -> None:
 def check_codex_profiles() -> None:
     directory = ROOT / "adapters/codex/.codex/agents"
     files = sorted(directory.glob("*.toml"))
-    if len(files) != len(EXPECTED_ROLES):
-        fail(f"expected {len(EXPECTED_ROLES)} Codex profiles, found {len(files)}")
+    if len(files) != len(CODEX_PROFILES):
+        fail(f"expected {len(CODEX_PROFILES)} Codex profiles, found {len(files)}")
     seen: set[str] = set()
     for path in files:
         profile = parse_codex_profile(path)
         name = profile.get("name")
-        if not isinstance(name, str) or name not in EXPECTED_ROLES:
+        if not isinstance(name, str) or name not in CODEX_PROFILES:
             fail(f"{relative(path)} has an unknown name")
         if name in seen:
             fail(f"duplicate Codex profile name: {safe_diagnostic(name)}")
         seen.add(name)
         if path.stem != name.replace("_", "-"):
             fail(f"{relative(path)} filename does not match profile name {safe_diagnostic(name)}")
-        expected_model, expected_effort, expected_sandbox = EXPECTED_ROLES[name]
-        if name == "awb_operator" and profile.get("sandbox_mode") != "read-only":
-            fail(f"{relative(path)} operator must use read-only sandbox mode")
-        if (profile.get("model"), profile.get("model_reasoning_effort"), profile.get("sandbox_mode")) != (
-            expected_model,
-            expected_effort,
-            expected_sandbox,
-        ):
-            fail(f"{relative(path)} model, effort, or sandbox differs from the routing policy")
-        instructions = profile.get("developer_instructions")
-        if not isinstance(instructions, str):
-            fail(f"{relative(path)} developer_instructions must be a string")
-        check_semantics(path, name, instructions)
-        validate_role_policy(path, name, instructions)
+        validate_codex_profile_tuple(path, profile)
 
 
 def check_claude_profiles() -> None:
@@ -548,26 +551,139 @@ def check_claude_profiles() -> None:
         seen.add(name)
         if path.stem != name:
             fail(f"{relative(path)} filename does not match profile name {safe_diagnostic(name)}")
-        expected_model, expected_effort, behaviorally_read_only = CLAUDE_PROFILES[name]
-        if (frontmatter.get("model"), frontmatter.get("effort")) != (expected_model, expected_effort):
-            fail(f"{relative(path)} model or effort differs from the routing policy")
         if "permissionMode" in frontmatter:
             fail(f"{relative(path)} cannot rely on permissionMode in a plugin agent")
         tools = {item.strip() for item in frontmatter.get("tools", "").split(",") if item.strip()}
         unknown_tools = sorted(tools - CLAUDE_TOOL_KEYS)
         if unknown_tools:
             fail(f"{relative(path)} exposes unknown tools: {safe_diagnostic(unknown_tools)}")
-        expected_tools = {"Read", "Edit", "Write", "Grep", "Glob", "Bash"} if not behaviorally_read_only else {"Read", "Grep", "Glob", "Bash"}
-        if name == "awb-operator":
-            expected_tools = {"Read", "Grep", "Glob"}
-        if tools != expected_tools:
-            fail(f"{relative(path)} does not use the least-authority role tool set")
-        if behaviorally_read_only and tools.intersection({"Edit", "Write", "NotebookEdit"}):
-            fail(f"{relative(path)} read-only role exposes an edit tool")
-        if not behaviorally_read_only and not {"Edit", "Write"}.issubset(tools):
-            fail(f"{relative(path)} implementation role must expose Edit and Write")
-        check_semantics(path, name.replace("-", "_"), body)
-        validate_role_policy(path, name.replace("-", "_"), body)
+        validate_claude_profile_tuple(path, frontmatter, body)
+
+
+@dataclass(frozen=True)
+class BoundedSubprocessResult:
+    returncode: int
+    output: bytes
+    truncated: bool
+    timed_out: bool
+
+
+class _BoundedCapture:
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.head_limit = limit // 2
+        self.tail_limit = limit - self.head_limit
+        self.head = bytearray()
+        self.tail: deque[int] = deque(maxlen=self.tail_limit)
+        self.total = 0
+        self.lock = threading.Lock()
+
+    def add(self, chunk: bytes) -> None:
+        with self.lock:
+            self.total += len(chunk)
+            remaining = self.head_limit - len(self.head)
+            if remaining:
+                self.head.extend(chunk[:remaining])
+                chunk = chunk[remaining:]
+            self.tail.extend(chunk)
+
+    def finish(self) -> tuple[bytes, bool]:
+        with self.lock:
+            if self.total <= self.limit:
+                return bytes(self.head) + bytes(self.tail), False
+            return bytes(self.head) + b"\n...[output truncated]...\n" + bytes(self.tail), True
+
+
+def minimal_subprocess_environment(extra: dict[str, str] | None = None) -> dict[str, str]:
+    environment = {
+        "HOME": "/nonexistent",
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "LANG": "C.UTF-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    if extra:
+        environment.update(extra)
+    return environment
+
+
+def _drain_subprocess(stream: Any, capture: _BoundedCapture) -> None:
+    while True:
+        chunk = stream.read(16_384)
+        if not chunk:
+            return
+        capture.add(chunk)
+
+
+def _terminate_subprocess_group(process: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=SUBPROCESS_KILL_GRACE_SECONDS)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    process.wait(timeout=SUBPROCESS_KILL_GRACE_SECONDS)
+
+
+def run_bounded_subprocess(
+    command: list[str],
+    *,
+    cwd: Path,
+    timeout_seconds: float,
+    label: str,
+    env: dict[str, str] | None = None,
+) -> BoundedSubprocessResult:
+    capture = _BoundedCapture(MAX_SUBPROCESS_OUTPUT_BYTES)
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=minimal_subprocess_environment() if env is None else env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    assert process.stdout is not None
+    reader = threading.Thread(target=_drain_subprocess, args=(process.stdout, capture), daemon=True)
+    reader.start()
+    timed_out = False
+    try:
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        _terminate_subprocess_group(process)
+    except BaseException:
+        _terminate_subprocess_group(process)
+        raise
+    finally:
+        reader.join(SUBPROCESS_KILL_GRACE_SECONDS)
+        if reader.is_alive():
+            _terminate_subprocess_group(process)
+            reader.join(SUBPROCESS_KILL_GRACE_SECONDS)
+        process.stdout.close()
+    output, truncated = capture.finish()
+    if timed_out:
+        fail(f"{label} timed out after {timeout_seconds} seconds; output={sanitize_subprocess_output(output)}")
+    return BoundedSubprocessResult(process.returncode, output, truncated, timed_out)
+
+
+def sanitize_subprocess_output(raw: bytes | str) -> str:
+    text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw
+    patterns = (
+        (re.compile(r"(?i)(authorization\s*:\s*)(?:bearer\s+)?[^\s,;\x00-\x1f\x7f]+"), r"\1[REDACTED]"),
+        (re.compile(r"\b(?:gh[opsu]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,})\b"), "[REDACTED]"),
+        (re.compile(r"(?i)(https?://)([^/@\s]+)@"), r"\1[REDACTED]@"),
+        (re.compile(r"(?i)\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|PRIVATE_KEY)[A-Z0-9_]*\s*[=:]\s*)[^\s,;\x00-\x1f\x7f]+"), r"\1[REDACTED]"),
+    )
+    for pattern, replacement in patterns:
+        text = pattern.sub(replacement, text)
+    return safe_diagnostic(text)
 
 
 def check_routing_replay() -> None:
@@ -577,20 +693,24 @@ def check_routing_replay() -> None:
         "--replay",
         str(ROOT / "skills/orchestrate-task/tests/routing-cases.json"),
     ]
-    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    result = run_bounded_subprocess(
+        command,
+        cwd=ROOT,
+        timeout_seconds=ROUTING_REPLAY_TIMEOUT_SECONDS,
+        label="routing replay",
+    )
     if result.returncode:
-        fail(f"routing replay failed: {safe_diagnostic(result.stdout + result.stderr)}")
-    print(safe_diagnostic(result.stdout.strip()))
+        fail(f"routing replay failed: {sanitize_subprocess_output(result.output)}")
+    print("Routing replay passed.")
 
-    unit_result = subprocess.run(
+    unit_result = run_bounded_subprocess(
         [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
         cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
+        timeout_seconds=UNIT_TEST_TIMEOUT_SECONDS,
+        label="routing unit tests",
     )
     if unit_result.returncode:
-        fail(f"routing unit tests failed: {safe_diagnostic(unit_result.stdout + unit_result.stderr)}")
+        fail(f"routing unit tests failed: {sanitize_subprocess_output(unit_result.output)}")
     print("Routing unit tests passed.")
 
 
@@ -606,18 +726,57 @@ def check_release_and_ci() -> None:
         "permissionMode",
         "Python 3.11",
         "11 roles",
+        "External and destructive operations always fail closed in the current release",
     ):
         if phrase not in readme:
             fail(f"README.md is missing required guidance: {phrase}")
+    if "Planning, implementation, testing, verification, review, and exact authorized operations run in bounded child tasks." in readme:
+        fail("README.md contains the obsolete unconditional child-task claim")
 
     workflow = safe_read_text(ROOT / ".github/workflows/validate.yml")
-    for action in ("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065"):
-        if action not in workflow:
-            fail(f"CI action must be pinned to the reviewed commit: {action}")
-    if "permissions:\n  contents: read" not in workflow or "timeout-minutes:" not in workflow:
-        fail("CI must retain least privilege and an execution timeout")
-    if 'python-version: ["3.11", "3.12"]' not in workflow or "python-version: ${{ matrix.python-version }}" not in workflow:
-        fail("CI must validate the repository on the supported Python 3.11 and 3.12 matrix")
+    checkout = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
+    images = (
+        "python:3.11.15-slim-bookworm@sha256:77923445c077d8eb971b14b2b114a1d9cd4a87edb4c75654820ca4832ee8cb15",
+        "python:3.12.13-slim-bookworm@sha256:72d3d75f2639ab82b34b29390ad3d6e0827c775befee94edda8e9976818f488d",
+    )
+    required_fragments = (
+        "pull_request_target:",
+        "types: [opened, synchronize, reopened]",
+        "permissions:\n  contents: read\n\nconcurrency:",
+        "runs-on: ubuntu-24.04",
+        "timeout-minutes: 8",
+        "cancel-in-progress: true",
+        "path: trusted",
+        "path: candidate",
+        "refs/pull/{0}/merge",
+        "github.event.pull_request.merge_commit_sha",
+        "python3 -I trusted/.github/ci/run_sandboxed_validation.py",
+        "docker pull --platform linux/amd64",
+        *images,
+    )
+    for fragment in required_fragments:
+        if fragment not in workflow:
+            fail(f"CI containment contract is missing: {safe_diagnostic(fragment)}")
+    if workflow.count(checkout) != 2 or workflow.count("persist-credentials: false") != 2:
+        fail("CI must use exactly two reviewed credential-free checkouts")
+    forbidden_fragments = (
+        "\n  pull_request:\n",
+        "actions/setup-python@",
+        "actions/cache@",
+        "actions/upload-artifact@",
+        "actions/download-artifact@",
+        "services:",
+        "secrets.",
+        "github.token",
+        "write-all",
+        "id-token:",
+        "packages:",
+        "issues:",
+        "pull-requests:",
+    )
+    for fragment in forbidden_fragments:
+        if fragment in workflow:
+            fail(f"CI containment contract contains forbidden behavior: {safe_diagnostic(fragment)}")
 
 
 def check_local_markdown_links() -> None:
@@ -652,12 +811,14 @@ def main() -> None:
         ".claude-plugin/marketplace.json",
         ".agents/plugins/marketplace.json",
         ".github/workflows/validate.yml",
+        ".github/ci/run_sandboxed_validation.py",
         "skills/orchestrate-task/SKILL.md",
         "skills/orchestrate-task/agents/openai.yaml",
         "skills/orchestrate-task/references/portable-contract.md",
         "skills/orchestrate-task/references/model-selection.md",
         "skills/orchestrate-task/scripts/route_subagent.py",
         "skills/orchestrate-task/tests/routing-cases.json",
+        "tests/test_ci_sandbox.py",
         "tests/test_route_subagent.py",
         "tests/test_verify_repository.py",
         "adapters/codex/README.md",
