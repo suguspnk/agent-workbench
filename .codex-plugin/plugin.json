@@ -1,7 +1,7 @@
 {
   "name": "agent-workbench",
-  "version": "0.7.0",
-  "description": "Portable task orchestration and evidence-backed agent loop discovery with independent verification.",
+  "version": "0.8.0",
+  "description": "Portable task orchestration, decision stress-testing, and evidence-backed agent loop discovery.",
   "author": {
     "name": "suguspnk"
   },
@@ -13,14 +13,16 @@
     "agent-workflow",
     "loop-discovery",
     "agent-loop",
+    "decision-making",
+    "plan-review",
     "verification",
     "portable"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent Workbench",
-    "shortDescription": "Route work and discover safe agent loops",
-    "longDescription": "Agent Workbench coordinates bounded, independently verified subagent work and discovers recurring work that may be suitable for safe agent loops. Deterministic readiness gates produce proposal-only loop contracts that remain inactive until separately authorized by a human.",
+    "shortDescription": "Stress-test plans, route work, discover safe loops",
+    "longDescription": "Agent Workbench stress-tests decisions before action, coordinates bounded independently verified subagent work, and discovers recurring work that may be suitable for safe agent loops. Deterministic readiness gates produce proposal-only loop contracts that remain inactive until separately authorized by a human.",
     "developerName": "suguspnk",
     "category": "Productivity",
     "capabilities": [
@@ -29,7 +31,7 @@
     "defaultPrompt": [
       "Use Agent Workbench to orchestrate this task through bounded subagents.",
       "Use Agent Workbench to route this risky change and require independent verification.",
-      "Use Agent Workbench to discover recurring work and draft a safe loop proposal."
+      "Use Agent Workbench to rigorously stress-test this plan before acting."
     ]
   }
 }

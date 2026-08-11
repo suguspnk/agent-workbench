@@ -3,16 +3,16 @@
   "owner": {
     "name": "suguspnk"
   },
-  "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, while proposal-only discover-loops drafts evidence-backed loop proposals without activation or scheduling.",
+  "description": "Portable workflows: grilling stress-tests decisions before action, orchestrate-task coordinates bounded verified subagents, and proposal-only discover-loops drafts evidence-backed loop proposals without activation or scheduling.",
   "metadata": {
-    "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, while proposal-only discover-loops drafts evidence-backed loop proposals without activation or scheduling."
+    "description": "Portable workflows: grilling stress-tests decisions before action, orchestrate-task coordinates bounded verified subagents, and proposal-only discover-loops drafts evidence-backed loop proposals without activation or scheduling."
   },
   "plugins": [
     {
       "name": "agent-workbench",
       "source": "./",
-      "version": "0.7.0",
-      "description": "Portable task orchestration and evidence-backed agent loop discovery with independent verification.",
+      "version": "0.8.0",
+      "description": "Portable task orchestration, decision stress-testing, and evidence-backed agent loop discovery.",
       "author": {
         "name": "suguspnk"
       },
@@ -23,6 +23,8 @@
         "orchestration",
         "loop-discovery",
         "agent-loop",
+        "decision-making",
+        "plan-review",
         "verification",
         "agent-skills"
       ],
@@ -31,6 +33,8 @@
         "orchestration",
         "loop-discovery",
         "agent-loop",
+        "decision-making",
+        "plan-review",
         "workflow",
         "portable"
       ]

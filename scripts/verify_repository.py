@@ -18,7 +18,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 EXPECTED_ROLES = {
     "awb_planner": ("gpt-5.6-sol", "high", "read-only"),
@@ -348,6 +348,40 @@ def check_discover_loops_skill() -> None:
             fail(f"discover-loops OpenAI metadata is missing: {phrase}")
 
 
+def check_grilling_skill() -> None:
+    skill_root = ROOT / "skills/grilling"
+    skill_path = skill_root / "SKILL.md"
+    frontmatter, body = parse_frontmatter(skill_path)
+    if frontmatter.get("name") != "grilling":
+        fail("grilling skill name is incorrect")
+    if not frontmatter.get("description"):
+        fail("grilling must declare a description")
+    for phrase in (
+        "one decision question per message",
+        "wait for the user's answer",
+        "Do not ask the user for a fact that can be found safely",
+        "recommended answer",
+        "The user owns the decisions",
+        "Do not turn the interview into execution",
+        "Do not act on the proposal until they explicitly confirm",
+    ):
+        if phrase not in body:
+            fail(f"grilling must retain behavioral boundary text: {phrase}")
+    if len(body.splitlines()) >= 200:
+        fail("grilling/SKILL.md must remain under 200 lines")
+    if (skill_root / "README.md").exists():
+        fail("grilling must not contain an auxiliary README")
+
+    openai_yaml = (skill_root / "agents/openai.yaml").read_text(encoding="utf-8")
+    for phrase in (
+        'display_name: "Grill a Plan"',
+        'short_description: "Stress-test a plan one decision at a time"',
+        'Use $grilling to rigorously stress-test this plan',
+    ):
+        if phrase not in openai_yaml:
+            fail(f"grilling OpenAI metadata is missing: {phrase}")
+
+
 def check_codex_profiles() -> None:
     directory = ROOT / "adapters/codex/.codex/agents"
     files = sorted(directory.glob("*.toml"))
@@ -523,6 +557,8 @@ def main() -> None:
         "skills/orchestrate-task/references/model-selection.md",
         "skills/orchestrate-task/scripts/route_subagent.py",
         "skills/orchestrate-task/tests/routing-cases.json",
+        "skills/grilling/SKILL.md",
+        "skills/grilling/agents/openai.yaml",
         "skills/discover-loops/SKILL.md",
         "skills/discover-loops/agents/openai.yaml",
         "skills/discover-loops/references/loop-readiness.md",
@@ -541,6 +577,7 @@ def main() -> None:
 
     check_manifests()
     check_skill()
+    check_grilling_skill()
     check_discover_loops_skill()
     check_codex_profiles()
     check_claude_profiles()

@@ -2,6 +2,10 @@
 
 All notable changes to Agent Workbench are documented here. Versions follow semantic versioning.
 
+## 0.8.0 - 2026-08-11
+
+- Added the `grilling` skill for a rigorous, user-owned decision interview that verifies available facts, asks one decision at a time, tracks dependencies, and requires explicit shared-understanding confirmation before any action.
+
 ## 0.7.0 - 2026-08-11
 
 - Added the `implementation-quality-governance` skill for risk-proportionate implementation and operational-change quality gates.
