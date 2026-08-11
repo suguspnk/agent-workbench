@@ -2,6 +2,14 @@
 
 All notable changes to Agent Workbench are documented here. Versions follow semantic versioning.
 
+## Unreleased
+
+- Added cumulative contract-boundary and evidence routing, a terminal deep investigator, and a fail-closed least-authority operator for exact authorized actions.
+- Hardened routing input/replay validation, profile parity and least authority, secret-safe handoffs, isolation disclosure, identity-led independence, and repository negative checks.
+- Added separately authorized public read-only external verification, strict work-shape/authority compatibility, unconditional migration and impact overlays, interpreter-independent JSON resource bounds, and no-follow bounded repository reads.
+- Bound external verification to the exact operator packet revision/action/target, separated planner-current from deferred implementation requirements, hardened Unicode/diagnostic handling, and validated canonical role-policy blocks on Python 3.11 and 3.12.
+- Documented the 11-role harness mappings, Python 3.11 validator requirement, and supported strict Claude validation floor.
+
 ## 0.6.0 - 2026-08-10
 
 - Added deterministic two-stage subagent routing and a representative replay set.

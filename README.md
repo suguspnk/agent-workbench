@@ -2,7 +2,7 @@
 
 Portable task orchestration for Codex, Claude Code, and other Agent Skills-compatible harnesses.
 
-Agent Workbench keeps the lead task responsible only for intake, routing, coordination, authorization, and acceptance. Planning, implementation, testing, verification, and review run in bounded child tasks. Its first workflow, `orchestrate-task`, combines a harness-neutral contract with deterministic subagent routing, replay cases, bundled Claude profiles, and an optional Codex profile adapter.
+Agent Workbench keeps the lead task responsible only for intake, routing, coordination, authorization, and acceptance. Planning, implementation, testing, verification, review, and exact authorized operations run in bounded child tasks. Its first workflow, `orchestrate-task`, combines a harness-neutral contract with deterministic subagent routing, replay cases, 11 roles in each harness, bundled Claude profiles, and an optional Codex profile adapter.
 
 ## Design principles
 
@@ -15,6 +15,8 @@ Agent Workbench keeps the lead task responsible only for intake, routing, coordi
 - Apply security, migration, public-contract, and high-impact follow-ups after primary-role selection so a broad rule cannot hide a risk boundary.
 - Use subagents as context and evidence boundaries, not an unconditional parallel swarm.
 - Require explicit authorization for pushes, pull requests, deployments, messages, global configuration changes, credentials, and destructive actions.
+- Express public API, persistent-data, and security boundaries independently; all applicable evidence and review overlays are cumulative.
+- Treat owned paths and nominal read-only profiles as behavioral unless the host enforces worktree, sandbox, network, and credential isolation.
 
 ## Repository layout
 
@@ -87,7 +89,7 @@ python3 skills/orchestrate-task/scripts/route_subagent.py \
   --card /path/to/routing-card.json
 ```
 
-The router is deterministic and provider-neutral. It does not spawn agents, modify configuration, call a model, or perform external side effects. The host confirms availability and then performs delegation. See [`model-selection.md`](skills/orchestrate-task/references/model-selection.md) for the schema, precedence rules, harness mappings, and research basis.
+The router is deterministic and provider-neutral. Legacy `contract` cards remain valid; optional `contract_boundaries` expresses simultaneous public, persistent, and security boundaries. Exact external/destructive work requires `work_shape: operate`, intrinsic external-operation/network/shell requirements, and structured current authorization. Its result is checked through a separately authorized `verify-external` public read-only observation before security review; the verifier cannot trust the operator handoff. Owned-path deletion is currently unsupported and fails closed. The router also validates requested portable capabilities, modalities, tools, and trimmed control-free skill names. It does not spawn agents, modify configuration, call a model, or perform external side effects. See [`model-selection.md`](skills/orchestrate-task/references/model-selection.md) for the schema and controls.
 
 ## Current scope
 
@@ -95,7 +97,7 @@ Agent Workbench includes one orchestration workflow, deterministic routing, repl
 
 ## Development
 
-Run all dependency-free repository and routing checks:
+Run all dependency-free repository and routing checks with Python 3.11 or newer. The repository validator uses standard-library `tomllib` and exits with a clear diagnostic on older Python:
 
 ```sh
 python3 scripts/verify_repository.py
@@ -107,7 +109,7 @@ When Claude Code is installed, also run:
 claude plugin validate . --strict
 ```
 
-Older Claude Code releases may not support `--strict`; run `claude plugin validate .` and review warnings manually in that case.
+Supported Claude validation uses `claude plugin validate . --strict`. Older releases that lack `--strict` are outside the warning-free validation floor; run without it only as a documented compatibility check and do not describe that as strict validation.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for change and replay requirements and [CHANGELOG.md](CHANGELOG.md) for releases.
 

@@ -4,6 +4,9 @@
     "name": "suguspnk"
   },
   "description": "Portable orchestration-only workflows with bounded subagent routing.",
+  "metadata": {
+    "description": "Portable orchestration-only workflows with bounded subagent routing."
+  },
   "plugins": [
     {
       "name": "agent-workbench",
