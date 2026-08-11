@@ -183,7 +183,7 @@ def _check_json_nodes(value: Any) -> None:
 
 
 def load_json(path: Path) -> Any:
-    """Open once, reject symlinks/special files, and read at most MAX+1 bytes."""
+    """Open once, reject final symlinks/special files, and read at most MAX+1 bytes."""
     flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
@@ -191,7 +191,7 @@ def load_json(path: Path) -> Any:
         flags |= os.O_NOFOLLOW
     if hasattr(os, "O_NONBLOCK"):
         flags |= os.O_NONBLOCK
-    descriptor = _open_without_symlink_components(path, flags)
+    descriptor = _open_with_pinned_directories(path, flags)
     try:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
@@ -213,7 +213,7 @@ def load_json(path: Path) -> Any:
             os.close(descriptor)
 
 
-def _open_without_symlink_components(path: Path, file_flags: int) -> int:
+def _open_with_pinned_directories(path: Path, file_flags: int) -> int:
     absolute = Path(os.path.abspath(os.fspath(path)))
     parts = absolute.parts[1:]
     if not parts:
@@ -223,15 +223,15 @@ def _open_without_symlink_components(path: Path, file_flags: int) -> int:
         directory_flags |= os.O_DIRECTORY
     if hasattr(os, "O_CLOEXEC"):
         directory_flags |= os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        directory_flags |= os.O_NOFOLLOW
+    # Follow directory aliases, but pin each resolved directory by descriptor;
+    # file_flags still rejects a symlink swapped into the final component.
     directory_fd = os.open(os.sep, directory_flags)
     try:
         for component in parts[:-1]:
             try:
                 next_fd = os.open(component, directory_flags, dir_fd=directory_fd)
             except OSError as error:
-                raise RoutingError("input path contains a symlink, missing, or inaccessible ancestor") from error
+                raise RoutingError("input path has a missing, non-directory, or inaccessible ancestor") from error
             os.close(directory_fd)
             directory_fd = next_fd
         try:

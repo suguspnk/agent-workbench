@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -241,7 +242,7 @@ class RouteSubagentTests(unittest.TestCase):
             ROUTER.route(card)
 
     def test_load_rejects_oversize_symlink_special_and_deep_nesting(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             oversize = root / "oversize.json"
             oversize.write_bytes(b" " * (ROUTER.MAX_INPUT_BYTES + 1))
@@ -261,8 +262,7 @@ class RouteSubagentTests(unittest.TestCase):
             nested.write_text("{}", encoding="utf-8")
             linked_parent = root / "linked-parent"
             linked_parent.symlink_to(real_parent, target_is_directory=True)
-            with self.assertRaisesRegex(ROUTER.RoutingError, "ancestor"):
-                ROUTER.load_json(linked_parent / "nested.json")
+            self.assertEqual(ROUTER.load_json(linked_parent / "nested.json"), {})
 
             fifo = root / "input.fifo"
             os.mkfifo(fifo)
@@ -279,12 +279,59 @@ class RouteSubagentTests(unittest.TestCase):
             with self.assertRaisesRegex(ROUTER.RoutingError, "more than"):
                 ROUTER.load_json(nodes)
 
+    def test_load_pins_followed_ancestor_and_rejects_final_symlink_swap(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original_parent = root / "original-parent"
+            original_parent.mkdir()
+            (original_parent / "card.json").write_text('{"source": "original"}', encoding="utf-8")
+            alternate_parent = root / "alternate-parent"
+            alternate_parent.mkdir()
+            (alternate_parent / "card.json").write_text('{"source": "alternate"}', encoding="utf-8")
+            linked_parent = root / "linked-parent"
+            linked_parent.symlink_to(original_parent, target_is_directory=True)
+
+            real_open = os.open
+            ancestor_swapped = False
+
+            def swap_ancestor_after_open(path: str, flags: int, *, dir_fd: int | None = None) -> int:
+                nonlocal ancestor_swapped
+                descriptor = real_open(path, flags, dir_fd=dir_fd)
+                if path == linked_parent.name and not ancestor_swapped:
+                    linked_parent.unlink()
+                    linked_parent.symlink_to(alternate_parent, target_is_directory=True)
+                    ancestor_swapped = True
+                return descriptor
+
+            with mock.patch.object(ROUTER.os, "open", side_effect=swap_ancestor_after_open):
+                self.assertEqual(ROUTER.load_json(linked_parent / "card.json"), {"source": "original"})
+            self.assertTrue(ancestor_swapped)
+
+            target = root / "target.json"
+            target.write_text("{}", encoding="utf-8")
+            final_path = root / "final.json"
+            final_path.write_text("{}", encoding="utf-8")
+            final_swapped = False
+
+            def swap_final_before_open(path: str, flags: int, *, dir_fd: int | None = None) -> int:
+                nonlocal final_swapped
+                if path == final_path.name and not final_swapped:
+                    final_path.unlink()
+                    final_path.symlink_to(target)
+                    final_swapped = True
+                return real_open(path, flags, dir_fd=dir_fd)
+
+            with mock.patch.object(ROUTER.os, "open", side_effect=swap_final_before_open):
+                with self.assertRaisesRegex(ROUTER.RoutingError, "symlink"):
+                    ROUTER.load_json(final_path)
+            self.assertTrue(final_swapped)
+
     def test_json_nesting_ignores_brackets_inside_strings(self) -> None:
         value = "[" * (ROUTER.MAX_JSON_DEPTH + 10)
         self.assertEqual(ROUTER.parse_json(json.dumps(value)), value)
 
     def test_replay_rejects_duplicate_ids_and_inexact_expected_schema(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "replay.json"
             case = self.cases[0]
             path.write_text(json.dumps([case, case]), encoding="utf-8")
@@ -296,7 +343,7 @@ class RouteSubagentTests(unittest.TestCase):
             self.assertEqual(ROUTER.check_replay(path), 1)
 
     def test_replay_diagnostics_escape_untrusted_ids_and_keys(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "replay.json"
             malicious = "bad\n\x1b]8;;https://example.invalid\x07\x85\u202e"
             case = json.loads(json.dumps(self.cases[0]))
@@ -315,7 +362,7 @@ class RouteSubagentTests(unittest.TestCase):
     def test_cli_exit_codes(self) -> None:
         good = subprocess.run([sys.executable, str(ROUTER_PATH), "--replay", str(REPLAY_PATH)], cwd=ROOT, capture_output=True, text=True, check=False)
         self.assertEqual(good.returncode, 0, good.stderr)
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             bad_path = Path(directory) / "bad.json"
             bad_path.write_text("{", encoding="utf-8")
             bad = subprocess.run([sys.executable, str(ROUTER_PATH), "--card", str(bad_path)], cwd=ROOT, capture_output=True, text=True, check=False)

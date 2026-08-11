@@ -76,7 +76,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "1"):
                 VERIFY.safe_read_text(oversize)
 
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as directory:
             external = Path(directory) / "valid.txt"
             external.write_text("valid", encoding="utf-8")
             self.assertEqual(VERIFY.safe_read_text(external), "valid")
