@@ -68,6 +68,10 @@ Choose a primary role for the packet, then add every applicable risk follow-up. 
 
 Split mixed work into packets. Do not ask a findings-only reviewer to implement, or let an implementer verify its own result.
 
+### Fast path
+
+A packet may use the router's `execution_path: fast` only when every canonical predicate is true: `work_shape=implement`; `scope` is `one file` or `bounded component`; `ambiguity=settled`; `contract` is `none` or `internal`; `tool_loop` is `none`, `one read/check`, or `repeated local tools`; `impact` is `reversible` or `user-visible`; `evidence_bar` is `syntax` or `focused test`; `context_profile` is `compact facts` or `focused source set`; `parallelism=none`; `change_authority=owned local paths`; and `router_confidence=high`. The lead sends that packet directly to `awb_builder`: do not create a planner or reviewer merely by default. `awb_verifier` remains required, so the fast path is not self-acceptance. Any failed check, uncertainty, changed contract, shared impact, or evidence bar above a focused test leaves the fast path and follows the normal routing rules.
+
 ### Harness mappings
 
 - **Claude Code plugin:** bundled agents appear with scoped names such as `agent-workbench:awb-builder`. They use the family aliases `haiku`, `sonnet`, and `opus` so workspace model allowlists and provider substitution remain observable. Plugin agent tool lists narrow capabilities, but Claude Code does not enforce `permissionMode` for plugin agents.

@@ -99,6 +99,23 @@ def _is_complex_execution(card: dict[str, str]) -> bool:
     )
 
 
+def _is_fast_path(card: dict[str, str]) -> bool:
+    """Return whether an implementation packet can skip planning and review fan-out."""
+    return (
+        card["work_shape"] == "implement"
+        and card["scope"] in {"one file", "bounded component"}
+        and card["ambiguity"] == "settled"
+        and card["contract"] in {"none", "internal"}
+        and card["tool_loop"] in {"none", "one read/check", "repeated local tools"}
+        and card["impact"] in {"reversible", "user-visible"}
+        and card["evidence_bar"] in {"syntax", "focused test"}
+        and card["context_profile"] in {"compact facts", "focused source set"}
+        and card["parallelism"] == "none"
+        and card["change_authority"] == "owned local paths"
+        and card["router_confidence"] == "high"
+    )
+
+
 def route(card_value: Any) -> dict[str, Any]:
     card = validate_card(card_value)
     shape = card["work_shape"]
@@ -194,8 +211,10 @@ def route(card_value: Any) -> dict[str, Any]:
         task_class = "routine"
 
     tier, effort = ROLE_PROFILE[role]
+    fast_path = _is_fast_path(card)
     return {
         "primary_role": role,
+        "execution_path": "fast" if fast_path else "standard",
         "task_class": task_class,
         "capability_tier": tier,
         "effort": effort,

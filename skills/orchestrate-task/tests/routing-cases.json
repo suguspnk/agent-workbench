@@ -16,6 +16,7 @@
     },
     "expected": {
       "primary_role": "awb_fast_investigator",
+      "execution_path": "standard",
       "task_class": "routine",
       "capability_tier": "efficient",
       "effort": "low",
@@ -40,6 +41,7 @@
     },
     "expected": {
       "primary_role": "awb_fast_investigator",
+      "execution_path": "standard",
       "task_class": "routine",
       "must_not_downgrade": false
     }
@@ -61,6 +63,7 @@
     },
     "expected": {
       "primary_role": "awb_builder",
+      "execution_path": "fast",
       "task_class": "bounded",
       "capability_tier": "balanced",
       "effort": "medium",
@@ -85,11 +88,148 @@
     },
     "expected": {
       "primary_role": "awb_builder",
+      "execution_path": "fast",
       "task_class": "bounded",
       "capability_tier": "balanced",
       "effort": "medium",
       "required_followups": ["awb_verifier"]
     }
+  },
+  {
+    "id": "fast-path-external-tools-excluded",
+    "card": {
+      "work_shape": "implement",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "repeated external tools",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "compact facts",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {"execution_path": "standard"}
+  },
+  {
+    "id": "fast-path-noisy-context-excluded",
+    "card": {
+      "work_shape": "implement",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "noisy logs/large artifacts",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {"execution_path": "standard"}
+  },
+  {
+    "id": "fast-path-dependent-sequence-excluded",
+    "card": {
+      "work_shape": "implement",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "compact facts",
+      "parallelism": "dependent sequence",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {"execution_path": "standard"}
+  },
+  {
+    "id": "fast-path-shared-impact-excluded",
+    "card": {
+      "work_shape": "implement",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "shared system",
+      "evidence_bar": "focused test",
+      "context_profile": "compact facts",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {"execution_path": "standard"}
+  },
+  {
+    "id": "fast-path-integration-evidence-excluded",
+    "card": {
+      "work_shape": "implement",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "integration/regression",
+      "context_profile": "compact facts",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {"execution_path": "standard"}
+  },
+  {
+    "id": "fast-path-public-contract-excluded",
+    "card": {
+      "work_shape": "implement",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "public API",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "compact facts",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {"execution_path": "standard"}
+  },
+  {
+    "id": "fast-path-shared-authority-excluded",
+    "card": {
+      "work_shape": "implement",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "compact facts",
+      "parallelism": "none",
+      "change_authority": "shared contract",
+      "router_confidence": "high"
+    },
+    "expected": {"execution_path": "standard"}
+  },
+  {
+    "id": "fast-path-uncertain-confidence-excluded",
+    "card": {
+      "work_shape": "implement",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "compact facts",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "uncertain"
+    },
+    "expected": {"execution_path": "standard"}
   },
   {
     "id": "public-api-change",
@@ -108,6 +248,7 @@
     },
     "expected": {
       "primary_role": "awb_deep_worker",
+      "execution_path": "standard",
       "required_followups": ["awb_verifier", "awb_test_engineer", "awb_reviewer"],
       "must_not_downgrade": true
     }
@@ -129,6 +270,7 @@
     },
     "expected": {
       "primary_role": "awb_planner",
+      "execution_path": "standard",
       "required_followups": [],
       "reroute_after_planning": true
     }
@@ -150,6 +292,7 @@
     },
     "expected": {
       "primary_role": "awb_deep_worker",
+      "execution_path": "standard",
       "required_followups": ["awb_verifier", "awb_test_engineer"]
     }
   },
@@ -170,6 +313,7 @@
     },
     "expected": {
       "primary_role": "awb_migration_worker",
+      "execution_path": "standard",
       "task_class": "critical",
       "capability_tier": "frontier",
       "effort": "maximum",
@@ -194,6 +338,7 @@
     },
     "expected": {
       "primary_role": "awb_deep_worker",
+      "execution_path": "standard",
       "required_followups": ["awb_verifier", "awb_test_engineer", "awb_security_reviewer"],
       "must_not_downgrade": true
     }
@@ -215,6 +360,7 @@
     },
     "expected": {
       "primary_role": "awb_verifier",
+      "execution_path": "standard",
       "required_followups": []
     }
   },
@@ -235,6 +381,7 @@
     },
     "expected": {
       "primary_role": "awb_test_engineer",
+      "execution_path": "standard",
       "capability_tier": "balanced",
       "effort": "high"
     }
@@ -256,6 +403,7 @@
     },
     "expected": {
       "primary_role": "awb_test_engineer",
+      "execution_path": "standard",
       "task_class": "critical",
       "required_followups": [],
       "must_not_downgrade": true
@@ -278,6 +426,7 @@
     },
     "expected": {
       "primary_role": "awb_security_reviewer",
+      "execution_path": "standard",
       "task_class": "critical",
       "effort": "maximum",
       "required_followups": [],
@@ -301,6 +450,7 @@
     },
     "expected": {
       "primary_role": "awb_planner",
+      "execution_path": "standard",
       "required_followups": [],
       "reroute_after_planning": true,
       "must_not_downgrade": true
@@ -323,6 +473,7 @@
     },
     "expected": {
       "primary_role": "awb_reviewer",
+      "execution_path": "standard",
       "task_class": "complex",
       "must_not_downgrade": true
     }
