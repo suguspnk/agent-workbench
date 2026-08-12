@@ -592,9 +592,7 @@ def validate_protected_surfaces(reader: CandidateReader, policy: dict[str, Any])
             fail(f"protected surface kind differs: {diagnostic(path)}")
         expected_executable = expected[path][1]
         actual_executable = actual_map[path][1]
-        # A candidate checkout may lose an executable bit during a read-only
-        # export, but may never gain one on a protected file.
-        if not expected_executable and actual_executable:
+        if expected_executable != actual_executable:
             fail(f"protected surface executable mode differs: {diagnostic(path)}")
     for path, (_, _, binding, expected_hash) in expected.items():
         if binding == "sha256":

@@ -7,7 +7,7 @@ Contributions are welcome through issues and pull requests.
 <!-- BEGIN TRUSTED PROTECTED SET -->
 ### Complete protected validation set
 
-The authoritative policy is version `15` and its `protected_set_digest` is `232afca38dd934a2520f9805ea51770203fbf086ab3786455f32e0d94976d08e`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, and `skills`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 22 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.
+The authoritative policy is version `16` and its `protected_set_digest` is `1ef714d1fb621808bcac8773a6dc4db2a3cfba3adcaa7d76904a53f6541e4170`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, and `skills`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 22 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.
 <!-- END TRUSTED PROTECTED SET -->
 
 <!-- BEGIN TRUSTED INITIAL BOOTSTRAP -->
@@ -46,8 +46,6 @@ On containment failure or trusted-policy drift, freeze merges, disable the affec
 - Keep the attachment helper GitHub.com-only, HTTPS-only, bounded, no-follow, no-POST-retry, curlrc-isolated, private-snapshot based, and strict about descriptor stability, canonical repository identity, regular files, size, MIME/extension agreement, and exact returned URL shape.
 - Keep attachment-helper tests strictly offline with fake `gh` and `curl` executables. Do not use a live endpoint or credential in repository validation.
 - Do not weaken `must_not_downgrade` boundaries without representative acceptance evidence.
-- Keep `tech-stack-standards` explicitly invoked and draft-only on current hosts: preserve both manual-invocation controls, bounded discovery/research, fail-closed privacy and evidence rules, exact manual-block preservation, claim-level citations, and the future host-owned safe-application contract.
-- When updating the personal `tech-stack-standards` source and packaged copy together, keep their complete file trees byte-identical. The unit test checks the personal copy when it is available under `CODEX_HOME` (or the default personal Codex directory).
 - Bump both plugin manifest versions together and update `CHANGELOG.md` for a release.
 - Avoid dependencies unless they provide a material benefit that cannot be achieved with the standard library.
 

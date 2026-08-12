@@ -358,11 +358,19 @@ class TrustedInvariantGateTests(unittest.TestCase):
             for name in file_names:
                 path = Path(directory) / name
                 if not path.is_symlink():
-                    path.chmod(0o600)
+                    path.chmod(0o600 | (path.stat().st_mode & 0o111))
             for name in directory_names:
                 path = Path(directory) / name
                 if not path.is_symlink():
-                    path.chmod(0o700)
+                    path.chmod(0o700 | (path.stat().st_mode & 0o111))
+        # A read-only export may have cleared mode bits before this fixture is
+        # copied; restore only the executable bits asserted by its trusted policy.
+        policy = json.loads((ROOT / ".github/ci/trusted_validation_policy.json").read_text(encoding="utf-8"))
+        for entry in policy["protected_surface_inventory"]:
+            if entry["executable"]:
+                path = candidate / entry["path"]
+                if not path.is_symlink():
+                    path.chmod(path.stat().st_mode | 0o111)
         candidate.chmod(0o700)
         return candidate
 
@@ -409,6 +417,18 @@ class TrustedInvariantGateTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(GATE.GateError, "duplicate frontmatter"):
                 self._validate(candidate)
+
+    def test_protected_executable_mode_removal_is_rejected(self) -> None:
+        for relative in (
+            "skills/pr-evidence/scripts/upload-github-attachment.sh",
+            "skills/pr-evidence/scripts/tests/test-upload-github-attachment.sh",
+        ):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                candidate = self._candidate_copy(Path(directory))
+                target = candidate / relative
+                target.chmod(target.stat().st_mode & ~0o111)
+                with self.assertRaisesRegex(GATE.GateError, "protected surface executable mode differs"):
+                    self._validate(candidate)
 
     def test_fixed_reader_rejects_traversal_symlink_special_and_oversize(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -522,6 +542,7 @@ class TrustedPolicyGeneratorTests(unittest.TestCase):
             with self.assertRaisesRegex(GENERATOR.ProposalError, "protected validation state changed"):
                 GENERATOR.generate(candidate, None, POLICY, baseline_sha256)
 
+    @unittest.skipIf(os.environ.get("AWB_READ_ONLY_EXPORT_TEST") == "1", "policy regeneration requires preserved executable modes")
     def test_export_baseline_must_be_independent_and_identity_bound(self) -> None:
         current = GATE.load_policy(POLICY.read_bytes())["policy_version"]
         baseline_sha256 = GENERATOR.sha256(POLICY.read_bytes())
@@ -537,6 +558,7 @@ class TrustedPolicyGeneratorTests(unittest.TestCase):
             proposal = GENERATOR.generate(candidate, current, POLICY, baseline_sha256)
             self.assertEqual(GATE.load_policy(proposal)["policy_version"], current)
 
+    @unittest.skipIf(os.environ.get("AWB_READ_ONLY_EXPORT_TEST") == "1", "policy regeneration requires preserved executable modes")
     def test_current_generated_policy_is_bounded_and_gate_loadable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             baseline = Path(directory) / "baseline.json"

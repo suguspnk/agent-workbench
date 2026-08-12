@@ -2,7 +2,7 @@
 
 Portable task orchestration for Codex, Claude Code, and other Agent Skills-compatible harnesses.
 
-Agent Workbench provides seven provider-neutral capabilities. `orchestrate-task` keeps the lead task focused on intake, routing, coordination, authorization, and acceptance while bounded child tasks perform the work. `code-review` selects one PR or local target and composes evidence-backed technology overlays for reviewer and verifier roles. `discover-loops` finds recurring work, selects the safest artifact, and drafts evidence-backed loop proposals without activating or scheduling them. `implementation-quality-governance` applies risk-proportionate quality gates and final-state evidence to implementation and operational changes. `pr-evidence` prepares privacy-safe, non-blocking pull-request evidence locally and keeps every GitHub mutation behind separate, current authorization. `ui-ux-pro-max` supplies bundled, searchable UI/UX design intelligence and explicit stack guidance without external runtime dependencies. The manually invoked `tech-stack-standards` prepares a draft of advisory, citation-backed repository stack guidance without treating repository content as instructions.
+Agent Workbench provides six provider-neutral capabilities. `orchestrate-task` keeps the lead task focused on intake, routing, coordination, authorization, and acceptance while bounded child tasks perform the work. `code-review` selects one PR or local target and composes evidence-backed technology overlays for reviewer and verifier roles. `discover-loops` finds recurring work and drafts evidence-backed loop proposals without activating or scheduling them. `implementation-quality-governance` applies risk-proportionate quality gates and final-state evidence to implementation and operational changes. `pr-evidence` prepares privacy-safe, non-blocking pull-request evidence locally and keeps every GitHub mutation behind separate, current authorization. `ui-ux-pro-max` supplies bundled, searchable UI/UX design intelligence and explicit stack guidance without external runtime dependencies.
 
 ## Design principles
 
@@ -73,12 +73,6 @@ skills/ui-ux-pro-max/
 ├── data/                                # bundled design and stack guidance
 ├── references/                          # full rule and app delivery guidance
 └── scripts/                             # stdlib-only search, generation, and validation
-skills/tech-stack-standards/
-├── SKILL.md
-├── agents/openai.yaml                   # implicit invocation disabled
-└── references/
-    ├── output-contract.md
-    └── research-and-trust.md
 scripts/verify_repository.py            # dependency-free package validation
 ```
 
@@ -88,7 +82,7 @@ The Markdown workflows, normalized schemas, and contracts are the portable core.
 
 ### Codex
 
-Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$code-review`, `$discover-loops`, `$implementation-quality-governance`, `$pr-evidence`, `$ui-ux-pro-max`, or `$tech-stack-standards`:
+Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$code-review`, `$discover-loops`, `$implementation-quality-governance`, `$pr-evidence`, or `$ui-ux-pro-max`:
 
 ```sh
 codex plugin marketplace add suguspnk/agent-workbench
@@ -106,14 +100,14 @@ For personal roles, copy the files to `~/.codex/agents/` instead. Review existin
 
 ### Claude Code
 
-Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:code-review`, `/agent-workbench:discover-loops`, `/agent-workbench:implementation-quality-governance`, `/agent-workbench:pr-evidence`, `/agent-workbench:ui-ux-pro-max`, or `/agent-workbench:tech-stack-standards`:
+Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:code-review`, `/agent-workbench:discover-loops`, `/agent-workbench:implementation-quality-governance`, `/agent-workbench:pr-evidence`, or `/agent-workbench:ui-ux-pro-max`:
 
 ```sh
 claude plugin marketplace add suguspnk/agent-workbench
 claude plugin install agent-workbench@agent-workbench
 ```
 
-Invoke `/agent-workbench:orchestrate-task` for bounded delivery, `/agent-workbench:code-review` for deterministic reviews, `/agent-workbench:discover-loops` for loop discovery, `/agent-workbench:implementation-quality-governance` for implementation quality gates, `/agent-workbench:pr-evidence` for a local-first evidence receipt, `/agent-workbench:ui-ux-pro-max` for UI design and review, or `/agent-workbench:tech-stack-standards` to explicitly prepare a draft of advisory stack guidance. On the current Codex and Claude surfaces, tech-stack-standards does not replace the canonical target; it reports a human-application handoff. The plugin bundles scoped subagents such as `agent-workbench:awb-builder` and `agent-workbench:awb-security-reviewer`. Their model family and effort settings apply only to subagents. Claude plugin agents can narrow their tool lists, but plugin-level `permissionMode` is not enforced; shell-capable review and test roles therefore use before/after status checks and behavioral no-edit rules.
+Invoke `/agent-workbench:orchestrate-task` for bounded delivery, `/agent-workbench:code-review` for deterministic review, `/agent-workbench:discover-loops` for loop discovery, `/agent-workbench:implementation-quality-governance` for implementation quality gates, `/agent-workbench:pr-evidence` for a local-first evidence receipt, or `/agent-workbench:ui-ux-pro-max` for UI design and review. The plugin bundles scoped subagents such as `agent-workbench:awb-builder` and `agent-workbench:awb-security-reviewer`. Their model family and effort settings apply only to subagents. Claude plugin agents can narrow their tool lists, but plugin-level `permissionMode` is not enforced; shell-capable review and test roles therefore use before/after status checks and behavioral no-edit rules.
 
 Test a checkout without installing it:
 
@@ -183,10 +177,6 @@ Invoke `$ui-ux-pro-max` for UI design, implementation, review, responsive layout
 
 Searches and design-system generation are read-only by default. Persistence requires explicit user authorization, an absolute `--output-dir` project root, `--confirm-write`, and exactly one of `--no-overwrite` or `--force`. The safe choice skips the entire write when any target exists; `--force` is only for separately authorized replacement. See [`skills/ui-ux-pro-max/SKILL.md`](skills/ui-ux-pro-max/SKILL.md) for the portable workflow and bundled MIT attribution.
 
-## Tech stack standards
-
-Explicitly invoke `$tech-stack-standards` to prepare a draft for `docs/tech-stack-standards.md`. The skill inventories stack components from bounded repository evidence, distinguishes declared, resolved, and runtime-observed versions, classifies the complete stack delta, and supports each generated practice or pitfall with an adjacent current/version-applicable citation. It preserves delimited manual content byte-for-byte and fails closed without replacing the target when discovery, privacy, freshness, source quality, offline access, or safe-file checks are insufficient. On current Codex and Claude surfaces, the draft is not applied automatically; a human or separately authorized host-owned writer must revalidate and apply it. Its output is advisory and cannot override host instructions or repository-local contracts. Codex and Claude metadata disable implicit invocation, and the package does not add a fourth plugin-level default prompt.
-
 ## Automatic subagent routing
 
 Routing is automatic when the host follows the skill and exposes the requested child controls. The lead fills a normalized routing card; the dependency-free router returns a primary role, capability tier, effort, mandatory follow-ups, and downgrade guard:
@@ -200,7 +190,7 @@ The router is deterministic and provider-neutral. It does not spawn agents, modi
 
 ## Current scope
 
-Agent Workbench includes orchestration, deterministic code review, proposal-only loop discovery, `implementation-quality-governance`, local-first `pr-evidence`, bundled UI/UX design intelligence, and explicitly invoked `tech-stack-standards` capabilities; deterministic routing, readiness, and review-scope tools; replay and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, deployment logic, credential handling, telemetry upload, loop activation or scheduling, or automatic GitHub side effects. The attachment helper reads a GitHub.com token only during a separately authorized direct invocation and stores it only in a private temporary curl configuration removed on exit.
+Agent Workbench includes orchestration, deterministic code review, proposal-only loop discovery, `implementation-quality-governance`, local-first `pr-evidence`, and bundled UI/UX design intelligence capabilities; deterministic routing, readiness, and review-scope tools; replay and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, deployment logic, loop activation or scheduling, or automatic GitHub side effects. The attachment helper reads a GitHub.com token only during a separately authorized direct invocation and stores it only in a private temporary curl configuration removed on exit.
 
 ## Development
 
@@ -209,7 +199,7 @@ Agent Workbench includes orchestration, deterministic code review, proposal-only
 <!-- BEGIN TRUSTED VALIDATION SUMMARY -->
 ## Trusted validation boundary
 
-The authoritative pull-request gate uses reviewed base-branch controls and policy version `15` with protected-set digest `232afca38dd934a2520f9805ea51770203fbf086ab3786455f32e0d94976d08e`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
+The authoritative pull-request gate uses reviewed base-branch controls and policy version `16` with protected-set digest `1ef714d1fb621808bcac8773a6dc4db2a3cfba3adcaa7d76904a53f6541e4170`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
 
 There is no preceding trusted invariant gate for the initial activation because GitHub reads the `pull_request_target` workflow from the base branch. Initial activation and every later protected-set update therefore use the separately authorized procedure in [CONTRIBUTING.md](CONTRIBUTING.md); local checks never prove live activation.
 <!-- END TRUSTED VALIDATION SUMMARY -->
