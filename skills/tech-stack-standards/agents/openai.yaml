@@ -1,0 +1,7 @@
+interface:
+  display_name: "Tech Stack Standards"
+  short_description: "Create evidence-backed stack guidance"
+  default_prompt: "Use $tech-stack-standards to prepare a draft of advisory, citation-backed standards for this repository."
+
+policy:
+  allow_implicit_invocation: false
