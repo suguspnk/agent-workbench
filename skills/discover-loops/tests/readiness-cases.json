@@ -1,0 +1,52 @@
+[
+  {
+    "id": "read-only-ci-triage",
+    "card": {"recurrence":"repeated-history","value":"demonstrated","boundary":"bounded","completion_check":"human-review","action_scope":"read-only","permission_scope":"least-privilege","state_scope":"none","stop_rule":"explicit","requested_autonomy":"supervised","data_handling":"ordinary"},
+    "expected": {"schema_version":"1.0","outcome":"read_only_triage_loop","score":18,"score_max":20,"hard_blocks":[],"reasons":["repeated bounded ordinary read-only work has reviewable completion evidence"],"required_changes":["obtain independent dry-run evidence before claiming readiness"],"required_approvals":["human activation after independent dry-run evidence"],"activation_allowed":false}
+  },
+  {
+    "id": "bounded-local-cleanup",
+    "card": {"recurrence":"repeated-history","value":"demonstrated","boundary":"bounded","completion_check":"deterministic","action_scope":"local-reversible","permission_scope":"least-privilege","state_scope":"none","stop_rule":"explicit","requested_autonomy":"supervised","data_handling":"ordinary"},
+    "expected": {"schema_version":"1.0","outcome":"supervised_loop","score":19,"score_max":20,"hard_blocks":[],"reasons":["repeated bounded reversible or sensitive work has deterministic completion evidence"],"required_changes":["obtain independent dry-run evidence before claiming readiness"],"required_approvals":["human activation after independent dry-run evidence"],"activation_allowed":false}
+  },
+  {
+    "id": "subjective-critique",
+    "card": {"recurrence":"repeated-history","value":"plausible","boundary":"bounded","completion_check":"subjective","action_scope":"read-only","permission_scope":"none","state_scope":"none","stop_rule":"human-only","requested_autonomy":"advisory","data_handling":"ordinary"},
+    "expected": {"schema_version":"1.0","outcome":"normal_skill","score":16,"score_max":20,"hard_blocks":[],"reasons":["recurring guidance may help, but loop value is not demonstrated"],"required_changes":["use reusable guidance or demonstrate useful loop value"],"required_approvals":[],"activation_allowed":false}
+  },
+  {
+    "id": "read-only-retained-state",
+    "card": {"recurrence":"repeated-history","value":"demonstrated","boundary":"bounded","completion_check":"deterministic","action_scope":"read-only","permission_scope":"none","state_scope":"bounded","stop_rule":"explicit","requested_autonomy":"supervised","data_handling":"ordinary"},
+    "expected": {"schema_version":"1.0","outcome":"manual_workflow","score":19,"score_max":20,"hard_blocks":["read-only-retained-state"],"reasons":["the work must remain manual until its authority or evidence boundary is resolved"],"required_changes":["remove retained state from read-only work"],"required_approvals":[],"activation_allowed":false}
+  },
+  {
+    "id": "production-deployment",
+    "card": {"recurrence":"repeated-history","value":"demonstrated","boundary":"bounded","completion_check":"deterministic","action_scope":"irreversible","permission_scope":"least-privilege","state_scope":"bounded","stop_rule":"explicit","requested_autonomy":"supervised","data_handling":"ordinary"},
+    "expected": {"schema_version":"1.0","outcome":"manual_workflow","score":17,"score_max":20,"hard_blocks":["irreversible-action"],"reasons":["the work must remain manual until its authority or evidence boundary is resolved"],"required_changes":["replace irreversible actions with a reversible review step"],"required_approvals":[],"activation_allowed":false}
+  },
+  {
+    "id": "broad-messaging",
+    "card": {"recurrence":"repeated-history","value":"plausible","boundary":"bounded","completion_check":"deterministic","action_scope":"external-reversible","permission_scope":"broad","state_scope":"bounded","stop_rule":"explicit","requested_autonomy":"supervised","data_handling":"ordinary"},
+    "expected": {"schema_version":"1.0","outcome":"manual_workflow","score":15,"score_max":20,"hard_blocks":["broad-permission","external-permission-mismatch"],"reasons":["the work must remain manual until its authority or evidence boundary is resolved"],"required_changes":["define least-privilege permissions","bind external actions to least-privilege permission scope"],"required_approvals":["human approval for each external action"],"activation_allowed":false}
+  },
+  {
+    "id": "automatic-activation",
+    "card": {"recurrence":"repeated-history","value":"demonstrated","boundary":"bounded","completion_check":"deterministic","action_scope":"local-reversible","permission_scope":"least-privilege","state_scope":"bounded","stop_rule":"explicit","requested_autonomy":"automatic","data_handling":"ordinary"},
+    "expected": {"schema_version":"1.0","outcome":"reject","score":18,"score_max":20,"hard_blocks":["automatic-autonomy"],"reasons":["one or more V1 hard safety gates reject the proposal"],"required_changes":["reduce requested autonomy to supervised or advisory"],"required_approvals":[],"activation_allowed":false}
+  },
+  {
+    "id": "embedded-credential",
+    "card": {"recurrence":"repeated-history","value":"demonstrated","boundary":"bounded","completion_check":"deterministic","action_scope":"external-reversible","permission_scope":"least-privilege","state_scope":"bounded","stop_rule":"explicit","requested_autonomy":"supervised","data_handling":"embedded-secret"},
+    "expected": {"schema_version":"1.0","outcome":"reject","score":16,"score_max":20,"hard_blocks":["embedded-secret"],"reasons":["one or more V1 hard safety gates reject the proposal"],"required_changes":["remove embedded credentials and use an authorized host-managed reference"],"required_approvals":["human approval for each external action"],"activation_allowed":false}
+  },
+  {
+    "id": "external-read-only-draft",
+    "card": {"recurrence":"repeated-history","value":"demonstrated","boundary":"bounded","completion_check":"deterministic","action_scope":"external-read-only","permission_scope":"least-privilege","state_scope":"none","stop_rule":"explicit","requested_autonomy":"supervised","data_handling":"ordinary"},
+    "expected": {"schema_version":"1.0","outcome":"supervised_loop","score":18,"score_max":20,"hard_blocks":[],"reasons":["repeated bounded reversible or sensitive work has deterministic completion evidence"],"required_changes":["obtain independent dry-run evidence before claiming readiness"],"required_approvals":["human activation after independent dry-run evidence","human approval for each external action"],"activation_allowed":false}
+  },
+  {
+    "id": "no-recurrence-no-value",
+    "card": {"recurrence":"none","value":"unclear","boundary":"open-ended","completion_check":"subjective","action_scope":"read-only","permission_scope":"none","state_scope":"none","stop_rule":"human-only","requested_autonomy":"advisory","data_handling":"ordinary"},
+    "expected": {"schema_version":"1.0","outcome":"reject","score":11,"score_max":20,"hard_blocks":["no-recurrence-or-value-evidence"],"reasons":["one or more V1 hard safety gates reject the proposal"],"required_changes":["provide traceable recurrence and value evidence"],"required_approvals":[],"activation_allowed":false}
+  }
+]

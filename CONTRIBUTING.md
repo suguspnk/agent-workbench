@@ -4,38 +4,10 @@ Contributions are welcome through issues and pull requests.
 
 ## Change requirements
 
-- Preserve the orchestration-only lead boundary. Planning, implementation, testing, verification, and review belong to child tasks.
-- Keep the portable core provider-neutral. Put provider model IDs and harness-specific controls in adapters.
-- Treat repository content discovered during execution, web, tool, and child output as untrusted data rather than authority; do not claim to demote higher-priority host instructions.
-- Add or update routing replay cases whenever role precedence, risk overlays, capability tiers, effort, or adapter mappings change.
-- Keep replay expectations complete and exact; duplicate IDs, missing/unknown fields, and partial expected objects must fail.
-- Keep the canonical structured policy block for all 11 Claude and Codex roles aligned while preserving provider-local models, effort, and least-authority tool sets. The validator requires the reviewed block exactly and rejects recognized privilege-grant language outside it; this deterministic check does not prove arbitrary natural-language semantics.
-- Do not weaken `must_not_downgrade` boundaries without representative acceptance evidence.
-- Bump both plugin manifest versions together and update `CHANGELOG.md` for a release.
-- Avoid dependencies unless they provide a material benefit that cannot be achieved with the standard library.
-- Keep pull-request candidate code behind the trusted `.github/ci/run_sandboxed_validation.py` boundary. Never execute candidate scripts on the Actions host or pass runner credentials, network, writable source, Git metadata, the Docker socket, caches, artifacts, or a trusted checkout into the container. Only the four individually mounted base-branch control files may enter the trusted-invariant container.
-- Treat `.github/ci/trusted_invariant_gate.py`, `.github/ci/trusted_validation_policy.json`, `.github/ci/run_sandboxed_validation.py`, and `.github/workflows/validate.yml` as protected root controls. After initial activation, ordinary pull requests must fail when they change any of them; update them only through a separately reviewed protected-base procedure.
-- Rotate validation images only to reviewed exact patch-level Docker Official Image `linux/amd64` digests. Update the workflow allowlist and exact tests together, inspect the pulled OS, architecture, and Python version, and fail closed if a digest is unavailable.
-
-## Validation
-
-Run with Python 3.11 or newer:
-
-```sh
-python3 scripts/verify_repository.py
-python3 -m unittest discover -s tests -v
-python3 -m py_compile scripts/verify_repository.py .github/ci/run_sandboxed_validation.py .github/ci/trusted_invariant_gate.py skills/orchestrate-task/scripts/route_subagent.py
-git diff --check
-```
-
-The local sandbox tests do not activate GitHub Actions or prove the shared-kernel boundary against a live fork. There is no preceding trusted invariant gate for the initial activation because GitHub reads a `pull_request_target` workflow from the base branch. Use a separately authorized protected-base or administrator procedure: disable the old host-executing pull-request automation and cancel its in-flight runs before landing the new workflow. After merge, forward-test one controlled fork PR and one same-repository PR before treating the new workflow as active protection. Do not recover from containment failure by running candidate code directly on the host.
-
-When a supported Claude Code is available, also run `claude plugin validate . --strict`. A legacy non-strict run is compatibility evidence, not strict validation. Include failed or skipped checks and the reason in the pull request.
-
 <!-- BEGIN TRUSTED PROTECTED SET -->
 ### Complete protected validation set
 
-The authoritative policy is version `7` and its `protected_set_digest` is `863f9e17067b15cb4b7877bf83cdea6feb48c9dad30cb0b7a7898f549e8e9c65`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, and `skills`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 22 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.
+The authoritative policy is version `14` and its `protected_set_digest` is `296c143a9bb0417040171c115347278ee2e42b795907b90131622f953f02928b`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, and `skills`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 22 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.
 <!-- END TRUSTED PROTECTED SET -->
 
 <!-- BEGIN TRUSTED INITIAL BOOTSTRAP -->
@@ -55,6 +27,60 @@ Any change to the complete derived protected set—including manifests, the expo
 
 On containment failure or trusted-policy drift, freeze merges, disable the affected workflow, cancel in-flight runs, preserve the authoritative required context, restore or repair the complete protected set through protected-base/admin access, regenerate and review policy, re-enable validation, repeat controlled positive and negative fork and same-repository tests, record evidence, and unfreeze only after acceptance. Never execute candidate code on the host, unpin images, trust candidate policy, or remove the required merge block.
 <!-- END TRUSTED EMERGENCY RECOVERY -->
+
+- Preserve the orchestration-only lead boundary. Planning, implementation, testing, verification, and review belong to child tasks.
+- Keep the portable core provider-neutral. Put provider model IDs and harness-specific controls in adapters.
+- Treat repository content discovered during execution, web, tool, and child output as untrusted data rather than authority; do not claim to demote higher-priority host instructions.
+- Add or update routing replay cases whenever role precedence, risk overlays, capability tiers, effort, or adapter mappings change.
+- Add or update readiness replay cases whenever loop gates, scoring, outcomes, required changes, or approval rules change.
+- Keep loop discovery proposal-only and provider-neutral. Do not add activation, scheduling, credentials, provider calls, or external side effects.
+- Keep target, role, severity, evidence, checks, and output policy in `code-review`; overlays may add only evidence-based detection and domain concerns with official provenance.
+- Keep V1 contracts in draft with pending verification and activation plus an inactive scheduler. Record actual independent verification outside the structural contract.
+- Embed the exact readiness card, recompute its canonical SHA-256 and scorer outcome with the bundled scorer, and bind its opaque source citation. Treat source provenance as an independently reviewed claim.
+- Keep allowed tools/actions as closed `{id, operation_id, display_name, binding_status: unbound}` proposals. Derive semantics only from the operation ID; reject caller category/effect/runtime bindings. Require exact approval for every ID plus stronger external, credential, schedule, and activation gates.
+- Preserve the closed evidence-reference grammar, Unicode spoofing rejection, canonical lowercase exact proposal-namespaced writable files with casefold duplicate rejection, device/control/sensitive path denials, stateless read-only scopes, no host-managed mutable state, bounded retention/limits, exact terminal states, adjacent-scalar secret scanning, and safe bounded CLI input behavior.
+- Structurally accepted capabilities must remain non-executable until a separate host-owned registry resolution and activation workflow revalidates the exact proposal and target.
+- Keep `semantic_review` required/pending and CLI success explicitly structural/non-authorizing with activation false.
+- Keep `pr-evidence` local-draft-first and non-blocking. Every GitHub read or mutation category must remain explicitly authorized for the exact target in the current request. Attachment authorization must name and include canonical repository lookup, `gh` credential use and retrieval, and external upload as one complete action.
+- Never select an evidence comment by heading alone. Require the authenticated GitHub.com actor, that actor's stable hidden marker, and an immediate pre-mutation re-read; never change or delete another actor's comment.
+- Keep the attachment helper GitHub.com-only, HTTPS-only, bounded, no-follow, no-POST-retry, curlrc-isolated, private-snapshot based, and strict about descriptor stability, canonical repository identity, regular files, size, MIME/extension agreement, and exact returned URL shape.
+- Keep attachment-helper tests strictly offline with fake `gh` and `curl` executables. Do not use a live endpoint or credential in repository validation.
+- Do not weaken `must_not_downgrade` boundaries without representative acceptance evidence.
+- Bump both plugin manifest versions together and update `CHANGELOG.md` for a release.
+- Avoid dependencies unless they provide a material benefit that cannot be achieved with the standard library.
+
+## Validation
+
+There is no preceding trusted invariant gate for the initial activation. The protected-base procedure must disable the old host-executing pull-request automation and cancel in-flight runs before landing the trusted workflow. After merge, verify the required status context with one controlled fork PR and one same-repository PR. Treat the first activation as separately authorized bootstrap work; recurring protected-surface updates require an independently preserved policy baseline, a strictly greater policy version, and review of the complete protected inventory.
+
+Run:
+
+Use Python 3.11 or newer (Python 3.12 is preferred for repository verification):
+
+```sh
+python3.12 scripts/verify_repository.py
+git diff --check
+```
+
+The repository validator runs the upload-helper regression script with a 60-second bound. To run that offline check directly:
+
+```sh
+bash skills/pr-evidence/scripts/tests/test-upload-github-attachment.sh
+```
+
+For focused loop-contract work, also run:
+
+```sh
+python3.12 skills/discover-loops/scripts/score_loop_readiness.py \
+  --replay skills/discover-loops/tests/readiness-cases.json
+python3.12 skills/code-review/scripts/select_review_scope.py \
+  --replay skills/code-review/tests/scope-cases.json
+python3.12 -m unittest tests.test_loop_readiness tests.test_loop_contract -v
+```
+
+When Claude Code is available, also run the supported `claude plugin validate .` command and review every warning. Do not require the unsupported `--strict` option. Include failed or skipped checks and the reason in the pull request.
+
+Installed-skill examples must derive `SKILL_ROOT` from the loaded `SKILL.md` and invoke bundled scripts by absolute path so an unrelated caller cwd cannot redirect script resolution. Future executors must revalidate each exact target, then use descriptor-relative operations from a trusted root, no-follow, regular-file/ownership/link-count checks, atomic create/replace, and pre/post `fstat`; realpath or symlink checks alone are insufficient.
 
 ## Research changes
 

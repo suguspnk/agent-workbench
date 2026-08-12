@@ -3,15 +3,16 @@
   "owner": {
     "name": "suguspnk"
   },
-  "description": "Portable orchestration-only workflows with bounded subagent routing.",
+  "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, discover-loops drafts evidence-backed loop proposals, pr-evidence prepares local receipts before separately authorized GitHub mutations, and implementation-quality-governance applies proportionate quality gates.",
   "metadata": {
-    "description": "Portable orchestration-only workflows with bounded subagent routing."
+    "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, discover-loops drafts evidence-backed loop proposals, pr-evidence prepares local receipts before separately authorized GitHub mutations, and implementation-quality-governance applies proportionate quality gates."
   },
   "plugins": [
     {
       "name": "agent-workbench",
       "source": "./",
-      "description": "Portable orchestration-only coordination with automatic subagent routing and independent verification.",
+      "version": "0.8.0",
+      "description": "Portable task orchestration, deterministic code review, safe loop discovery, opt-in pull-request evidence preparation, and implementation quality governance with independent verification.",
       "author": {
         "name": "suguspnk"
       },
@@ -20,13 +21,27 @@
       "license": "Apache-2.0",
       "keywords": [
         "orchestration",
+        "loop-discovery",
+        "agent-loop",
+        "pr-evidence",
+        "quality-governance",
+        "ui-ux",
+        "design-system",
         "verification",
+        "code-review",
         "agent-skills"
       ],
       "category": "Productivity",
       "tags": [
         "orchestration",
+        "loop-discovery",
+        "agent-loop",
+        "pr-evidence",
+        "quality-governance",
+        "ui-ux",
+        "design-system",
         "workflow",
+        "code-review",
         "portable"
       ]
     }

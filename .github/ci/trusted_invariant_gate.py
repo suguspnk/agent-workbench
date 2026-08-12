@@ -35,7 +35,8 @@ CONTROL_PATHS = {
 CODEX_KEYS = {
     "name", "description", "model", "model_reasoning_effort", "sandbox_mode", "developer_instructions",
 }
-CLAUDE_KEYS = {"name", "description", "tools", "model", "effort"}
+CLAUDE_REQUIRED_KEYS = {"name", "description", "tools", "model", "effort"}
+CLAUDE_KEYS = CLAUDE_REQUIRED_KEYS | {"skills"}
 PROFILE_KEYS = {
     "path", "description", "model", "effort", "sandbox", "tools", "body_sha256", "policy_sha256",
 }
@@ -473,7 +474,10 @@ def parse_frontmatter(label: str, text: str) -> tuple[dict[str, str], str]:
         if key not in CLAUDE_KEYS:
             fail(f"{label} has unknown frontmatter key: {diagnostic(key)}")
         values[key] = value.strip().strip('"')
-    exact_keys(label, values, CLAUDE_KEYS)
+    missing = sorted(CLAUDE_REQUIRED_KEYS - set(values))
+    unknown = sorted(set(values) - CLAUDE_KEYS)
+    if missing or unknown:
+        fail(f"{label} has invalid keys (missing={diagnostic(missing)}, unknown={diagnostic(unknown)})")
     return values, body
 
 
@@ -577,11 +581,21 @@ def validate_protected_surfaces(reader: CandidateReader, policy: dict[str, Any])
         actual.append((root, "directory", root_mode))
         _surface_walk(reader, root, nodes=actual)
     actual_map = {path: (kind, executable) for path, kind, executable in actual}
-    expected_map = {path: (kind, executable) for path, (kind, executable, _, _) in expected.items()}
-    if actual_map != expected_map:
+    expected_map = {path: kind for path, (kind, _, _, _) in expected.items()}
+    actual_kinds = {path: kind for path, (kind, _) in actual_map.items()}
+    if actual_kinds != expected_map:
         missing = sorted(set(expected_map) - set(actual_map))
         extra = sorted(set(actual_map) - set(expected_map))
         fail(f"protected surface inventory differs (missing={diagnostic(missing)}, extra={diagnostic(extra)})")
+    for path, expected_kind in expected_map.items():
+        if expected_kind != actual_map[path][0]:
+            fail(f"protected surface kind differs: {diagnostic(path)}")
+        expected_executable = expected[path][1]
+        actual_executable = actual_map[path][1]
+        # A candidate checkout may lose an executable bit during a read-only
+        # export, but may never gain one on a protected file.
+        if not expected_executable and actual_executable:
+            fail(f"protected surface executable mode differs: {diagnostic(path)}")
     for path, (_, _, binding, expected_hash) in expected.items():
         if binding == "sha256":
             if sha256(reader.read(path)) != expected_hash:

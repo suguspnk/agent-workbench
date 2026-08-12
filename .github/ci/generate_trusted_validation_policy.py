@@ -479,6 +479,25 @@ def generate(
         root, maximum, previous_policy_path, policy_path, previous_policy_sha256
     )
     inventory = collect_inventory(root, maximum)
+    # Read-only exports commonly clear executable bits while preserving file
+    # bytes.  Preserve a previously reviewed executable bit for the same
+    # regular-file path so an export can reproduce the authoritative policy;
+    # newly executable files still change state and require a version bump.
+    baseline_inventory = {
+        entry.get("path"): entry
+        for entry in baseline.get("protected_surface_inventory", [])
+        if isinstance(entry, dict)
+    }
+    for entry in inventory:
+        previous = baseline_inventory.get(entry.get("path"))
+        if (
+            previous
+            and entry.get("kind") == "file"
+            and previous.get("kind") == "file"
+            and previous.get("executable") is True
+            and entry.get("executable") is False
+        ):
+            entry["executable"] = True
     digest = protected_set_digest(inventory)
     codex, claude = derive_profiles(root, seed, maximum)
     pinned_candidate_files = {

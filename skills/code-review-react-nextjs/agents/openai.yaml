@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review: React and Next.js"
+  short_description: "Add React web and Next.js defect checks"
+  default_prompt: "Use $code-review with $code-review-react-nextjs for the selected React web/Next scope."
