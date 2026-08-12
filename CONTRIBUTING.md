@@ -4,6 +4,30 @@ Contributions are welcome through issues and pull requests.
 
 ## Change requirements
 
+<!-- BEGIN TRUSTED PROTECTED SET -->
+### Complete protected validation set
+
+The authoritative policy is version `16` and its `protected_set_digest` is `1ef714d1fb621808bcac8773a6dc4db2a3cfba3adcaa7d76904a53f6541e4170`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, and `skills`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 22 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.
+<!-- END TRUSTED PROTECTED SET -->
+
+<!-- BEGIN TRUSTED INITIAL BOOTSTRAP -->
+### Initial protected-base activation
+
+There is no preceding trusted invariant gate for the initial activation because GitHub reads a `pull_request_target` workflow from the base branch. Local checks do not prove live activation. The separately authorized procedure must freeze merges; disable the old host-executing `Validate` workflow and cancel in-flight runs; prepare and independently review a clean protected-base change; regenerate policy version and protected-set digest; land through protected-base or administrator access; re-enable the replacement workflow; atomically migrate required status to `Trusted invariants (authoritative)`; run controlled positive and negative fork and same-repository pull requests; record run URLs, SHAs, policy/digest, and ruleset evidence; then unfreeze merges.
+<!-- END TRUSTED INITIAL BOOTSTRAP -->
+
+<!-- BEGIN TRUSTED PROTECTED UPDATE -->
+### Recurring protected-set update
+
+Any change to the complete derived protected set—including manifests, the exported skills tree, profiles/adapters, validator/router/replay, CI controls, generator, or these document contracts—requires the same protected-base procedure: freeze merges, disable/cancel validation, regenerate and increment policy, independently review contained positive/negative checks, land through protected-base/admin access, re-enable and migrate the required authoritative status, run controlled fork and same-repository enforcement tests, record evidence, and unfreeze. For an exported checkout, the generator requires a separately preserved baseline outside the candidate tree and its reviewed SHA-256, for example `python3 .github/ci/generate_trusted_validation_policy.py --root /path/to/candidate --previous-policy /path/to/previous-policy.json --previous-policy-sha256 <64-hex-digest>`; it rejects the candidate policy as a baseline. Ordinary pull requests must not modify policy and its subjects together.
+<!-- END TRUSTED PROTECTED UPDATE -->
+
+<!-- BEGIN TRUSTED EMERGENCY RECOVERY -->
+### Emergency recovery
+
+On containment failure or trusted-policy drift, freeze merges, disable the affected workflow, cancel in-flight runs, preserve the authoritative required context, restore or repair the complete protected set through protected-base/admin access, regenerate and review policy, re-enable validation, repeat controlled positive and negative fork and same-repository tests, record evidence, and unfreeze only after acceptance. Never execute candidate code on the host, unpin images, trust candidate policy, or remove the required merge block.
+<!-- END TRUSTED EMERGENCY RECOVERY -->
+
 - Preserve the orchestration-only lead boundary. Planning, implementation, testing, verification, and review belong to child tasks.
 - Keep the portable core provider-neutral. Put provider model IDs and harness-specific controls in adapters.
 - Treat repository content discovered during execution, web, tool, and child output as untrusted data rather than authority; do not claim to demote higher-priority host instructions.
@@ -26,6 +50,8 @@ Contributions are welcome through issues and pull requests.
 - Avoid dependencies unless they provide a material benefit that cannot be achieved with the standard library.
 
 ## Validation
+
+There is no preceding trusted invariant gate for the initial activation. The protected-base procedure must disable the old host-executing pull-request automation and cancel in-flight runs before landing the trusted workflow. After merge, verify the required status context with one controlled fork PR and one same-repository PR. Treat the first activation as separately authorized bootstrap work; recurring protected-surface updates require an independently preserved policy baseline, a strictly greater policy version, and review of the complete protected inventory.
 
 Run:
 

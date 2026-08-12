@@ -15,13 +15,30 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_fast_investigator",
       "execution_path": "standard",
+      "primary_role": "awb_fast_investigator",
       "task_class": "routine",
       "capability_tier": "efficient",
       "effort": "low",
       "required_followups": [],
-      "must_not_downgrade": false
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "settled narrow evidence fits the efficient investigator"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -40,10 +57,30 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_fast_investigator",
       "execution_path": "standard",
+      "primary_role": "awb_fast_investigator",
       "task_class": "routine",
-      "must_not_downgrade": false
+      "capability_tier": "efficient",
+      "effort": "low",
+      "required_followups": [],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "settled narrow evidence fits the efficient investigator"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -62,13 +99,34 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_builder",
       "execution_path": "fast",
+      "primary_role": "awb_builder",
       "task_class": "bounded",
       "capability_tier": "balanced",
       "effort": "medium",
-      "required_followups": ["awb_verifier"],
-      "must_not_downgrade": false
+      "required_followups": [
+        "awb_verifier"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "the interface and ownership are bounded enough for the balanced builder"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -87,149 +145,35 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_builder",
       "execution_path": "fast",
+      "primary_role": "awb_builder",
       "task_class": "bounded",
       "capability_tier": "balanced",
       "effort": "medium",
-      "required_followups": ["awb_verifier"]
+      "required_followups": [
+        "awb_verifier"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "the interface and ownership are bounded enough for the balanced builder"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
-  },
-  {
-    "id": "fast-path-external-tools-excluded",
-    "card": {
-      "work_shape": "implement",
-      "scope": "one file",
-      "ambiguity": "settled",
-      "contract": "internal",
-      "tool_loop": "repeated external tools",
-      "impact": "reversible",
-      "evidence_bar": "focused test",
-      "context_profile": "compact facts",
-      "parallelism": "none",
-      "change_authority": "owned local paths",
-      "router_confidence": "high"
-    },
-    "expected": {"execution_path": "standard"}
-  },
-  {
-    "id": "fast-path-noisy-context-excluded",
-    "card": {
-      "work_shape": "implement",
-      "scope": "one file",
-      "ambiguity": "settled",
-      "contract": "internal",
-      "tool_loop": "one read/check",
-      "impact": "reversible",
-      "evidence_bar": "focused test",
-      "context_profile": "noisy logs/large artifacts",
-      "parallelism": "none",
-      "change_authority": "owned local paths",
-      "router_confidence": "high"
-    },
-    "expected": {"execution_path": "standard"}
-  },
-  {
-    "id": "fast-path-dependent-sequence-excluded",
-    "card": {
-      "work_shape": "implement",
-      "scope": "one file",
-      "ambiguity": "settled",
-      "contract": "internal",
-      "tool_loop": "one read/check",
-      "impact": "reversible",
-      "evidence_bar": "focused test",
-      "context_profile": "compact facts",
-      "parallelism": "dependent sequence",
-      "change_authority": "owned local paths",
-      "router_confidence": "high"
-    },
-    "expected": {"execution_path": "standard"}
-  },
-  {
-    "id": "fast-path-shared-impact-excluded",
-    "card": {
-      "work_shape": "implement",
-      "scope": "one file",
-      "ambiguity": "settled",
-      "contract": "internal",
-      "tool_loop": "one read/check",
-      "impact": "shared system",
-      "evidence_bar": "focused test",
-      "context_profile": "compact facts",
-      "parallelism": "none",
-      "change_authority": "owned local paths",
-      "router_confidence": "high"
-    },
-    "expected": {"execution_path": "standard"}
-  },
-  {
-    "id": "fast-path-integration-evidence-excluded",
-    "card": {
-      "work_shape": "implement",
-      "scope": "one file",
-      "ambiguity": "settled",
-      "contract": "internal",
-      "tool_loop": "one read/check",
-      "impact": "reversible",
-      "evidence_bar": "integration/regression",
-      "context_profile": "compact facts",
-      "parallelism": "none",
-      "change_authority": "owned local paths",
-      "router_confidence": "high"
-    },
-    "expected": {"execution_path": "standard"}
-  },
-  {
-    "id": "fast-path-public-contract-excluded",
-    "card": {
-      "work_shape": "implement",
-      "scope": "one file",
-      "ambiguity": "settled",
-      "contract": "public API",
-      "tool_loop": "one read/check",
-      "impact": "reversible",
-      "evidence_bar": "focused test",
-      "context_profile": "compact facts",
-      "parallelism": "none",
-      "change_authority": "owned local paths",
-      "router_confidence": "high"
-    },
-    "expected": {"execution_path": "standard"}
-  },
-  {
-    "id": "fast-path-shared-authority-excluded",
-    "card": {
-      "work_shape": "implement",
-      "scope": "one file",
-      "ambiguity": "settled",
-      "contract": "internal",
-      "tool_loop": "one read/check",
-      "impact": "reversible",
-      "evidence_bar": "focused test",
-      "context_profile": "compact facts",
-      "parallelism": "none",
-      "change_authority": "shared contract",
-      "router_confidence": "high"
-    },
-    "expected": {"execution_path": "standard"}
-  },
-  {
-    "id": "fast-path-uncertain-confidence-excluded",
-    "card": {
-      "work_shape": "implement",
-      "scope": "one file",
-      "ambiguity": "settled",
-      "contract": "internal",
-      "tool_loop": "one read/check",
-      "impact": "reversible",
-      "evidence_bar": "focused test",
-      "context_profile": "compact facts",
-      "parallelism": "none",
-      "change_authority": "owned local paths",
-      "router_confidence": "uncertain"
-    },
-    "expected": {"execution_path": "standard"}
   },
   {
     "id": "public-api-change",
@@ -247,10 +191,36 @@
       "router_confidence": "uncertain"
     },
     "expected": {
-      "primary_role": "awb_deep_worker",
       "execution_path": "standard",
-      "required_followups": ["awb_verifier", "awb_test_engineer", "awb_reviewer"],
-      "must_not_downgrade": true
+      "primary_role": "awb_deep_worker",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "risk, ambiguity, context, or blast radius requires a frontier worker"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "shared contract",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -266,13 +236,49 @@
       "context_profile": "long-running history",
       "parallelism": "dependent sequence",
       "change_authority": "shared contract",
-      "router_confidence": "unresolved"
+      "router_confidence": "unresolved",
+      "required_capabilities": [
+        "write",
+        "test"
+      ],
+      "required_tools": [
+        "file-write",
+        "shell"
+      ]
     },
     "expected": {
-      "primary_role": "awb_planner",
       "execution_path": "standard",
+      "primary_role": "awb_planner",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
       "required_followups": [],
-      "reroute_after_planning": true
+      "reroute_after_planning": true,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": true,
+      "reasons": [
+        "architecture, packet boundaries, or routing remain unresolved"
+      ],
+      "deferred_capabilities": [
+        "write",
+        "test"
+      ],
+      "deferred_modalities": [],
+      "deferred_tools": [
+        "file-write",
+        "shell"
+      ],
+      "deferred_skills": [
+        "implementation-quality-governance"
+      ],
+      "current_change_authority": "none",
+      "deferred_change_authority": "shared contract",
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -291,9 +297,35 @@
       "router_confidence": "uncertain"
     },
     "expected": {
-      "primary_role": "awb_deep_worker",
       "execution_path": "standard",
-      "required_followups": ["awb_verifier", "awb_test_engineer"]
+      "primary_role": "awb_deep_worker",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "debugging requires hypothesis formation and an iterative tool loop"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -312,13 +344,36 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_migration_worker",
       "execution_path": "standard",
+      "primary_role": "awb_migration_worker",
       "task_class": "critical",
       "capability_tier": "frontier",
       "effort": "maximum",
-      "required_followups": ["awb_verifier", "awb_test_engineer", "awb_reviewer"],
-      "must_not_downgrade": true
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "persistent-data or migration work requires rollout, observability, and recovery analysis"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "shared contract",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -337,10 +392,37 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_deep_worker",
       "execution_path": "standard",
-      "required_followups": ["awb_verifier", "awb_test_engineer", "awb_security_reviewer"],
-      "must_not_downgrade": true
+      "primary_role": "awb_deep_worker",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer",
+        "awb_security_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "risk, ambiguity, context, or blast radius requires a frontier worker"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -359,9 +441,30 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_verifier",
       "execution_path": "standard",
-      "required_followups": []
+      "primary_role": "awb_verifier",
+      "task_class": "bounded",
+      "capability_tier": "balanced",
+      "effort": "medium",
+      "required_followups": [],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "focused deterministic acceptance checks fit the verifier"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -380,10 +483,30 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_test_engineer",
       "execution_path": "standard",
+      "primary_role": "awb_test_engineer",
+      "task_class": "bounded",
       "capability_tier": "balanced",
-      "effort": "high"
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "integration, failure-path, or high-impact validation needs the test engineer"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -402,11 +525,30 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_test_engineer",
       "execution_path": "standard",
+      "primary_role": "awb_test_engineer",
       "task_class": "critical",
+      "capability_tier": "balanced",
+      "effort": "high",
       "required_followups": [],
-      "must_not_downgrade": true
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "integration, failure-path, or high-impact validation needs the test engineer"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -425,12 +567,30 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_security_reviewer",
       "execution_path": "standard",
+      "primary_role": "awb_security_reviewer",
       "task_class": "critical",
+      "capability_tier": "frontier",
       "effort": "maximum",
       "required_followups": [],
-      "must_not_downgrade": true
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "review packets use an independent findings-only role"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -445,15 +605,34 @@
       "evidence_bar": "independent review",
       "context_profile": "long-running history",
       "parallelism": "dependent sequence",
-      "change_authority": "external/destructive",
+      "change_authority": "none",
       "router_confidence": "unresolved"
     },
     "expected": {
-      "primary_role": "awb_planner",
       "execution_path": "standard",
+      "primary_role": "awb_planner",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "high",
       "required_followups": [],
       "reroute_after_planning": true,
-      "must_not_downgrade": true
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "architecture, packet boundaries, or routing remain unresolved"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": "none",
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   },
   {
@@ -472,10 +651,970 @@
       "router_confidence": "high"
     },
     "expected": {
-      "primary_role": "awb_reviewer",
       "execution_path": "standard",
+      "primary_role": "awb_reviewer",
       "task_class": "complex",
-      "must_not_downgrade": true
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "review packets use an independent findings-only role"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "public-api-map-terminal",
+    "card": {
+      "work_shape": "map",
+      "scope": "cross-component",
+      "ambiguity": "settled",
+      "contract": "public API",
+      "tool_loop": "repeated local tools",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_deep_investigator",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "settled consequential read-only work needs a terminal frontier investigator"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "persistent-map-terminal",
+    "card": {
+      "work_shape": "map",
+      "scope": "cross-system",
+      "ambiguity": "settled",
+      "contract": "persistent data",
+      "tool_loop": "repeated local tools",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_deep_investigator",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "settled consequential read-only work needs a terminal frontier investigator"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "security-extract-terminal",
+    "card": {
+      "work_shape": "extract",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "security boundary",
+      "tool_loop": "repeated local tools",
+      "impact": "production-critical",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_deep_investigator",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [
+        "awb_security_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "settled consequential read-only work needs a terminal frontier investigator"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "public-persistent-boundaries",
+    "card": {
+      "work_shape": "implement",
+      "scope": "cross-component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "reversible",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high",
+      "contract_boundaries": [
+        "public API",
+        "persistent data"
+      ]
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_migration_worker",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "maximum",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "persistent-data or migration work requires rollout, observability, and recovery analysis"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "public-security-boundaries",
+    "card": {
+      "work_shape": "implement",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "none",
+      "tool_loop": "repeated local tools",
+      "impact": "production-critical",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high",
+      "contract_boundaries": [
+        "public API",
+        "security boundary"
+      ]
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_deep_worker",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer",
+        "awb_security_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "risk, ambiguity, context, or blast radius requires a frontier worker"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "persistent-security-boundaries",
+    "card": {
+      "work_shape": "debug",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "production-critical",
+      "evidence_bar": "integration/regression",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high",
+      "contract_boundaries": [
+        "persistent data",
+        "security boundary"
+      ]
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_deep_worker",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer",
+        "awb_security_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "debugging requires hypothesis formation and an iterative tool loop"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "all-contract-boundaries",
+    "card": {
+      "work_shape": "implement",
+      "scope": "cross-system",
+      "ambiguity": "settled",
+      "contract": "public API",
+      "tool_loop": "repeated local tools",
+      "impact": "production-critical",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high",
+      "contract_boundaries": [
+        "persistent data",
+        "security boundary"
+      ]
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_migration_worker",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "maximum",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer",
+        "awb_security_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "persistent-data or migration work requires rollout, observability, and recovery analysis"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "bounded-independent-review",
+    "card": {
+      "work_shape": "implement",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "reversible",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_builder",
+      "task_class": "bounded",
+      "capability_tier": "balanced",
+      "effort": "medium",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "the interface and ownership are bounded enough for the balanced builder"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "bounded-integration-regression",
+    "card": {
+      "work_shape": "implement",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "reversible",
+      "evidence_bar": "integration/regression",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_builder",
+      "task_class": "bounded",
+      "capability_tier": "balanced",
+      "effort": "medium",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "the interface and ownership are bounded enough for the balanced builder"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "persistent-debugging-overlays",
+    "card": {
+      "work_shape": "debug",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "persistent data",
+      "tool_loop": "repeated local tools",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_deep_worker",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "debugging requires hypothesis formation and an iterative tool loop"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "migration-never-routine",
+    "card": {
+      "work_shape": "migrate",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "none",
+      "tool_loop": "repeated local tools",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_migration_worker",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "maximum",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier",
+        "awb_reviewer"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "persistent-data or migration work requires rollout, observability, and recovery analysis"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "authorized-external-operation",
+    "card": {
+      "work_shape": "operate",
+      "scope": "cross-system",
+      "ambiguity": "settled",
+      "contract": "security boundary",
+      "tool_loop": "repeated external tools",
+      "impact": "production-critical",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "external/destructive",
+      "router_confidence": "high",
+      "required_capabilities": [
+        "external-operation"
+      ],
+      "required_tools": [
+        "network",
+        "shell"
+      ],
+      "operation_authorization": {
+        "action": "merge pull request",
+        "target": "owner/repository pull request 123",
+        "approval": "explicit trusted-user authorization",
+        "recovery": "irreversible",
+        "verification": "independent verifier",
+        "packet_id": "operator-123",
+        "revision": "1",
+        "binding": "sha256:bf618fcb1f605e0fbea7f307949518573c4ab29e1a3d79d495ed41499a1723a2"
+      }
+    },
+    "expected_error": "external execution unavailable: no constrained network adapter is configured"
+  },
+  {
+    "id": "worker-required-skill",
+    "card": {
+      "work_shape": "implement",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high",
+      "required_capabilities": [
+        "write",
+        "test"
+      ],
+      "required_modalities": [
+        "code"
+      ],
+      "required_tools": [
+        "file-write",
+        "shell"
+      ],
+      "required_skills": [
+        "project-security-gate"
+      ]
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_builder",
+      "task_class": "bounded",
+      "capability_tier": "balanced",
+      "effort": "medium",
+      "required_followups": [
+        "awb_verifier"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [
+        "write",
+        "test"
+      ],
+      "required_modalities": [
+        "code"
+      ],
+      "required_tools": [
+        "file-write",
+        "shell"
+      ],
+      "required_skills": [
+        "project-security-gate",
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "the interface and ownership are bounded enough for the balanced builder"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "shared-impact-sole-test-trigger",
+    "card": {
+      "work_shape": "implement",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "shared system",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_deep_worker",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "risk, ambiguity, context, or blast radius requires a frontier worker"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "production-impact-sole-test-trigger",
+    "card": {
+      "work_shape": "implement",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "repeated local tools",
+      "impact": "production-critical",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "owned local paths",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_deep_worker",
+      "task_class": "critical",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [
+        "awb_test_engineer",
+        "awb_verifier"
+      ],
+      "reroute_after_planning": false,
+      "must_not_downgrade": true,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [
+        "implementation-quality-governance"
+      ],
+      "skill_fallback_required": true,
+      "reasons": [
+        "risk, ambiguity, context, or blast radius requires a frontier worker"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "owned local paths",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "independent-external-verification",
+    "card": {
+      "work_shape": "verify-external",
+      "scope": "cross-system",
+      "ambiguity": "settled",
+      "contract": "security boundary",
+      "tool_loop": "repeated external tools",
+      "impact": "production-critical",
+      "evidence_bar": "independent review",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "none",
+      "router_confidence": "high",
+      "required_capabilities": [
+        "external-verification"
+      ],
+      "required_tools": [
+        "network",
+        "shell"
+      ],
+      "external_verification": {
+        "target": "owner/repository pull request 123",
+        "scope": "merged state and checks only",
+        "approval": "explicit trusted-user authorization",
+        "access": "public read-only",
+        "evidence": "independent direct observation",
+        "operator_packet_id": "operator-123",
+        "operator_revision": "1",
+        "action": "merge pull request",
+        "authorization_binding": "sha256:bf618fcb1f605e0fbea7f307949518573c4ab29e1a3d79d495ed41499a1723a2"
+      }
+    },
+    "expected_error": "external execution unavailable: no constrained network adapter is configured"
+  },
+  {
+    "id": "ordinary-local-shell-verification",
+    "card": {
+      "work_shape": "test",
+      "scope": "one file",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "none",
+      "router_confidence": "high",
+      "required_capabilities": [
+        "test"
+      ],
+      "required_tools": [
+        "shell"
+      ]
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_verifier",
+      "task_class": "bounded",
+      "capability_tier": "balanced",
+      "effort": "medium",
+      "required_followups": [],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [
+        "test"
+      ],
+      "required_modalities": [],
+      "required_tools": [
+        "shell"
+      ],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "focused deterministic acceptance checks fit the verifier"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "map-local-unknown-plans",
+    "card": {
+      "work_shape": "map",
+      "scope": "bounded component",
+      "ambiguity": "local unknown",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "syntax",
+      "context_profile": "focused source set",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_planner",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": true,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "read-only evidence or routing remains unsettled"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": "none",
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "extract-competing-hypotheses-plans",
+    "card": {
+      "work_shape": "extract",
+      "scope": "bounded component",
+      "ambiguity": "competing hypotheses",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "syntax",
+      "context_profile": "focused source set",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_planner",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": true,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "read-only evidence or routing remains unsettled"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": "none",
+      "authorization_binding": null,
+      "authorization_reference": null
+    }
+  },
+  {
+    "id": "map-uncertain-confidence-plans",
+    "card": {
+      "work_shape": "map",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "syntax",
+      "context_profile": "focused source set",
+      "parallelism": "independent read-only",
+      "change_authority": "none",
+      "router_confidence": "uncertain"
+    },
+    "expected": {
+      "execution_path": "standard",
+      "primary_role": "awb_planner",
+      "task_class": "complex",
+      "capability_tier": "frontier",
+      "effort": "high",
+      "required_followups": [],
+      "reroute_after_planning": true,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "read-only evidence or routing remains unsettled"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": "none",
+      "authorization_binding": null,
+      "authorization_reference": null
     }
   }
 ]

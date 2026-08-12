@@ -194,6 +194,18 @@ Agent Workbench includes orchestration, deterministic code review, proposal-only
 
 ## Development
 
+## Trusted validation bootstrap and updates
+
+<!-- BEGIN TRUSTED VALIDATION SUMMARY -->
+## Trusted validation boundary
+
+The authoritative pull-request gate uses reviewed base-branch controls and policy version `16` with protected-set digest `1ef714d1fb621808bcac8773a6dc4db2a3cfba3adcaa7d76904a53f6541e4170`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
+
+There is no preceding trusted invariant gate for the initial activation because GitHub reads the `pull_request_target` workflow from the base branch. Initial activation and every later protected-set update therefore use the separately authorized procedure in [CONTRIBUTING.md](CONTRIBUTING.md); local checks never prove live activation.
+<!-- END TRUSTED VALIDATION SUMMARY -->
+
+There is no preceding trusted invariant gate for the initial activation of the protected validation workflow. Before enabling it, an authorized administrator must disable the old host-executing pull-request automation, cancel in-flight runs, land the protected-base change, and verify the required status context. After merge, run one controlled fork PR and one same-repository PR before relying on the new context for enforcement. Subsequent protected-surface changes require the separately reviewed base procedure and a regenerated, independently baseline-bound policy.
+
 Run repository, routing, unit, and strict offline attachment-helper checks:
 
 Repository checks require Python 3.11 or newer; CI and release verification use Python 3.12 where available:

@@ -3,16 +3,16 @@
   "owner": {
     "name": "suguspnk"
   },
-  "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, discover-loops drafts evidence-backed loop proposals, pr-evidence prepares local receipts before separately authorized GitHub mutations, and implementation-quality-governance applies proportionate quality gates.",
+  "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, code-review composes evidence-backed reviews, proposal-only discover-loops drafts inactive loop proposals, implementation-quality-governance applies change gates, pr-evidence prepares local receipts, and manually invoked draft-only tech-stack-standards prepares advisory stack guidance.",
   "metadata": {
-    "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, discover-loops drafts evidence-backed loop proposals, pr-evidence prepares local receipts before separately authorized GitHub mutations, and implementation-quality-governance applies proportionate quality gates."
+    "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, code-review composes evidence-backed reviews, proposal-only discover-loops drafts inactive loop proposals, implementation-quality-governance applies change gates, pr-evidence prepares local receipts, and manually invoked draft-only tech-stack-standards prepares advisory stack guidance."
   },
   "plugins": [
     {
       "name": "agent-workbench",
       "source": "./",
       "version": "0.8.0",
-      "description": "Portable task orchestration, deterministic code review, safe loop discovery, opt-in pull-request evidence preparation, and implementation quality governance with independent verification.",
+      "description": "Portable task orchestration, deterministic code review, safe loop discovery, quality governance, opt-in pull-request evidence preparation, and draft-only tech-stack standards.",
       "author": {
         "name": "suguspnk"
       },
@@ -23,6 +23,8 @@
         "orchestration",
         "loop-discovery",
         "agent-loop",
+        "tech-stack-standards",
+        "documentation",
         "pr-evidence",
         "quality-governance",
         "ui-ux",
@@ -36,6 +38,8 @@
         "orchestration",
         "loop-discovery",
         "agent-loop",
+        "tech-stack-standards",
+        "documentation",
         "pr-evidence",
         "quality-governance",
         "ui-ux",

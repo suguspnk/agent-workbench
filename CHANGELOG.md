@@ -2,6 +2,12 @@
 
 All notable changes to Agent Workbench are documented here. Versions follow semantic versioning.
 
+## Unreleased
+
+- Hardened orchestration routing, role contracts, secure repository readers, bounded diagnostics, and replay coverage across Codex and Claude adapters.
+- Added fail-closed trusted pull-request validation with pinned container images, an independently baseline-bound protected-surface policy, and candidate behavior checks that cannot self-authorize.
+- Reconciled the protected inventory and validator with the current `main` skill tree, code-review contracts, manifests, and profile surfaces.
+
 ## 0.8.0 - 2026-08-11
 
 - Added the opt-in `pr-evidence` skill for privacy-safe, non-blocking local pull-request evidence preparation.
@@ -20,6 +26,11 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 - Required explicit stack selection and user-visible `html-tailwind` fallback labeling instead of silent stack inference.
 - Made design-system persistence fail closed without write authorization, an absolute existing project root, and an explicit no-overwrite or force choice; preflight now covers every target and rejects symlink redirection.
 - Added source-data validation, inherited and persistence regression tests, unrelated-directory smoke coverage, and upstream MIT license attribution for Next Level Builder's version 2.13.0 content.
+- Added the explicitly invoked, draft-only `tech-stack-standards` skill for bounded, evidence-backed repository stack guidance with a human-application handoff.
+- Enforced manual-only Codex invocation with `policy.allow_implicit_invocation: false` and retained the existing three plugin-level default prompts.
+- Added declared, resolved, and runtime-observed version confidence; complete added/changed/removed/renamed/unchanged classification; repository-relative evidence; and claim-level, version-applicable source citations.
+- Added fail-closed privacy, untrusted-repository, offline/thin-source, bounded freshness, manual-content preservation, and safe in-repository target replacement contracts.
+- Added dependency-free package verification and unit coverage for invocation policy, source/package alignment when the personal source is present, and required safety/output semantics.
 
 ## 0.7.0 - 2026-08-11
 
