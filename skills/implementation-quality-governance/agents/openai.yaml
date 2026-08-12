@@ -1,0 +1,7 @@
+interface:
+  display_name: "Implementation Quality Governance"
+  short_description: "Risk-proportionate change quality and evidence"
+  default_prompt: "Use $implementation-quality-governance to make this change in the correct architectural owner with proportionate safety controls and final-state evidence."
+
+policy:
+  allow_implicit_invocation: true

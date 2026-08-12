@@ -3,16 +3,16 @@
   "owner": {
     "name": "suguspnk"
   },
-  "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, proposal-only discover-loops drafts evidence-backed loop proposals, and pr-evidence prepares local receipts before separately authorized GitHub mutations.",
+  "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, discover-loops drafts evidence-backed loop proposals, pr-evidence prepares local receipts before separately authorized GitHub mutations, and implementation-quality-governance applies proportionate quality gates.",
   "metadata": {
-    "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, proposal-only discover-loops drafts evidence-backed loop proposals, and pr-evidence prepares local receipts before separately authorized GitHub mutations."
+    "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, discover-loops drafts evidence-backed loop proposals, pr-evidence prepares local receipts before separately authorized GitHub mutations, and implementation-quality-governance applies proportionate quality gates."
   },
   "plugins": [
     {
       "name": "agent-workbench",
       "source": "./",
       "version": "0.8.0",
-      "description": "Portable task orchestration, deterministic code review, safe loop discovery, and opt-in pull-request evidence preparation.",
+      "description": "Portable task orchestration, deterministic code review, safe loop discovery, opt-in pull-request evidence preparation, and implementation quality governance with independent verification.",
       "author": {
         "name": "suguspnk"
       },
@@ -24,6 +24,7 @@
         "loop-discovery",
         "agent-loop",
         "pr-evidence",
+        "quality-governance",
         "verification",
         "code-review",
         "agent-skills"
@@ -34,6 +35,7 @@
         "loop-discovery",
         "agent-loop",
         "pr-evidence",
+        "quality-governance",
         "workflow",
         "code-review",
         "portable"

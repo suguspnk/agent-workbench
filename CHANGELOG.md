@@ -14,10 +14,11 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 - Added composable JavaScript/TypeScript, Node.js/NestJS, React/Next.js, and React Native overlays with monorepo-aware detection and official rule provenance.
 - Made the code-review core the mandatory operational contract for both `awb-reviewer` and `awb-verifier` provider profiles.
 - Added deterministic scope replay and focused unit coverage for explicit and discovered targets, failure/ambiguity handling, overlay composition, and caller overrides.
+- Added the `implementation-quality-governance` skill, public capability metadata, and repository guard for risk-proportionate implementation and operational-change quality gates.
+- Added the `implementation-quality-governance` skill, public capability metadata, and repository guard for risk-proportionate implementation and operational-change quality gates.
 
 ## 0.7.0 - 2026-08-11
 
-- Added the `implementation-quality-governance` skill for risk-proportionate implementation and operational-change quality gates.
 - Added the provider-neutral `discover-loops` skill for evidence-backed loop discovery and proposal drafting.
 - Added deterministic readiness scoring across reject, manual workflow, normal skill, read-only triage loop, and supervised loop outcomes.
 - Added strict V1 loop-contract validation bound to readiness evidence, typed capability categories, least-privilege approvals, portable path/state containment, bounded retention and limits, exact stop states, and draft-only lifecycle state.

@@ -1,7 +1,7 @@
 {
   "name": "agent-workbench",
   "version": "0.8.0",
-  "description": "Portable task orchestration, deterministic code review, safe loop discovery, and opt-in pull-request evidence preparation.",
+  "description": "Portable task orchestration, deterministic code review, safe loop discovery, opt-in pull-request evidence preparation, and implementation quality governance with independent verification.",
   "author": {
     "name": "suguspnk"
   },
@@ -14,6 +14,7 @@
     "loop-discovery",
     "agent-loop",
     "pr-evidence",
+    "quality-governance",
     "verification",
     "code-review",
     "portable"
@@ -21,17 +22,17 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent Workbench",
-    "shortDescription": "Route work, review code, discover loops, and draft PR evidence",
-    "longDescription": "Agent Workbench coordinates bounded, independently verified subagent work, runs deterministic evidence-backed code review, discovers recurring work suitable for safe agent loops, and prepares privacy-safe pull-request evidence locally before separately authorized GitHub mutation. Loop proposals remain inactive until separately authorized.",
+    "shortDescription": "Orchestrate work, review code, discover safe loops, and govern quality",
+    "longDescription": "Agent Workbench coordinates bounded, independently verified subagent work, runs deterministic code review, discovers recurring work suitable for safe agent loops, prepares privacy-safe pull-request evidence locally, and applies implementation quality governance. Deterministic readiness gates produce proposal-only loop contracts that remain inactive until separately authorized by a human.",
     "developerName": "suguspnk",
     "category": "Productivity",
     "capabilities": [
       "Interactive"
     ],
     "defaultPrompt": [
-      "Use Agent Workbench to orchestrate this task through bounded subagents.",
-      "Use Agent Workbench to review one PR or local diff with applicable technology overlays.",
-      "Use Agent Workbench to discover safe loops or prepare local PR evidence."
+      "Use $orchestrate-task to orchestrate this task through bounded subagents.",
+      "Use $discover-loops to discover recurring work and draft a safe loop proposal.",
+      "Use $implementation-quality-governance to implement this change with proportionate quality gates."
     ]
   }
 }
