@@ -15,7 +15,11 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 - Made the code-review core the mandatory operational contract for both `awb-reviewer` and `awb-verifier` provider profiles.
 - Added deterministic scope replay and focused unit coverage for explicit and discovered targets, failure/ambiguity handling, overlay composition, and caller overrides.
 - Added the `implementation-quality-governance` skill, public capability metadata, and repository guard for risk-proportionate implementation and operational-change quality gates.
-- Added the `implementation-quality-governance` skill, public capability metadata, and repository guard for risk-proportionate implementation and operational-change quality gates.
+- Added the self-contained `ui-ux-pro-max` skill with bundled design data, full rule references, stack-specific guidance, and standard-library search and design-system tools.
+- Made skill script resolution portable across unrelated working directories through an explicit trusted absolute skill root.
+- Required explicit stack selection and user-visible `html-tailwind` fallback labeling instead of silent stack inference.
+- Made design-system persistence fail closed without write authorization, an absolute existing project root, and an explicit no-overwrite or force choice; preflight now covers every target and rejects symlink redirection.
+- Added source-data validation, inherited and persistence regression tests, unrelated-directory smoke coverage, and upstream MIT license attribution for Next Level Builder's version 2.13.0 content.
 
 ## 0.7.0 - 2026-08-11
 

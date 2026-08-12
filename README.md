@@ -2,7 +2,7 @@
 
 Portable task orchestration for Codex, Claude Code, and other Agent Skills-compatible harnesses.
 
-Agent Workbench provides five provider-neutral capabilities. `orchestrate-task` keeps the lead task focused on intake, routing, coordination, authorization, and acceptance while bounded child tasks perform the work. `code-review` selects one PR or local target and composes evidence-backed technology overlays for reviewer and verifier roles. `discover-loops` finds recurring work and drafts evidence-backed loop proposals without activating or scheduling them. `implementation-quality-governance` applies risk-proportionate quality gates and final-state evidence to implementation and operational changes. `pr-evidence` prepares privacy-safe, non-blocking pull-request evidence locally and keeps every GitHub mutation behind separate, current authorization.
+Agent Workbench provides six provider-neutral capabilities. `orchestrate-task` keeps the lead task focused on intake, routing, coordination, authorization, and acceptance while bounded child tasks perform the work. `code-review` selects one PR or local target and composes evidence-backed technology overlays for reviewer and verifier roles. `discover-loops` finds recurring work and drafts evidence-backed loop proposals without activating or scheduling them. `implementation-quality-governance` applies risk-proportionate quality gates and final-state evidence to implementation and operational changes. `pr-evidence` prepares privacy-safe, non-blocking pull-request evidence locally and keeps every GitHub mutation behind separate, current authorization. `ui-ux-pro-max` supplies bundled, searchable UI/UX design intelligence and explicit stack guidance without external runtime dependencies.
 
 ## Design principles
 
@@ -66,6 +66,14 @@ skills/pr-evidence/
     ├── upload-github-attachment.sh       # authorized GitHub.com-only upload helper
     └── tests/test-upload-github-attachment.sh  # strict offline fake-client tests
 scripts/verify_repository.py            # package and strict offline validation
+skills/ui-ux-pro-max/
+├── SKILL.md
+├── LICENSE                              # upstream MIT notice and attribution
+├── agents/openai.yaml
+├── data/                                # bundled design and stack guidance
+├── references/                          # full rule and app delivery guidance
+└── scripts/                             # stdlib-only search, generation, and validation
+scripts/verify_repository.py            # dependency-free package validation
 ```
 
 The Markdown workflows, normalized schemas, and contracts are the portable core. Harness-specific adapters map portable roles to capabilities the host actually exposes.
@@ -74,7 +82,7 @@ The Markdown workflows, normalized schemas, and contracts are the portable core.
 
 ### Codex
 
-Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$code-review`, `$discover-loops`, `$implementation-quality-governance`, or `$pr-evidence`:
+Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$code-review`, `$discover-loops`, `$implementation-quality-governance`, `$pr-evidence`, or `$ui-ux-pro-max`:
 
 ```sh
 codex plugin marketplace add suguspnk/agent-workbench
@@ -92,14 +100,14 @@ For personal roles, copy the files to `~/.codex/agents/` instead. Review existin
 
 ### Claude Code
 
-Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:code-review`, `/agent-workbench:discover-loops`, `/agent-workbench:implementation-quality-governance`, or `/agent-workbench:pr-evidence`:
+Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:code-review`, `/agent-workbench:discover-loops`, `/agent-workbench:implementation-quality-governance`, `/agent-workbench:pr-evidence`, or `/agent-workbench:ui-ux-pro-max`:
 
 ```sh
 claude plugin marketplace add suguspnk/agent-workbench
 claude plugin install agent-workbench@agent-workbench
 ```
 
-Invoke `/agent-workbench:orchestrate-task` for bounded delivery, `/agent-workbench:discover-loops` for loop discovery, `/agent-workbench:implementation-quality-governance` for implementation quality gates, or `/agent-workbench:pr-evidence` for a local-first evidence receipt. The plugin bundles scoped subagents such as `agent-workbench:awb-builder` and `agent-workbench:awb-security-reviewer`. Their model family and effort settings apply only to subagents. Claude plugin agents can narrow their tool lists, but plugin-level `permissionMode` is not enforced; shell-capable review and test roles therefore use before/after status checks and behavioral no-edit rules.
+Invoke `/agent-workbench:orchestrate-task` for bounded delivery, `/agent-workbench:code-review` for deterministic review, `/agent-workbench:discover-loops` for loop discovery, `/agent-workbench:implementation-quality-governance` for implementation quality gates, `/agent-workbench:pr-evidence` for a local-first evidence receipt, or `/agent-workbench:ui-ux-pro-max` for UI design and review. The plugin bundles scoped subagents such as `agent-workbench:awb-builder` and `agent-workbench:awb-security-reviewer`. Their model family and effort settings apply only to subagents. Claude plugin agents can narrow their tool lists, but plugin-level `permissionMode` is not enforced; shell-capable review and test roles therefore use before/after status checks and behavioral no-edit rules.
 
 Test a checkout without installing it:
 
@@ -162,6 +170,13 @@ Invoke `$code-review` with an explicit PR/local target or let it select a conclu
 python3.12 skills/code-review/scripts/select_review_scope.py \
   --replay skills/code-review/tests/scope-cases.json
 ```
+
+## UI/UX design intelligence
+
+Invoke `$ui-ux-pro-max` for UI design, implementation, review, responsive layout, accessibility, animation, visual polish, or data visualization. The skill bundles its design data and Python standard-library search tools. It requires an explicit stack for stack guidance and works from unrelated current directories when its scripts are invoked through the trusted absolute skill root.
+
+Searches and design-system generation are read-only by default. Persistence requires explicit user authorization, an absolute `--output-dir` project root, `--confirm-write`, and exactly one of `--no-overwrite` or `--force`. The safe choice skips the entire write when any target exists; `--force` is only for separately authorized replacement. See [`skills/ui-ux-pro-max/SKILL.md`](skills/ui-ux-pro-max/SKILL.md) for the portable workflow and bundled MIT attribution.
+
 ## Automatic subagent routing
 
 Routing is automatic when the host follows the skill and exposes the requested child controls. The lead fills a normalized routing card; the dependency-free router returns a primary role, capability tier, effort, mandatory follow-ups, and downgrade guard:
@@ -175,7 +190,7 @@ The router is deterministic and provider-neutral. It does not spawn agents, modi
 
 ## Current scope
 
-Agent Workbench includes orchestration, deterministic code review, proposal-only loop discovery, `implementation-quality-governance`, and local-first `pr-evidence` capabilities; deterministic routing, readiness, and review-scope tools; replay and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, deployment logic, loop activation or scheduling, or automatic GitHub side effects. The attachment helper reads a GitHub.com token only during a separately authorized direct invocation and stores it only in a private temporary curl configuration removed on exit.
+Agent Workbench includes orchestration, deterministic code review, proposal-only loop discovery, `implementation-quality-governance`, local-first `pr-evidence`, and bundled UI/UX design intelligence capabilities; deterministic routing, readiness, and review-scope tools; replay and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, deployment logic, loop activation or scheduling, or automatic GitHub side effects. The attachment helper reads a GitHub.com token only during a separately authorized direct invocation and stores it only in a private temporary curl configuration removed on exit.
 
 ## Development
 
@@ -205,4 +220,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for change and replay requirements and [C
 
 ## Security and license
 
-See [SECURITY.md](SECURITY.md) for private vulnerability reporting. Agent Workbench is licensed under Apache License 2.0; see [LICENSE](LICENSE).
+See [SECURITY.md](SECURITY.md) for private vulnerability reporting. Agent Workbench is licensed under Apache License 2.0; see [LICENSE](LICENSE). The bundled `ui-ux-pro-max` content is adapted from [UI UX Pro Max Skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) by Next Level Builder, upstream version 2.13.0, and retains its MIT notice in [`skills/ui-ux-pro-max/LICENSE`](skills/ui-ux-pro-max/LICENSE).

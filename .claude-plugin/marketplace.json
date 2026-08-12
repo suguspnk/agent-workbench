@@ -25,6 +25,8 @@
         "agent-loop",
         "pr-evidence",
         "quality-governance",
+        "ui-ux",
+        "design-system",
         "verification",
         "code-review",
         "agent-skills"
@@ -36,6 +38,8 @@
         "agent-loop",
         "pr-evidence",
         "quality-governance",
+        "ui-ux",
+        "design-system",
         "workflow",
         "code-review",
         "portable"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "UI UX Pro Max"
+  short_description: "Apply stack-specific UI and UX design guidance"
+  default_prompt: "Use $ui-ux-pro-max to design or review this interface with explicit stack guidance."

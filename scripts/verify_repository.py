@@ -16,6 +16,7 @@ import posixpath
 import re
 import stat
 import subprocess
+import tempfile
 import tomllib
 import unicodedata
 from pathlib import Path
@@ -342,7 +343,7 @@ def check_manifests() -> None:
         description = require_nonempty_string(manifest.get("description"), f"{label} manifest description")
         manifest_descriptions[label] = description
         keywords = require_string_array(manifest.get("keywords"), f"{label} manifest keywords")
-        if not {"loop-discovery", "agent-loop", "pr-evidence", "quality-governance"}.issubset(keywords):
+        if not {"loop-discovery", "agent-loop", "pr-evidence", "quality-governance", "code-review", "ui-ux", "design-system"}.issubset(keywords):
             fail(f"{label} manifest must include loop-discovery, agent-loop, pr-evidence, and quality-governance keywords")
         if label == "Claude" and description != CLAUDE_DESCRIPTION_CONTRACTS["Claude manifest description"]:
             fail("Claude manifest description must match its approved contract")
@@ -416,7 +417,7 @@ def check_manifests() -> None:
     claude_entry = claude_marketplace["plugins"][0]
     for field in ("keywords", "tags"):
         values = require_string_array(claude_entry.get(field), f"Claude marketplace {field}")
-        if not {"loop-discovery", "agent-loop", "pr-evidence", "quality-governance"}.issubset(values):
+        if not {"loop-discovery", "agent-loop", "pr-evidence", "quality-governance", "code-review", "ui-ux", "design-system"}.issubset(values):
             fail(f"Claude marketplace {field} must include loop-discovery, agent-loop, pr-evidence, and quality-governance")
     claude_description = require_nonempty_string(
         claude_marketplace.get("description"), "Claude marketplace root description"
@@ -2443,6 +2444,236 @@ def check_code_review_skills() -> None:
         require(ROOT / "skills/code-review" / relative_path)
 
 
+def check_ui_ux_pro_max_skill() -> None:
+    skill_root = ROOT / "skills/ui-ux-pro-max"
+    if not skill_root.is_dir():
+        return
+    skill_path = skill_root / "SKILL.md"
+    frontmatter, body = parse_frontmatter(skill_path)
+    if frontmatter.get("name") != "ui-ux-pro-max":
+        fail("ui-ux-pro-max skill name is incorrect")
+    description = frontmatter.get("description", "")
+    for phrase in ("UI design", "frontend implementation", "accessibility", "data visualization"):
+        if phrase not in description:
+            fail(f"ui-ux-pro-max frontmatter description is missing trigger guidance: {phrase}")
+    if "## When to Apply" in body:
+        fail("ui-ux-pro-max must not duplicate trigger guidance in its body")
+
+    for phrase in (
+        "UI_UX_PRO_MAX_ROOT",
+        "trusted absolute directory containing this loaded `SKILL.md`",
+        "Require an explicit stack selection",
+        '"Stack fallback: html-tailwind."',
+        "obtain the user's explicit authorization",
+        "--output-dir",
+        "--confirm-write",
+        "--no-overwrite",
+        "--force",
+        "quick-reference.md",
+        "pro-rules.md",
+        "python.org",
+        "upstream version 2.13.0",
+        "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+    ):
+        if phrase not in body:
+            fail(f"ui-ux-pro-max skill guidance is missing: {phrase}")
+    if "README" in body:
+        fail("ui-ux-pro-max must not point Python setup guidance to a missing README")
+    if "CLAUDE_PLUGIN_ROOT" in body:
+        fail("ui-ux-pro-max commands must not depend on CLAUDE_PLUGIN_ROOT")
+
+    required_package_files = [
+        "LICENSE",
+        "agents/openai.yaml",
+        "references/quick-reference.md",
+        "references/pro-rules.md",
+        "scripts/core.py",
+        "scripts/design_system.py",
+        "scripts/search.py",
+        "scripts/validate_data.py",
+        "scripts/tests/test_core.py",
+        "data/ui-reasoning.csv",
+    ]
+    for item in required_package_files:
+        require(skill_root / item)
+
+    source_texts = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [skill_path, *(skill_root / "scripts").glob("*.py")]
+    )
+    if "CLAUDE_PLUGIN_ROOT" in source_texts:
+        fail("ui-ux-pro-max package must not depend on CLAUDE_PLUGIN_ROOT")
+    if "Path.cwd()" in (skill_root / "scripts/design_system.py").read_text(encoding="utf-8"):
+        fail("ui-ux-pro-max persistence must not default to the caller's current directory")
+    for phrase in (
+        "confirm_write",
+        "requested_base.is_absolute()",
+        "existing_targets",
+        "current.is_symlink()",
+        '"skipped_exists"',
+    ):
+        if phrase not in (skill_root / "scripts/design_system.py").read_text(encoding="utf-8"):
+            fail(f"ui-ux-pro-max persistence safeguard is missing: {phrase}")
+
+    openai_text = (skill_root / "agents/openai.yaml").read_text(encoding="utf-8")
+    metadata: dict[str, str] = {}
+    for field in ("display_name", "short_description", "default_prompt"):
+        match = re.search(rf'^  {field}: ("(?:[^"\\]|\\.)*")$', openai_text, re.MULTILINE)
+        if not match:
+            fail(f"ui-ux-pro-max agents/openai.yaml {field} must be a quoted string")
+        metadata[field] = json.loads(match.group(1))
+    if not 25 <= len(metadata["short_description"]) <= 64:
+        fail("ui-ux-pro-max short_description must contain 25 to 64 characters")
+    if "$ui-ux-pro-max" not in metadata["default_prompt"]:
+        fail("ui-ux-pro-max default_prompt must name $ui-ux-pro-max")
+
+    license_text = (skill_root / "LICENSE").read_text(encoding="utf-8")
+    for phrase in (
+        "MIT License",
+        "Copyright (c) 2024 Next Level Builder",
+        "The above copyright notice and this permission notice shall be included",
+        "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+        "Imported upstream version: 2.13.0",
+    ):
+        if phrase not in license_text:
+            fail(f"ui-ux-pro-max MIT attribution is missing: {phrase}")
+
+    search_script = skill_root / "scripts/search.py"
+    validate_script = skill_root / "scripts/validate_data.py"
+    test_directory = skill_root / "scripts/tests"
+    with tempfile.TemporaryDirectory(prefix="agent-workbench-ui-ux-") as temporary:
+        unrelated_cwd = Path(temporary)
+
+        data_result = subprocess.run(
+            [sys.executable, str(validate_script)],
+            cwd=unrelated_cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        if data_result.returncode or "ui-reasoning.csv" not in data_result.stdout:
+            fail(f"ui-ux-pro-max data validation failed:\n{data_result.stdout}{data_result.stderr}")
+
+        unit_result = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(test_directory), "-v"],
+            cwd=unrelated_cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=120,
+        )
+        if unit_result.returncode:
+            fail(f"ui-ux-pro-max unit tests failed:\n{unit_result.stdout}{unit_result.stderr}")
+
+        smoke_commands = {
+            "domain": [sys.executable, str(search_script), "accessibility contrast", "--domain", "ux", "--json"],
+            "design-system": [sys.executable, str(search_script), "saas analytics dashboard", "--design-system", "--json"],
+            "stack": [sys.executable, str(search_script), "performance rendering", "--stack", "nextjs", "--json"],
+            "zero-result": [sys.executable, str(search_script), "zzqqxx-no-database-match", "--domain", "ux", "--json"],
+        }
+        smoke_outputs: dict[str, dict[str, Any]] = {}
+        for label, command in smoke_commands.items():
+            result = subprocess.run(
+                command,
+                cwd=unrelated_cwd,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=60,
+            )
+            if result.returncode:
+                fail(f"ui-ux-pro-max {label} smoke failed:\n{result.stdout}{result.stderr}")
+            try:
+                smoke_outputs[label] = json.loads(result.stdout)
+            except json.JSONDecodeError as error:
+                fail(f"ui-ux-pro-max {label} smoke returned invalid JSON: {error}")
+
+        if smoke_outputs["domain"].get("count", 0) < 1:
+            fail("ui-ux-pro-max domain smoke returned no matches")
+        if not isinstance(smoke_outputs["design-system"].get("design_system"), dict):
+            fail("ui-ux-pro-max design-system smoke returned no design system")
+        if smoke_outputs["stack"].get("stack") != "nextjs" or smoke_outputs["stack"].get("count", 0) < 1:
+            fail("ui-ux-pro-max explicit-stack smoke returned no Next.js guidance")
+        if smoke_outputs["zero-result"].get("count") != 0 or not smoke_outputs["zero-result"].get("suggestions"):
+            fail("ui-ux-pro-max zero-result smoke must remain explicitly empty with suggestions")
+
+        persist_base = [
+            sys.executable,
+            str(search_script),
+            "saas dashboard",
+            "--design-system",
+            "--persist",
+            "--project-name",
+            "Verifier Project",
+            "--page",
+            "dashboard",
+            "--output-dir",
+            str(unrelated_cwd),
+            "--confirm-write",
+            "--json",
+        ]
+        safe_result = subprocess.run(
+            [*persist_base, "--no-overwrite"],
+            cwd=unrelated_cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        if safe_result.returncode:
+            fail(f"ui-ux-pro-max persistence smoke failed:\n{safe_result.stdout}{safe_result.stderr}")
+        safe_output = json.loads(safe_result.stdout)
+        if safe_output.get("persistence", {}).get("status") != "success":
+            fail("ui-ux-pro-max initial safe persistence did not succeed")
+        master_path = unrelated_cwd / "design-system/verifier-project/MASTER.md"
+        page_path = unrelated_cwd / "design-system/verifier-project/pages/dashboard.md"
+        initial_master = master_path.read_text(encoding="utf-8")
+        initial_page = page_path.read_text(encoding="utf-8")
+
+        skip_result = subprocess.run(
+            [*persist_base, "--no-overwrite"],
+            cwd=unrelated_cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        if skip_result.returncode:
+            fail(f"ui-ux-pro-max persistence skip smoke failed:\n{skip_result.stdout}{skip_result.stderr}")
+        try:
+            skip_output = json.loads(skip_result.stdout)
+        except json.JSONDecodeError as error:
+            fail(f"ui-ux-pro-max persistence skip smoke returned invalid JSON: {error}")
+        if skip_output.get("persistence", {}).get("status") != "skipped_exists":
+            fail("ui-ux-pro-max persistence skip smoke did not report skipped_exists")
+        if master_path.read_text(encoding="utf-8") != initial_master or page_path.read_text(encoding="utf-8") != initial_page:
+            fail("ui-ux-pro-max safe persistence modified an existing target")
+
+        force_command = [
+            value if value != "saas dashboard" else "ecommerce luxury"
+            for value in persist_base
+        ]
+        force_result = subprocess.run(
+            [*force_command, "--force"],
+            cwd=unrelated_cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        if force_result.returncode:
+            fail(f"ui-ux-pro-max force persistence smoke failed:\n{force_result.stdout}{force_result.stderr}")
+        try:
+            force_output = json.loads(force_result.stdout)
+        except json.JSONDecodeError as error:
+            fail(f"ui-ux-pro-max force persistence smoke returned invalid JSON: {error}")
+        if force_output.get("persistence", {}).get("status") != "success":
+            fail("ui-ux-pro-max force persistence smoke did not report success")
+
+    print("UI/UX Pro Max data, unit, unrelated-cwd, zero-result, and persistence checks passed.")
+
+
 def check_codex_profiles() -> None:
     directory = ROOT / "adapters/codex/.codex/agents"
     files = sorted(directory.glob("*.toml"))
@@ -2619,6 +2850,11 @@ def check_release_and_ci() -> None:
         "Endpoint compatibility",
         "needs-confirmation",
         "fake `gh` and `curl`",
+        "$ui-ux-pro-max",
+        "UI/UX design intelligence",
+        "--confirm-write",
+        "--no-overwrite",
+        "Next Level Builder",
     ):
         if phrase not in readme:
             fail(f"README.md is missing required guidance: {phrase}")
@@ -2695,6 +2931,17 @@ REQUIRED_FILES = (
         "skills/implementation-quality-governance/references/runtime-and-delivery.md",
         "skills/implementation-quality-governance/references/state-and-contract-integrity.md",
         "skills/implementation-quality-governance/references/trust-and-domain-safety.md",
+        "skills/ui-ux-pro-max/SKILL.md",
+        "skills/ui-ux-pro-max/LICENSE",
+        "skills/ui-ux-pro-max/agents/openai.yaml",
+        "skills/ui-ux-pro-max/references/quick-reference.md",
+        "skills/ui-ux-pro-max/references/pro-rules.md",
+        "skills/ui-ux-pro-max/scripts/core.py",
+        "skills/ui-ux-pro-max/scripts/design_system.py",
+        "skills/ui-ux-pro-max/scripts/search.py",
+        "skills/ui-ux-pro-max/scripts/validate_data.py",
+        "skills/ui-ux-pro-max/scripts/tests/test_core.py",
+        "skills/ui-ux-pro-max/data/ui-reasoning.csv",
         "tests/test_route_subagent.py",
         "tests/test_loop_readiness.py",
         "tests/test_loop_contract.py",
@@ -2715,6 +2962,7 @@ def main() -> None:
     check_discover_loops_skill()
     check_pr_evidence_skill()
     check_code_review_skills()
+    check_ui_ux_pro_max_skill()
     check_codex_profiles()
     check_claude_profiles()
     check_replays_and_unit_tests()
