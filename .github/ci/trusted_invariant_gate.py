@@ -16,10 +16,15 @@ from pathlib import Path
 from typing import Any
 
 CANDIDATE_ROOT = "/workspace"
-POLICY_KEYS = {
+POLICY_KEYS_V1 = {
     "schema_version", "max_file_bytes", "policy_markers", "policy_rows",
     "authorization_by_role", "codex_profiles", "claude_profiles",
     "pinned_candidate_files", "workflow_sha256", "checkout_action", "validation_images",
+}
+POLICY_KEYS_V2 = POLICY_KEYS_V1 | {
+    "policy_version", "protected_document_contracts", "protected_set_digest",
+    "protected_surface_inventory", "protected_surface_roots", "recognized_surface_rules",
+    "policy_input_sha256", "trusted_copy_sha256",
 }
 CONTROL_PATHS = {
     "gate": ".github/ci/trusted_invariant_gate.py",
@@ -46,6 +51,31 @@ SAFE_COMPONENT = re.compile(r"[A-Za-z0-9._-]+\Z")
 MAX_POLICY_BYTES = 262_144
 MAX_JSON_DEPTH = 64
 MAX_JSON_NODES = 20_000
+MAX_SURFACE_NODES = 4_096
+MAX_SURFACE_DEPTH = 32
+SURFACE_RULE_KEYS = {
+    "adapter_exceptions", "ignored_root_paths", "instruction_directory_names",
+    "instruction_file_names", "max_depth", "max_nodes",
+}
+EXPECTED_SURFACE_RULES = {
+    "adapter_exceptions": ["adapters/codex/.codex"],
+    "ignored_root_paths": [".git"],
+    "instruction_directory_names": [
+        ".agents", ".claude", ".codex", ".github", "agents", "commands", "hooks", "skills", "workflows",
+    ],
+    "instruction_file_names": [".mcp.json", "AGENTS.md", "AGENTS.override.md", "CLAUDE.md", "SKILL.md"],
+    "max_depth": MAX_SURFACE_DEPTH,
+    "max_nodes": MAX_SURFACE_NODES,
+}
+TRUSTED_COPY_SHA256_PATHS = {
+    ".github/ci/trusted_invariant_gate.py",
+    ".github/ci/run_sandboxed_validation.py",
+    ".github/workflows/validate.yml",
+}
+POLICY_INPUT_KEYS = (
+    "authorization_by_role", "checkout_action", "max_file_bytes", "policy_markers",
+    "policy_rows", "validation_images",
+)
 
 
 class GateError(RuntimeError):
@@ -270,6 +300,15 @@ def sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def policy_input_sha256(policy: dict[str, Any]) -> str:
+    try:
+        payload = {key: policy[key] for key in POLICY_INPUT_KEYS}
+    except KeyError as error:
+        fail(f"trusted policy input is missing {diagnostic(error.args[0])}")
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return sha256(canonical)
+
+
 def string_map(label: str, value: Any, expected_keys: set[str] | None = None) -> dict[str, str]:
     if not isinstance(value, dict) or any(not isinstance(key, str) or not isinstance(item, str) for key, item in value.items()):
         fail(f"{label} must be an object of strings")
@@ -279,11 +318,73 @@ def string_map(label: str, value: Any, expected_keys: set[str] | None = None) ->
     return result
 
 
+def validate_surface_rules(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        fail("recognized_surface_rules must be an object")
+    exact_keys("recognized_surface_rules", value, SURFACE_RULE_KEYS)
+    if value != EXPECTED_SURFACE_RULES:
+        fail("recognized_surface_rules differ from the immutable trusted contract")
+    for key in ("adapter_exceptions", "ignored_root_paths", "instruction_directory_names", "instruction_file_names"):
+        if any(not isinstance(item, str) for item in value[key]):
+            fail(f"recognized_surface_rules.{key} must contain strings")
+    if not isinstance(value["max_depth"], int) or not isinstance(value["max_nodes"], int):
+        fail("recognized_surface_rules bounds must be integers")
+    return value
+
+
 def load_policy(content: bytes) -> dict[str, Any]:
     policy = load_json_bytes("trusted validation policy", content)
-    exact_keys("trusted validation policy", policy, POLICY_KEYS)
-    if policy["schema_version"] != 1:
-        fail("trusted validation policy schema_version must be 1")
+    schema_version = policy.get("schema_version")
+    if schema_version not in {1, 2}:
+        fail("trusted validation policy schema_version must be 1 or 2")
+    exact_keys("trusted validation policy", policy, POLICY_KEYS_V2 if schema_version == 2 else POLICY_KEYS_V1)
+    if schema_version == 2:
+        if not isinstance(policy.get("policy_version"), int) or not 2 <= policy["policy_version"] <= 1_000_000:
+            fail("trusted validation policy policy_version is invalid")
+        inventory = policy.get("protected_surface_inventory")
+        roots = policy.get("protected_surface_roots")
+        rules = policy.get("recognized_surface_rules")
+        contracts = policy.get("protected_document_contracts")
+        digest = policy.get("protected_set_digest")
+        if not isinstance(inventory, list) or not inventory or len(inventory) > MAX_SURFACE_NODES:
+            fail("protected_surface_inventory is invalid")
+        if not isinstance(roots, list) or not roots or any(not isinstance(item, str) for item in roots):
+            fail("protected_surface_roots is invalid")
+        if not isinstance(contracts, list) or not isinstance(digest, str) or not SHA256.fullmatch(digest):
+            fail("trusted surface rules or document contracts are invalid")
+        validate_surface_rules(rules)
+        seen: set[str] = set()
+        canonical = hashlib.sha256()
+        for entry in sorted(inventory, key=lambda item: item.get("path", "")):
+            if not isinstance(entry, dict) or set(entry) - {"binding", "executable", "kind", "path", "sha256"}:
+                fail("protected inventory entry has invalid keys")
+            path = entry.get("path")
+            kind = entry.get("kind")
+            binding = entry.get("binding")
+            executable = entry.get("executable")
+            if not isinstance(path, str) or path in seen:
+                fail("protected inventory has duplicate or invalid path")
+            literal_components(path)
+            if kind not in {"file", "directory"} or binding not in {"sha256", "trusted-copy", "inventory"} or not isinstance(executable, bool):
+                fail("protected inventory entry is invalid")
+            if kind == "file" and binding == "sha256":
+                value = entry.get("sha256")
+                if not isinstance(value, str) or not SHA256.fullmatch(value):
+                    fail("protected inventory file hash is invalid")
+            elif "sha256" in entry:
+                fail("only sha256-bound files may contain a hash")
+            seen.add(path)
+            canonical.update("\0".join((path, kind, binding, entry.get("sha256", ""), "true" if executable else "false")).encode())
+        if canonical.hexdigest() != digest:
+            fail("protected_set_digest does not match the canonical inventory")
+        input_hash = policy.get("policy_input_sha256")
+        if not isinstance(input_hash, str) or not SHA256.fullmatch(input_hash) or input_hash != policy_input_sha256(policy):
+            fail("policy_input_sha256 does not match the canonical trusted inputs")
+        trusted_hashes = policy.get("trusted_copy_sha256")
+        if not isinstance(trusted_hashes, dict) or set(trusted_hashes) != TRUSTED_COPY_SHA256_PATHS:
+            fail("trusted_copy_sha256 must contain the exact trusted controls")
+        if any(not isinstance(value, str) or not SHA256.fullmatch(value) for value in trusted_hashes.values()):
+            fail("trusted_copy_sha256 values must be lowercase SHA256")
     maximum = policy["max_file_bytes"]
     if not isinstance(maximum, int) or isinstance(maximum, bool) or not 1 <= maximum <= 8_388_608:
         fail("trusted validation policy max_file_bytes is invalid")
@@ -417,6 +518,137 @@ def validate_profiles(reader: CandidateReader, policy: dict[str, Any]) -> None:
             fail(f"{label} complete trusted profile expectation differs")
 
 
+def _surface_walk(reader: CandidateReader, relative_directory: str, *, nodes: list[tuple[str, str, bool]]) -> None:
+    """Enumerate one protected tree without following symlinks or specials."""
+    if len(nodes) > MAX_SURFACE_NODES:
+        fail("protected surface exceeds the bounded node limit")
+    directory = reader.open_directory(literal_components(relative_directory))
+    try:
+        try:
+            names = sorted(os.listdir(directory))
+        except OSError:
+            fail(f"protected surface directory cannot be enumerated: {diagnostic(relative_directory)}")
+        for name in names:
+            if not SAFE_COMPONENT.fullmatch(name):
+                fail(f"protected surface contains an unsafe name: {diagnostic(name)}")
+            path = f"{relative_directory}/{name}" if relative_directory else name
+            components = literal_components(path)
+            if len(components) > MAX_SURFACE_DEPTH:
+                fail("protected surface exceeds the bounded depth limit")
+            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
+            try:
+                descriptor = os.open(name, flags, dir_fd=directory)
+            except OSError:
+                fail(f"protected surface entry cannot be opened safely: {diagnostic(path)}")
+            try:
+                metadata = os.fstat(descriptor)
+                executable = bool(metadata.st_mode & 0o111)
+                if stat.S_ISDIR(metadata.st_mode):
+                    nodes.append((path, "directory", executable))
+                    _surface_walk(reader, path, nodes=nodes)
+                elif stat.S_ISREG(metadata.st_mode):
+                    if metadata.st_size > reader.max_file_bytes:
+                        fail(f"protected surface file is oversized: {diagnostic(path)}")
+                    nodes.append((path, "file", executable))
+                else:
+                    fail(f"protected surface contains a special file: {diagnostic(path)}")
+            finally:
+                os.close(descriptor)
+            if len(nodes) > MAX_SURFACE_NODES:
+                fail("protected surface exceeds the bounded node limit")
+    finally:
+        os.close(directory)
+
+
+def validate_protected_surfaces(reader: CandidateReader, policy: dict[str, Any]) -> None:
+    if policy.get("schema_version") != 2:
+        return
+    expected = {
+        entry["path"]: (entry["kind"], entry["executable"], entry.get("binding"), entry.get("sha256"))
+        for entry in policy["protected_surface_inventory"]
+    }
+    actual: list[tuple[str, str, bool]] = []
+    for root in policy["protected_surface_roots"]:
+        root_descriptor = reader.open_directory(literal_components(root))
+        try:
+            root_mode = bool(os.fstat(root_descriptor).st_mode & 0o111)
+        finally:
+            os.close(root_descriptor)
+        actual.append((root, "directory", root_mode))
+        _surface_walk(reader, root, nodes=actual)
+    actual_map = {path: (kind, executable) for path, kind, executable in actual}
+    expected_map = {path: (kind, executable) for path, (kind, executable, _, _) in expected.items()}
+    if actual_map != expected_map:
+        missing = sorted(set(expected_map) - set(actual_map))
+        extra = sorted(set(actual_map) - set(expected_map))
+        fail(f"protected surface inventory differs (missing={diagnostic(missing)}, extra={diagnostic(extra)})")
+    for path, (_, _, binding, expected_hash) in expected.items():
+        if binding == "sha256":
+            if sha256(reader.read(path)) != expected_hash:
+                fail(f"protected surface hash differs: {diagnostic(path)}")
+
+    # Reject newly introduced harness-recognized authority surfaces anywhere else in the tree.
+    rules = validate_surface_rules(policy["recognized_surface_rules"])
+    forbidden_files = set(rules["instruction_file_names"])
+    forbidden_dirs = set(rules["instruction_directory_names"])
+    ignored_root_paths = set(rules["ignored_root_paths"])
+    allowed_directory_prefixes = set(policy["protected_surface_roots"]) | set(rules["adapter_exceptions"])
+    allowed_paths = set(expected)
+    queue = [""]
+    seen = 0
+    while queue:
+        directory = queue.pop()
+        descriptor = reader.open_directory(literal_components(directory) if directory else ())
+        try:
+            try:
+                names = sorted(os.listdir(descriptor))
+            except OSError:
+                fail("candidate tree cannot be enumerated for recognized surfaces")
+            for name in names:
+                if directory == "" and name in ignored_root_paths:
+                    continue
+                if not SAFE_COMPONENT.fullmatch(name):
+                    fail(f"candidate tree contains an unsafe name: {diagnostic(name)}")
+                path = f"{directory}/{name}" if directory else name
+                components = literal_components(path)
+                if len(components) > MAX_SURFACE_DEPTH:
+                    fail("candidate recognized-surface scan exceeds the bounded depth limit")
+                seen += 1
+                if seen > MAX_SURFACE_NODES:
+                    fail("candidate recognized-surface scan exceeds the bounded node limit")
+                if name in forbidden_files and path not in allowed_paths:
+                    fail(f"unallowlisted instruction surface: {diagnostic(path)}")
+                if name in forbidden_dirs and not any(path == root or path.startswith(root + "/") for root in allowed_directory_prefixes):
+                    fail(f"unallowlisted instruction directory: {diagnostic(path)}")
+                flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
+                try:
+                    child = os.open(name, flags, dir_fd=descriptor)
+                except OSError:
+                    fail(f"candidate tree entry cannot be opened safely: {diagnostic(path)}")
+                try:
+                    metadata = os.fstat(child)
+                    if stat.S_ISDIR(metadata.st_mode):
+                        queue.append(path)
+                    elif not stat.S_ISREG(metadata.st_mode):
+                        fail(f"candidate tree contains a special file: {diagnostic(path)}")
+                finally:
+                    os.close(child)
+        finally:
+            os.close(descriptor)
+
+    for contract in policy.get("protected_document_contracts", []):
+        if not isinstance(contract, dict) or set(contract) != {"begin", "content", "end", "id", "path"}:
+            fail("protected document contract is malformed")
+        body = decode_utf8(contract["path"], reader.read(contract["path"]))
+        begin, end = contract["begin"], contract["end"]
+        if body.count(begin) != 1 or body.count(end) != 1:
+            fail(f"protected document contract markers missing: {diagnostic(contract['path'])}")
+        start = body.index(begin) + len(begin)
+        finish = body.index(end, start)
+        if body[start:finish] != "\n" + contract["content"] + "\n":
+            fail(f"protected document contract differs: {diagnostic(contract['path'])}")
+
+
 def validate(*, candidate_root: str, policy_path: str, trusted_gate_path: str,
              trusted_launcher_path: str, trusted_workflow_path: str) -> None:
     trusted_policy = read_trusted_file(policy_path, MAX_POLICY_BYTES)
@@ -432,6 +664,13 @@ def validate(*, candidate_root: str, policy_path: str, trusted_gate_path: str,
         for name, relative_path in CONTROL_PATHS.items():
             if reader.read(relative_path) != controls[name]:
                 fail(f"candidate trusted control differs from the base branch: {diagnostic(relative_path)}")
+        for name, relative_path in {
+            "gate": ".github/ci/trusted_invariant_gate.py",
+            "launcher": ".github/ci/run_sandboxed_validation.py",
+            "workflow": ".github/workflows/validate.yml",
+        }.items():
+            if sha256(controls[name]) != policy["trusted_copy_sha256"][relative_path]:
+                fail(f"trusted {name} does not match its protected policy hash")
         if sha256(controls["workflow"]) != policy["workflow_sha256"]:
             fail("trusted workflow does not match workflow_sha256")
         for relative_path, expected_hash in policy["pinned_candidate_files"].items():
@@ -441,6 +680,7 @@ def validate(*, candidate_root: str, policy_path: str, trusted_gate_path: str,
             if relative_path.endswith(".json"):
                 load_json_bytes(relative_path, content, require_object=False)
         validate_profiles(reader, policy)
+        validate_protected_surfaces(reader, policy)
         reader.assert_root_stable()
     finally:
         reader.close()

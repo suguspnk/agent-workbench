@@ -88,6 +88,21 @@ MAX_SUBPROCESS_OUTPUT_BYTES = 65_536
 ROUTING_REPLAY_TIMEOUT_SECONDS = 30
 UNIT_TEST_TIMEOUT_SECONDS = 180
 SUBPROCESS_KILL_GRACE_SECONDS = 2
+POLICY_INPUT_KEYS = (
+    "authorization_by_role", "checkout_action", "max_file_bytes", "policy_markers",
+    "policy_rows", "validation_images",
+)
+TRUSTED_COPY_SHA256_PATHS = {
+    ".github/ci/trusted_invariant_gate.py",
+    ".github/ci/run_sandboxed_validation.py",
+    ".github/workflows/validate.yml",
+}
+
+
+def policy_input_sha256(policy: dict[str, Any]) -> str:
+    payload = {key: policy[key] for key in POLICY_INPUT_KEYS}
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 _ORIGINAL_OS_OPEN = os.open
 _SECURE_OPEN_DIAGNOSTIC = (
     "secure file reading is unsupported on this platform; requires POSIX os.open "
@@ -760,10 +775,27 @@ def check_release_and_ci() -> None:
         "schema_version", "max_file_bytes", "policy_markers", "policy_rows",
         "authorization_by_role", "codex_profiles", "claude_profiles",
         "pinned_candidate_files", "workflow_sha256", "checkout_action", "validation_images",
+        "policy_version", "protected_document_contracts", "protected_set_digest",
+        "protected_surface_inventory", "protected_surface_roots", "recognized_surface_rules",
+        "policy_input_sha256", "trusted_copy_sha256",
     }
     require_exact_keys(ROOT / ".github/ci/trusted_validation_policy.json", policy, expected_policy_keys)
-    if policy.get("schema_version") != 1:
-        fail("trusted validation policy schema_version must be 1")
+    if policy.get("schema_version") != 2 or not isinstance(policy.get("policy_version"), int) or policy["policy_version"] < 2:
+        fail("trusted validation policy schema_version/policy_version must be v2")
+    if not isinstance(policy.get("protected_surface_inventory"), list) or not policy.get("protected_surface_inventory"):
+        fail("trusted validation policy protected surface inventory is missing")
+    if not isinstance(policy.get("protected_document_contracts"), list) or not policy.get("protected_document_contracts"):
+        fail("trusted validation policy document contracts are missing")
+    if not isinstance(policy.get("protected_set_digest"), str) or not re.fullmatch(r"[0-9a-f]{64}", policy["protected_set_digest"]):
+        fail("trusted validation policy protected_set_digest is invalid")
+    if policy.get("policy_input_sha256") != policy_input_sha256(policy):
+        fail("trusted validation policy policy_input_sha256 is stale")
+    trusted_hashes = policy.get("trusted_copy_sha256")
+    if not isinstance(trusted_hashes, dict) or set(trusted_hashes) != TRUSTED_COPY_SHA256_PATHS:
+        fail("trusted validation policy trusted_copy_sha256 is incomplete")
+    for relative_path in sorted(TRUSTED_COPY_SHA256_PATHS):
+        if trusted_hashes.get(relative_path) != hashlib.sha256(safe_read_bytes(ROOT / relative_path)).hexdigest():
+            fail(f"trusted validation policy trusted-copy hash is stale: {safe_diagnostic(relative_path)}")
     if set(policy.get("codex_profiles", {})) != set(CODEX_PROFILES):
         fail("trusted validation policy must contain all 11 exact Codex role names")
     expected_claude_roles = {name.replace("-", "_") for name in CLAUDE_PROFILES}

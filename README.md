@@ -127,3 +127,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for change and replay requirements and [C
 ## Security and license
 
 See [SECURITY.md](SECURITY.md) for private vulnerability reporting. Agent Workbench is licensed under Apache License 2.0; see [LICENSE](LICENSE).
+
+<!-- BEGIN TRUSTED VALIDATION SUMMARY -->
+## Trusted validation boundary
+
+The authoritative pull-request gate uses reviewed base-branch controls and policy version `7` with protected-set digest `863f9e17067b15cb4b7877bf83cdea6feb48c9dad30cb0b7a7898f549e8e9c65`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
+
+There is no preceding trusted invariant gate for the initial activation because GitHub reads the `pull_request_target` workflow from the base branch. Initial activation and every later protected-set update therefore use the separately authorized procedure in [CONTRIBUTING.md](CONTRIBUTING.md); local checks never prove live activation.
+<!-- END TRUSTED VALIDATION SUMMARY -->

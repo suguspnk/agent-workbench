@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
@@ -26,6 +27,13 @@ if GATE_SPEC is None or GATE_SPEC.loader is None:
 GATE = importlib.util.module_from_spec(GATE_SPEC)
 sys.modules[GATE_SPEC.name] = GATE
 GATE_SPEC.loader.exec_module(GATE)
+GENERATOR_PATH = ROOT / ".github/ci/generate_trusted_validation_policy.py"
+GENERATOR_SPEC = importlib.util.spec_from_file_location("generate_trusted_validation_policy", GENERATOR_PATH)
+if GENERATOR_SPEC is None or GENERATOR_SPEC.loader is None:
+    raise RuntimeError("could not load trusted policy generator")
+GENERATOR = importlib.util.module_from_spec(GENERATOR_SPEC)
+sys.modules[GENERATOR_SPEC.name] = GENERATOR
+GENERATOR_SPEC.loader.exec_module(GENERATOR)
 POLICY = ROOT / ".github/ci/trusted_validation_policy.json"
 WORKFLOW = ROOT / ".github/workflows/validate.yml"
 EXPECTED_IMAGES = {
@@ -421,16 +429,126 @@ class TrustedInvariantGateTests(unittest.TestCase):
             finally:
                 reader.close()
 
+    def test_recognized_surfaces_are_rejected_at_arbitrary_depth(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = self._candidate_copy(Path(directory))
+            nested = candidate / "docs" / "nested"
+            nested.mkdir(parents=True)
+            (nested / "SKILL.md").write_text("untrusted authority", encoding="utf-8")
+            with self.assertRaisesRegex(GATE.GateError, "unallowlisted instruction surface"):
+                self._validate(candidate)
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = self._candidate_copy(Path(directory))
+            nested = candidate / "misc" / "workflows"
+            nested.mkdir(parents=True)
+            with self.assertRaisesRegex(GATE.GateError, "unallowlisted instruction directory"):
+                self._validate(candidate)
+        for name in (".agents", ".github", "agents", "skills"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                candidate = self._candidate_copy(Path(directory))
+                nested = candidate / "misc" / name
+                nested.mkdir(parents=True)
+                with self.assertRaisesRegex(GATE.GateError, "unallowlisted instruction directory"):
+                    self._validate(candidate)
+
     def test_strict_json_rejects_duplicate_keys_invalid_utf8_and_unknown_policy_keys(self) -> None:
         with self.assertRaisesRegex(GATE.GateError, "duplicate JSON key"):
             GATE.load_json_bytes("candidate", b'{"key": 1, "key": 2}')
         with self.assertRaisesRegex(GATE.GateError, "strict UTF-8 JSON"):
             GATE.load_json_bytes("candidate", b'{"key": "\xff"}')
         policy = POLICY.read_text(encoding="utf-8").replace(
-            '"schema_version": 1,', '"schema_version": 1,\n  "unknown": true,', 1
+            '"schema_version": 2,', '"schema_version": 2,\n  "unknown": true,', 1
         )
         with self.assertRaisesRegex(GATE.GateError, "unknown"):
             GATE.load_policy(policy.encode("utf-8"))
+
+
+class TrustedPolicyGeneratorTests(unittest.TestCase):
+    def _candidate_copy(self, parent: Path) -> Path:
+        candidate = parent / "candidate"
+        shutil.copytree(ROOT, candidate, ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"))
+        return candidate
+
+    def test_changed_protected_state_requires_a_strictly_greater_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = self._candidate_copy(Path(directory))
+            baseline = Path(directory).parent / (Path(directory).name + "-baseline.json")
+            baseline.write_bytes(POLICY.read_bytes())
+            baseline_sha256 = GENERATOR.sha256(baseline.read_bytes())
+            skill = candidate / "skills/orchestrate-task/SKILL.md"
+            skill.chmod(0o600)
+            skill.write_text(skill.read_text(encoding="utf-8") + "\nchanged\n", encoding="utf-8")
+            current = GATE.load_policy((candidate / ".github/ci/trusted_validation_policy.json").read_bytes())["policy_version"]
+            with self.assertRaisesRegex(GENERATOR.ProposalError, "policy version must increase"):
+                GENERATOR.generate(candidate, current, baseline, baseline_sha256)
+            proposal = GENERATOR.generate(candidate, current + 1, baseline, baseline_sha256)
+            self.assertEqual(GATE.load_policy(proposal)["policy_version"], current + 1)
+
+    def test_trusted_controls_and_carried_policy_inputs_require_version_bump(self) -> None:
+        current = GATE.load_policy(POLICY.read_bytes())["policy_version"]
+        baseline_sha256 = GENERATOR.sha256(POLICY.read_bytes())
+        mutations = (
+            (".github/ci/trusted_invariant_gate.py", lambda path: path.write_text(path.read_text(encoding="utf-8") + "\nchanged\n", encoding="utf-8")),
+            (".github/ci/run_sandboxed_validation.py", lambda path: path.write_text(path.read_text(encoding="utf-8") + "\nchanged\n", encoding="utf-8")),
+        )
+        for relative_path, mutate in mutations:
+            with self.subTest(relative_path=relative_path), tempfile.TemporaryDirectory() as directory:
+                candidate = self._candidate_copy(Path(directory))
+                target = candidate / relative_path
+                target.chmod(0o600)
+                mutate(target)
+                with self.assertRaisesRegex(GENERATOR.ProposalError, "protected validation state changed"):
+                    GENERATOR.generate(candidate, None, POLICY, baseline_sha256)
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = self._candidate_copy(Path(directory))
+            target = candidate / ".github/ci/trusted_invariant_gate.py"
+            target.chmod(0o600)
+            target.write_text(target.read_text(encoding="utf-8") + "\nchanged\n", encoding="utf-8")
+            policy_path = candidate / ".github/ci/trusted_validation_policy.json"
+            policy_path.chmod(0o600)
+            policy = json.loads(policy_path.read_text(encoding="utf-8"))
+            policy["trusted_copy_sha256"][".github/ci/trusted_invariant_gate.py"] = GENERATOR.sha256(target.read_bytes())
+            policy_path.write_text(json.dumps(policy, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(GENERATOR.ProposalError, "protected validation state changed"):
+                GENERATOR.generate(candidate, None, POLICY, baseline_sha256)
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = self._candidate_copy(Path(directory))
+            policy_path = candidate / ".github/ci/trusted_validation_policy.json"
+            policy_path.chmod(0o600)
+            policy = json.loads(policy_path.read_text(encoding="utf-8"))
+            policy["checkout_action"] = "actions/checkout@" + "0" * 40
+            policy["policy_input_sha256"] = GENERATOR.policy_input_sha256(policy)
+            policy_path.write_text(json.dumps(policy, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(GENERATOR.ProposalError, "protected validation state changed"):
+                GENERATOR.generate(candidate, None, POLICY, baseline_sha256)
+
+    def test_export_baseline_must_be_independent_and_identity_bound(self) -> None:
+        current = GATE.load_policy(POLICY.read_bytes())["policy_version"]
+        baseline_sha256 = GENERATOR.sha256(POLICY.read_bytes())
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = self._candidate_copy(Path(directory))
+            candidate_policy = candidate / ".github/ci/trusted_validation_policy.json"
+            with self.assertRaisesRegex(GENERATOR.ProposalError, "outside the candidate checkout"):
+                GENERATOR.generate(candidate, current, candidate_policy, baseline_sha256)
+            with self.assertRaisesRegex(GENERATOR.ProposalError, "reviewed 64-character"):
+                GENERATOR.generate(candidate, current, POLICY)
+            with self.assertRaisesRegex(GENERATOR.ProposalError, "does not match"):
+                GENERATOR.generate(candidate, current, POLICY, "0" * 64)
+            proposal = GENERATOR.generate(candidate, current, POLICY, baseline_sha256)
+            self.assertEqual(GATE.load_policy(proposal)["policy_version"], current)
+
+    def test_current_generated_policy_is_bounded_and_gate_loadable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            baseline = Path(directory) / "baseline.json"
+            baseline.write_bytes(POLICY.read_bytes())
+            policy = GENERATOR.generate(
+                ROOT,
+                GATE.load_policy(POLICY.read_bytes())["policy_version"],
+                baseline,
+                GENERATOR.sha256(baseline.read_bytes()),
+            )
+        self.assertLessEqual(len(policy), GENERATOR.MAX_POLICY_BYTES)
+        self.assertEqual(GATE.load_policy(policy)["schema_version"], 2)
 
 
 if __name__ == "__main__":
