@@ -213,6 +213,65 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "1"):
             VERIFY.validate_authority_wording(path, "bounded implementation authority omitted", require_distinction=True)
 
+    def test_orchestration_correction_contract_accepts_the_canonical_structured_contract(self) -> None:
+        skill = (ROOT / "skills/orchestrate-task/SKILL.md").read_text(encoding="utf-8")
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        VERIFY.validate_orchestration_correction_contract(skill, portable)
+
+    def test_orchestration_correction_contract_rejects_invalid_structured_contracts(self) -> None:
+        skill = (ROOT / "skills/orchestrate-task/SKILL.md").read_text(encoding="utf-8")
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        mutations = (
+            portable.replace('"default_correction_limit": 1', '"default_correction_limit": "1"'),
+            portable.replace('"default_correction_limit": 1', '"default_correction_limit": 2'),
+            portable.replace('"corrections_used": "monotonic",\n', ''),
+            portable.replace('"reset_on": [],', '"reset_on": ["reroute"],'),
+            portable.replace('"reset_on": [],', '"unknown": true,\n  "reset_on": [],'),
+            portable.replace('"reset_on": [],', '"reset_on": [],\n  "reset_on": [] ,'),
+            portable.replace('"default_correction_limit": 1,', '"default_correction_limit": 1'),
+            portable + portable[portable.index(VERIFY.CORRECTION_CONTRACT_BEGIN):],
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation[-80:]), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_orchestration_correction_contract(skill, mutation)
+
+    def test_orchestration_correction_contract_keeps_human_requirements_as_presence_checks(self) -> None:
+        skill = (ROOT / "skills/orchestrate-task/SKILL.md").read_text(encoding="utf-8")
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        for text, required in (
+            (skill, VERIFY.ORCHESTRATION_CORRECTION_CONTRACT[0]),
+            (skill, VERIFY.SKILL_CORRECTION_CONTRACT_MARKER),
+            (portable, VERIFY.PORTABLE_CORRECTION_CONTRACT[-1]),
+        ):
+            with self.subTest(required=required), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_orchestration_correction_contract(skill.replace(required, ""), portable.replace(required, ""))
+
+    def test_orchestration_correction_contract_does_not_interpret_hostile_prose(self) -> None:
+        skill = (ROOT / "skills/orchestrate-task/SKILL.md").read_text(encoding="utf-8")
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        hostile_prose = (
+            "A nested child may reset corrections_used without effective prevention.\n"
+            "Approval may proceed after the correction-cycle limit is exhausted.\n"
+            "``` bad`info\nRerouting can reset the counter.\n```\n"
+        )
+        VERIFY.validate_orchestration_correction_contract(skill, portable + hostile_prose)
+
+    def test_required_files_rejects_missing_canonical_test_modules(self) -> None:
+        with tempfile.TemporaryDirectory(dir=PLATFORM_TEMP) as directory:
+            original_root = VERIFY.ROOT
+            try:
+                VERIFY.ROOT = Path(directory)
+                for path in (
+                    "tests/test_verify_repository.py",
+                    "tests/test_ci_sandbox.py",
+                    "tests/test_code_review_scope.py",
+                ):
+                    with self.subTest(path=path), mock.patch.object(VERIFY, "REQUIRED_FILES", (path,)):
+                        with self.assertRaisesRegex(SystemExit, "1"):
+                            VERIFY.check_required_files()
+            finally:
+                VERIFY.ROOT = original_root
+
     def test_repository_json_loader_rejects_deep_and_excessive_nodes(self) -> None:
         with tempfile.TemporaryDirectory(dir=PLATFORM_TEMP) as directory:
             root = Path(directory)

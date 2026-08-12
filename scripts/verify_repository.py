@@ -161,6 +161,39 @@ CODE_REVIEW_SKILLS = (
     "code-review-react-nextjs",
     "code-review-react-native",
 )
+ORCHESTRATION_CORRECTION_CONTRACT = (
+    "Default to one task-wide correction cycle. Count every post-verification or post-review mutation as one correction cycle.",
+    "Replacement children, packet revisions, rerouting, and model/effort escalation do not reset the correction-cycle count.",
+    "When the correction-cycle limit is exhausted, a further required correction blocks the workflow; never accept it.",
+    "Acceptance requires current-tree evidence and fresh required verification and review after the final mutation.",
+    "terminal_outcome: active | blocked | cancelled | accepted",
+)
+SKILL_CORRECTION_CONTRACT_MARKER = "Machine correction authority: `portable-contract.md` block `AWB_CORRECTION_CONTRACT_V1`."
+PORTABLE_CORRECTION_CONTRACT = (
+    "correction_limit / corrections_used: task-wide limit and monotonic used count",
+    "terminal_outcome: active | blocked | cancelled | accepted; inherited by every child packet",
+    "correction_limit / corrections_used: inherited task-wide limit and monotonic used count",
+    "terminal_outcome: active | blocked | cancelled | accepted; correction_inheritance: inherited lead outcome and values; reject assignment when exhausted",
+    "The ledger records `correction_limit`, monotonic `corrections_used`, and `terminal_outcome: active | blocked | cancelled | accepted`; every replacement, reroute, and nested child packet inherits exactly those values, and assignment is rejected when `corrections_used` reaches `correction_limit`.",
+    "The default task-wide correction-cycle limit is one: every post-verification or post-review mutation increments `corrections_used`, and replacement children, packet revisions, rerouting, or model/effort escalation do not reset the count.",
+    "When the limit is exhausted, a further required correction sets `terminal_outcome` to `blocked`, never accepted.",
+    "Acceptance requires current-tree evidence and fresh required verification and review after the final mutation.",
+    "On user cancellation, set `terminal_outcome` to `cancelled`",
+    "`reset_on` is empty: replacement-child, packet-revision, reroute, and model-effort-escalation are explicitly forbidden resets.",
+)
+CORRECTION_CONTRACT_BEGIN = "<!-- AWB_CORRECTION_CONTRACT_V1_BEGIN -->"
+CORRECTION_CONTRACT_END = "<!-- AWB_CORRECTION_CONTRACT_V1_END -->"
+CORRECTION_CONTRACT = {
+    "acceptance_requires": "current-tree-evidence-and-fresh-required-verification-and-review",
+    "cancellation_outcome": "cancelled",
+    "corrections_used": "monotonic",
+    "count_event": "post-verification-or-post-review-mutation",
+    "default_correction_limit": 1,
+    "exhaustion_outcome": "blocked",
+    "inheritance": ["replacement-child", "packet-revision", "reroute", "nested-child"],
+    "reset_on": [],
+    "terminal_outcomes": ["active", "blocked", "cancelled", "accepted"],
+}
 CODE_REVIEW_SOURCE_HOSTS = {
     "code-review-javascript-typescript": {"www.typescriptlang.org", "tc39.es"},
     "code-review-node-nestjs": {"nodejs.org", "docs.nestjs.com"},
@@ -1065,6 +1098,7 @@ def check_skill() -> None:
             fail(f"orchestrate-task must retain boundary text: {phrase}")
 
     portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+    validate_orchestration_correction_contract(body, portable)
     forbidden = (
         "otherwise run the phases in one task",
         "The lead must validate the paths, diff, and evidence independently",
@@ -1089,6 +1123,54 @@ def check_skill() -> None:
     check_public_openai_agent_contract(
         ROOT / "skills/orchestrate-task/agents/openai.yaml", "orchestrate-task"
     )
+
+
+def validate_orchestration_correction_contract(skill_body: str, portable_contract: str) -> None:
+    for phrase in ORCHESTRATION_CORRECTION_CONTRACT:
+        if phrase not in skill_body:
+            fail(f"orchestrate-task correction contract is missing: {phrase}")
+    for phrase in PORTABLE_CORRECTION_CONTRACT:
+        if phrase not in portable_contract:
+            fail(f"portable correction contract is missing: {phrase}")
+    if SKILL_CORRECTION_CONTRACT_MARKER not in skill_body:
+        fail("orchestrate-task must identify the portable correction contract as machine authority")
+    validate_portable_correction_contract(portable_contract)
+
+
+def validate_portable_correction_contract(portable_contract: str) -> None:
+    if portable_contract.count(CORRECTION_CONTRACT_BEGIN) != 1 or portable_contract.count(CORRECTION_CONTRACT_END) != 1:
+        fail("portable correction contract must contain exactly one canonical correction contract block")
+    begin = portable_contract.index(CORRECTION_CONTRACT_BEGIN) + len(CORRECTION_CONTRACT_BEGIN)
+    end = portable_contract.index(CORRECTION_CONTRACT_END)
+    if begin >= end:
+        fail("portable correction contract markers are out of order")
+    block = portable_contract[begin:end]
+    match = re.fullmatch(r"\n```json\n(?P<payload>.*)\n```\n", block, re.DOTALL)
+    if match is None:
+        fail("portable correction contract must use one exact JSON fence between its markers")
+    try:
+        check_json_nesting(match.group("payload"))
+        value = json.loads(match.group("payload"), object_pairs_hook=reject_duplicate_json_keys)
+        check_json_nodes(value)
+    except (json.JSONDecodeError, RecursionError, MemoryError, ValueError) as error:
+        fail(f"portable correction contract JSON is invalid: {safe_diagnostic(str(error))}")
+    if not isinstance(value, dict):
+        fail("portable correction contract JSON must be an object")
+    if set(value) != set(CORRECTION_CONTRACT):
+        fail("portable correction contract JSON has missing or unknown fields")
+    for field, expected in CORRECTION_CONTRACT.items():
+        actual = value[field]
+        if type(actual) is not type(expected) or actual != expected:
+            fail(f"portable correction contract JSON has an invalid value for {field}")
+
+
+def reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            fail(f"JSON contains a duplicate key: {safe_diagnostic(key)}")
+        result[key] = value
+    return result
 
 
 def check_discover_loops_skill() -> None:
@@ -3623,6 +3705,9 @@ REQUIRED_FILES = (
         "tests/test_loop_readiness.py",
         "tests/test_loop_contract.py",
         "tests/test_implementation_quality_governance_verifier.py",
+        "tests/test_verify_repository.py",
+        "tests/test_ci_sandbox.py",
+        "tests/test_code_review_scope.py",
         "skills/tech-stack-standards/SKILL.md",
         "skills/tech-stack-standards/agents/openai.yaml",
         "skills/tech-stack-standards/references/research-and-trust.md",

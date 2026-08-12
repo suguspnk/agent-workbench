@@ -389,6 +389,13 @@ class TrustedInvariantGateTests(unittest.TestCase):
         self.assertEqual(len(policy["codex_profiles"]), 11)
         self.assertEqual(len(policy["claude_profiles"]), 11)
         self.assertEqual(set(policy["codex_profiles"]), set(policy["claude_profiles"]))
+        self.assertEqual(policy["protected_surface_roots"], list(GATE.PROTECTED_ROOTS))
+        for path in (
+            "tests/test_verify_repository.py",
+            "tests/test_ci_sandbox.py",
+            "tests/test_code_review_scope.py",
+        ):
+            self.assertIn(path, policy["pinned_candidate_files"])
         with tempfile.TemporaryDirectory() as directory:
             self._validate(self._candidate_copy(Path(directory)))
 
@@ -400,6 +407,18 @@ class TrustedInvariantGateTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(GATE.GateError, "pinned candidate file differs"):
                 self._validate(candidate)
+
+    def test_candidate_canonical_test_deletion_fails_the_authoritative_gate(self) -> None:
+        for path in (
+            "tests/test_verify_repository.py",
+            "tests/test_ci_sandbox.py",
+            "tests/test_code_review_scope.py",
+        ):
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as directory:
+                candidate = self._candidate_copy(Path(directory))
+                (candidate / path).unlink()
+                with self.assertRaisesRegex(GATE.GateError, "candidate file is missing|protected surface inventory differs"):
+                    self._validate(candidate)
 
     def test_candidate_control_change_and_duplicate_profile_key_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -571,6 +590,25 @@ class TrustedPolicyGeneratorTests(unittest.TestCase):
             )
         self.assertLessEqual(len(policy), GENERATOR.MAX_POLICY_BYTES)
         self.assertEqual(GATE.load_policy(policy)["schema_version"], 2)
+
+    def test_generated_policy_protects_canonical_test_modules(self) -> None:
+        current = GATE.load_policy(POLICY.read_bytes())["policy_version"]
+        baseline_sha256 = GENERATOR.sha256(POLICY.read_bytes())
+        with tempfile.TemporaryDirectory() as directory:
+            baseline = Path(directory) / "baseline.json"
+            baseline.write_bytes(POLICY.read_bytes())
+            proposal = GATE.load_policy(
+                GENERATOR.generate(ROOT, current + 1, baseline, baseline_sha256)
+            )
+        inventory = {entry["path"] for entry in proposal["protected_surface_inventory"]}
+        self.assertEqual(proposal["protected_surface_roots"], list(GENERATOR.PROTECTED_ROOTS))
+        for path in (
+            "tests/test_verify_repository.py",
+            "tests/test_ci_sandbox.py",
+            "tests/test_code_review_scope.py",
+        ):
+            self.assertIn(path, inventory)
+            self.assertIn(path, proposal["pinned_candidate_files"])
 
 
 if __name__ == "__main__":

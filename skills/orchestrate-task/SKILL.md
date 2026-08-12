@@ -104,12 +104,16 @@ Before a child executes a command, it must inspect the documented command behavi
 - Record child identity, role, parent, and fresh/reused state. A verifier or reviewer identity must differ from the implementer/operator; reuse is allowed only when it preserves that independence and the packet records it.
 - Require the reviewer to inspect the actual diff and return evidence-backed findings. Treat behavioral read-only as a request unless the harness exposes an enforceable boundary.
 - If review finds required fixes, delegate the correction, verify again, and obtain a new review. A prior approval expires after any material change. Cap correction loops; surface an unresolved design conflict rather than cycling indefinitely.
+- Default to one task-wide correction cycle. Count every post-verification or post-review mutation as one correction cycle.
+- Replacement children, packet revisions, rerouting, and model/effort escalation do not reset the correction-cycle count.
+- When the correction-cycle limit is exhausted, a further required correction blocks the workflow; never accept it.
 - Follow-up order is implementation, test when required, verifier, ordinary reviewer, then security reviewer. External operation and verification stop at the unavailable-adapter gate. Any material mutation invalidates all earlier verification and review that could be affected; rerun them on the final tree.
-- Accept only when required child handoffs provide evidence for the objective and criteria. Report what changed, what was verified, what remains uncertain, and any action requiring the user's authorization.
+- Acceptance requires current-tree evidence and fresh required verification and review after the final mutation. Accept only when required child handoffs provide evidence for the objective and criteria. Report what changed, what was verified, what remains uncertain, and any action requiring the user's authorization.
+- Machine correction authority: `portable-contract.md` block `AWB_CORRECTION_CONTRACT_V1`.
 
 ## Compact task ledger
 
-Maintain a small lead-owned ledger for delegated work, including child identity, role, parent identity, fresh/reused state, packet revision, and observed isolation:
+Maintain a small lead-owned ledger for delegated work, including child identity, role, parent identity, fresh/reused state, packet revision, observed isolation, `correction_limit`, monotonic `corrections_used`, and inherited `terminal_outcome: active | blocked | cancelled | accepted`. Every replacement, reroute, and nested child inherits those correction fields; reject assignment when `corrections_used` has reached `correction_limit`.
 
 `planned → assigned → implementing → ready-to-verify → reviewing → accepted`
 

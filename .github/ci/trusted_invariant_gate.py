@@ -44,7 +44,21 @@ PINNED_PATHS = {
     "scripts/verify_repository.py",
     "skills/orchestrate-task/scripts/route_subagent.py",
     "skills/orchestrate-task/tests/routing-cases.json",
+    "tests/test_ci_sandbox.py",
+    "tests/test_code_review_scope.py",
+    "tests/test_verify_repository.py",
 }
+PROTECTED_ROOTS = (
+    ".agents",
+    ".claude-plugin",
+    ".codex-plugin",
+    ".github",
+    "adapters/codex/.codex",
+    "agents",
+    "scripts",
+    "skills",
+    "tests",
+)
 CODEX_DIRECTORY = "adapters/codex/.codex/agents"
 CLAUDE_DIRECTORY = "agents"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -351,6 +365,8 @@ def load_policy(content: bytes) -> dict[str, Any]:
             fail("protected_surface_inventory is invalid")
         if not isinstance(roots, list) or not roots or any(not isinstance(item, str) for item in roots):
             fail("protected_surface_roots is invalid")
+        if roots != list(PROTECTED_ROOTS):
+            fail("protected_surface_roots differ from the immutable trusted contract")
         if not isinstance(contracts, list) or not isinstance(digest, str) or not SHA256.fullmatch(digest):
             fail("trusted surface rules or document contracts are invalid")
         validate_surface_rules(rules)
