@@ -16,6 +16,10 @@ Contributions are welcome through issues and pull requests.
 - Preserve the closed evidence-reference grammar, Unicode spoofing rejection, canonical lowercase exact proposal-namespaced writable files with casefold duplicate rejection, device/control/sensitive path denials, stateless read-only scopes, no host-managed mutable state, bounded retention/limits, exact terminal states, adjacent-scalar secret scanning, and safe bounded CLI input behavior.
 - Structurally accepted capabilities must remain non-executable until a separate host-owned registry resolution and activation workflow revalidates the exact proposal and target.
 - Keep `semantic_review` required/pending and CLI success explicitly structural/non-authorizing with activation false.
+- Keep `pr-evidence` local-draft-first and non-blocking. Every GitHub read or mutation category must remain explicitly authorized for the exact target in the current request. Attachment authorization must name and include canonical repository lookup, `gh` credential use and retrieval, and external upload as one complete action.
+- Never select an evidence comment by heading alone. Require the authenticated GitHub.com actor, that actor's stable hidden marker, and an immediate pre-mutation re-read; never change or delete another actor's comment.
+- Keep the attachment helper GitHub.com-only, HTTPS-only, bounded, no-follow, no-POST-retry, curlrc-isolated, private-snapshot based, and strict about descriptor stability, canonical repository identity, regular files, size, MIME/extension agreement, and exact returned URL shape.
+- Keep attachment-helper tests strictly offline with fake `gh` and `curl` executables. Do not use a live endpoint or credential in repository validation.
 - Do not weaken `must_not_downgrade` boundaries without representative acceptance evidence.
 - Bump both plugin manifest versions together and update `CHANGELOG.md` for a release.
 - Avoid dependencies unless they provide a material benefit that cannot be achieved with the standard library.
@@ -29,6 +33,12 @@ Use Python 3.11 or newer (Python 3.12 is preferred for repository verification):
 ```sh
 python3.12 scripts/verify_repository.py
 git diff --check
+```
+
+The repository validator runs the upload-helper regression script with a 60-second bound. To run that offline check directly:
+
+```sh
+bash skills/pr-evidence/scripts/tests/test-upload-github-attachment.sh
 ```
 
 For focused loop-contract work, also run:

@@ -2,6 +2,15 @@
 
 All notable changes to Agent Workbench are documented here. Versions follow semantic versioning.
 
+## 0.8.0 - 2026-08-11
+
+- Added the opt-in `pr-evidence` skill for privacy-safe, non-blocking local pull-request evidence preparation.
+- Required separate, current authorization for artifact upload, evidence-comment creation or update, duplicate or attachment cleanup, credential rotation, and security notification.
+- Added authenticated-actor plus stable-marker comment ownership guidance, immediate pre-mutation re-reads, and an explicit unresolved concurrent-duplicate limitation.
+- Added a GitHub.com-only upload helper with strict repository and file validation, a 25 MiB raster/video allowlist, private temporary credential storage, bounded HTTPS-only upload behavior, sanitized diagnostics, and exact result-URL validation.
+- Recorded the user-attachment endpoint as `needs-confirmation` and treated HTTP `201 Created` as the upload result without a follow-up GET.
+- Added strict offline fake-`gh` and fake-`curl` regression coverage and wired it into bounded repository validation. No live endpoint behavior was tested.
+
 ## 0.7.0 - 2026-08-11
 
 - Added the `implementation-quality-governance` skill for risk-proportionate implementation and operational-change quality gates.

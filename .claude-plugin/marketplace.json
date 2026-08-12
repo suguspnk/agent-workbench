@@ -3,16 +3,16 @@
   "owner": {
     "name": "suguspnk"
   },
-  "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, while proposal-only discover-loops drafts evidence-backed loop proposals without activation or scheduling.",
+  "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, proposal-only discover-loops drafts evidence-backed loop proposals, and pr-evidence prepares local receipts before separately authorized GitHub mutations.",
   "metadata": {
-    "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, while proposal-only discover-loops drafts evidence-backed loop proposals without activation or scheduling."
+    "description": "Portable workflows: orchestrate-task coordinates bounded verified subagents, proposal-only discover-loops drafts evidence-backed loop proposals, and pr-evidence prepares local receipts before separately authorized GitHub mutations."
   },
   "plugins": [
     {
       "name": "agent-workbench",
       "source": "./",
-      "version": "0.7.0",
-      "description": "Portable task orchestration and evidence-backed agent loop discovery with independent verification.",
+      "version": "0.8.0",
+      "description": "Portable task orchestration, safe loop discovery, and opt-in pull-request evidence preparation.",
       "author": {
         "name": "suguspnk"
       },
@@ -23,6 +23,7 @@
         "orchestration",
         "loop-discovery",
         "agent-loop",
+        "pr-evidence",
         "verification",
         "agent-skills"
       ],
@@ -31,6 +32,7 @@
         "orchestration",
         "loop-discovery",
         "agent-loop",
+        "pr-evidence",
         "workflow",
         "portable"
       ]

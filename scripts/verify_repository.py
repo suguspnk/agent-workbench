@@ -18,7 +18,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 EXPECTED_ROLES = {
     "awb_planner": ("gpt-5.6-sol", "high", "read-only"),
@@ -98,6 +98,19 @@ def parse_frontmatter(path: Path) -> tuple[dict[str, str], str]:
     return values, body
 
 
+def forbidden_curl_arguments(script: str) -> set[str]:
+    start = script.find("curl -q")
+    if start < 0:
+        return set()
+    end = script.find('2>"$error_file"', start)
+    if end < 0:
+        end = len(script)
+    invocation = script[start:end].replace("\\\n", " ")
+    tokens = re.findall(r"""'(?:[^']*)'|"(?:[^"\\]|\\.)*"|\S+""", invocation)
+    forbidden = {"-L", "--location", "--location-trusted", "--retry", "--retry-all-errors", "--retry-connrefused"}
+    return {token for token in tokens if token in forbidden}
+
+
 def check_manifests() -> None:
     codex = load_json(ROOT / ".codex-plugin/plugin.json")
     claude = load_json(ROOT / ".claude-plugin/plugin.json")
@@ -117,8 +130,8 @@ def check_manifests() -> None:
         if manifest.get("repository") != "https://github.com/suguspnk/agent-workbench":
             fail(f"{label} manifest repository URL is incorrect")
         keywords = manifest.get("keywords")
-        if not isinstance(keywords, list) or not {"loop-discovery", "agent-loop"}.issubset(keywords):
-            fail(f"{label} manifest must include loop-discovery and agent-loop keywords")
+        if not isinstance(keywords, list) or not {"loop-discovery", "agent-loop", "pr-evidence"}.issubset(keywords):
+            fail(f"{label} manifest must include loop-discovery, agent-loop, and pr-evidence keywords")
 
     if codex.get("skills") != "./skills/":
         fail("Codex manifest must point skills to ./skills/")
@@ -157,8 +170,8 @@ def check_manifests() -> None:
     claude_entry = claude_marketplace["plugins"][0]
     for field in ("keywords", "tags"):
         values = claude_entry.get(field)
-        if not isinstance(values, list) or not {"loop-discovery", "agent-loop"}.issubset(values):
-            fail(f"Claude marketplace {field} must include loop-discovery and agent-loop")
+        if not isinstance(values, list) or not {"loop-discovery", "agent-loop", "pr-evidence"}.issubset(values):
+            fail(f"Claude marketplace {field} must include loop-discovery, agent-loop, and pr-evidence")
     claude_description = claude_marketplace.get("description")
     claude_metadata = claude_marketplace.get("metadata")
     if not isinstance(claude_description, str) or not claude_description.strip():
@@ -168,7 +181,7 @@ def check_manifests() -> None:
     metadata_description = claude_metadata.get("description")
     if not isinstance(metadata_description, str) or not metadata_description.strip():
         fail("Claude marketplace metadata.description must be a non-empty string")
-    for phrase in ("orchestrate-task", "proposal-only", "discover-loops"):
+    for phrase in ("orchestrate-task", "proposal-only", "discover-loops", "pr-evidence"):
         if phrase not in claude_description or phrase not in metadata_description:
             fail(f"Claude marketplace descriptions must cover both workflows: {phrase}")
     codex_entry = codex_marketplace["plugins"][0]
@@ -348,6 +361,173 @@ def check_discover_loops_skill() -> None:
             fail(f"discover-loops OpenAI metadata is missing: {phrase}")
 
 
+def check_pr_evidence_skill() -> None:
+    skill_root = ROOT / "skills/pr-evidence"
+    skill_path = skill_root / "SKILL.md"
+    frontmatter, body = parse_frontmatter(skill_path)
+    if set(frontmatter) != {"name", "description"}:
+        fail("pr-evidence frontmatter must contain only one-line name and description fields")
+    if frontmatter.get("name") != "pr-evidence" or not frontmatter.get("description"):
+        fail("pr-evidence skill metadata is incomplete")
+    for phrase in (
+        "Default to a local draft and mutation plan",
+        "separately and explicitly authorizes",
+        "canonical GitHub.com repository",
+        "use the `gh` credential",
+        "evidence remains a visibility receipt, not a merge gate",
+        "authenticated login",
+        "stable actor marker",
+        "re-read that exact comment ID immediately before",
+        "Never delete or change another actor's comment",
+        "concurrent duplicate race",
+        "Endpoint compatibility: needs-confirmation",
+        "attachment visibility, retention, and deletion behavior are also `needs-confirmation`",
+        "response larger than 64 KiB",
+        "requires curl 8.4.0 or newer",
+        "checks the captured byte count again before JSON parsing",
+        "non-`201` response including 3xx or 5xx",
+        "no success observed; creation state unknown; no cleanup attempted",
+        "at most 10 pages or 1,000 comments",
+        "perform no mutation",
+        "--authorized-upload",
+        "up to 25 MiB",
+        "strictly offline",
+    ):
+        if phrase not in body:
+            fail(f"pr-evidence must retain authorization or safety guidance: {phrase}")
+
+    helper_path = skill_root / "scripts/upload-github-attachment.sh"
+    helper = helper_path.read_text(encoding="utf-8")
+    snapshot_path = skill_root / "scripts/snapshot_artifact.py"
+    snapshot = snapshot_path.read_text(encoding="utf-8")
+    for phrase in (
+        "set +x",
+        "umask 077",
+        "--authorized-upload",
+        "MAX_ARTIFACT_BYTES=26214400",
+        "MAX_RESPONSE_BYTES=65536",
+        "UPLOAD_UNKNOWN=",
+        "snapshot_artifact.py",
+        '"$snapshot_path"',
+        'GH_HOST:-',
+        'curl -q --version',
+        'curl 8.4.0 or newer is required before upload.',
+        'gh api --hostname github.com',
+        'if ! repository_metadata=',
+        ".full_name",
+        '"$canonical_repository" != "$repository"',
+        'gh auth token --hostname github.com',
+        'if ! github_token=',
+        'if ! mime_type=',
+        'mktemp -d',
+        'chmod 700 "$temp_dir"',
+        'chmod 600 "$curl_config_file"',
+        "curl -q",
+        "--proto '=https'",
+        "--proto-redir '=https'",
+        "--max-redirs 0",
+        "--connect-timeout 10",
+        "--max-time 60",
+        '--max-filesize "$MAX_RESPONSE_BYTES"',
+        'response_size="$(wc -c',
+        "response_size > MAX_RESPONSE_BYTES",
+        "no success observed; creation state unknown; no cleanup attempted",
+        "[A-Za-z0-9_-]+",
+    ):
+        if phrase not in helper:
+            fail(f"pr-evidence upload helper is missing a safety invariant: {phrase}")
+    if forbidden_curl_arguments('if [[ -L "$artifact_path" ]]; then exit 1; fi'):
+        fail("curl argument validator must not treat a file symlink test as curl redirect behavior")
+    if forbidden_curl_arguments("curl -q \\\n  --retry 1 https://example.invalid") != {"--retry"}:
+        fail("curl argument validator regression did not detect an actual retry argument")
+    forbidden_arguments = forbidden_curl_arguments(helper)
+    if forbidden_arguments:
+        fail(f"pr-evidence upload helper contains forbidden redirect/retry arguments: {sorted(forbidden_arguments)}")
+    if "|| true" in helper:
+        fail("pr-evidence upload helper must preserve external command failures")
+    if helper.count("curl -q") != 2 or helper.count("--request POST") != 1:
+        fail("pr-evidence upload helper must perform one local version check and exactly one bounded POST")
+    ordered_controls = (
+        helper.find("curl -q --version"),
+        helper.find("gh api --hostname github.com"),
+        helper.find("gh auth token --hostname github.com"),
+        helper.find("--request POST"),
+    )
+    if -1 in ordered_controls or tuple(sorted(ordered_controls)) != ordered_controls:
+        fail("curl minimum-version validation must occur before GitHub lookup, token retrieval, and upload")
+    token_guard = 'if [[ -z "$github_token" || ! "$github_token" =~ ^[A-Za-z0-9_]+$ ]]; then'
+    token_validation = helper.find(token_guard)
+    curl_config_construction = helper.find('Authorization: Bearer')
+    if token_validation < 0 or curl_config_construction < 0 or token_validation >= curl_config_construction:
+        fail("token output shape must be validated before curl configuration construction")
+    response_size_check = helper.find('response_size="$(wc -c')
+    response_parse = helper.find("jq -er", response_size_check)
+    if response_size_check < 0 or response_parse < 0 or response_size_check >= response_parse:
+        fail("captured response size must be checked before JSON parsing")
+    if not helper_path.stat().st_mode & 0o111:
+        fail("pr-evidence upload helper must be executable")
+    for phrase in (
+        "O_NOFOLLOW",
+        "O_NONBLOCK",
+        "S_ISREG",
+        "st_mtime_ns",
+        "st_ctime_ns",
+        "os.O_EXCL",
+        "os.fchmod(snapshot_fd, 0o600)",
+        "copied > limit",
+    ):
+        if phrase not in snapshot:
+            fail(f"pr-evidence snapshot helper is missing a safety invariant: {phrase}")
+
+    test_path = skill_root / "scripts/tests/test-upload-github-attachment.sh"
+    test_script = test_path.read_text(encoding="utf-8")
+    for phrase in (
+        'cat > "$TEST_ROOT/bin/gh"',
+        'cat > "$TEST_ROOT/bin/curl"',
+        "curlrc isolation flag must be first",
+        "FAKE_UPLOAD_STATUS",
+        "FAKE_ASSET_URL",
+        "FAKE_CURL_MODE",
+        "FAKE_FILE_EXIT_NONZERO",
+        "FAKE_GH_API_EXIT_NONZERO",
+        "FAKE_GH_AUTH_EXIT_NONZERO",
+        "--max-filesize 65536",
+        "oversize-response",
+        "oversize-zero-response",
+        "FAKE_CURL_VERSION=8.3.0",
+        "JQ_LOG",
+        "token-empty",
+        "token-multiline",
+        "token-quote",
+        "token-directive",
+        "assert_token_rejected_before_upload",
+        "assert_no_upload_temp_dirs",
+        "assert_upload_unknown",
+        "non-GitHub host must fail before gh use",
+        "canonical-mismatch",
+        "replacement-race upload URL",
+        "EXPECTED_UPLOAD_BYTES_FILE",
+        "punctuation-url",
+        "percent-url",
+        "markdown-url",
+        "private temporary path was not cleaned",
+        "fake token leaked into runtime output or logs",
+    ):
+        if phrase not in test_script:
+            fail(f"pr-evidence offline test is missing: {phrase}")
+    if not test_path.stat().st_mode & 0o111:
+        fail("pr-evidence offline test must be executable")
+
+    openai_yaml = (skill_root / "agents/openai.yaml").read_text(encoding="utf-8")
+    for phrase in (
+        'display_name: "PR Evidence"',
+        'short_description: "Draft safe, non-blocking PR evidence"',
+        "Use $pr-evidence to prepare a local evidence receipt",
+    ):
+        if phrase not in openai_yaml:
+            fail(f"pr-evidence OpenAI metadata is missing: {phrase}")
+
+
 def check_codex_profiles() -> None:
     directory = ROOT / "adapters/codex/.codex/agents"
     files = sorted(directory.glob("*.toml"))
@@ -442,6 +622,18 @@ def check_replays_and_unit_tests() -> None:
         fail(f"loop-readiness replay failed:\n{loop_result.stdout}{loop_result.stderr}")
     print(loop_result.stdout.strip())
 
+    upload_test_result = subprocess.run(
+        ["bash", str(ROOT / "skills/pr-evidence/scripts/tests/test-upload-github-attachment.sh")],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if upload_test_result.returncode:
+        fail(f"pr-evidence offline upload-helper tests failed:\n{upload_test_result.stdout}{upload_test_result.stderr}")
+    print(upload_test_result.stdout.strip())
+
     unit_result = subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
         cwd=ROOT,
@@ -473,6 +665,10 @@ def check_release_and_ci() -> None:
         "structurally_valid: true",
         "descriptor-relative safe operations",
         "opaque `workspace:` or `source:` citations",
+        "Pull-request evidence",
+        "Endpoint compatibility",
+        "needs-confirmation",
+        "fake `gh` and `curl`",
     ):
         if phrase not in readme:
             fail(f"README.md is missing required guidance: {phrase}")
@@ -531,6 +727,11 @@ def main() -> None:
         "skills/discover-loops/scripts/score_loop_readiness.py",
         "skills/discover-loops/scripts/validate_loop_contract.py",
         "skills/discover-loops/tests/readiness-cases.json",
+        "skills/pr-evidence/SKILL.md",
+        "skills/pr-evidence/agents/openai.yaml",
+        "skills/pr-evidence/scripts/snapshot_artifact.py",
+        "skills/pr-evidence/scripts/upload-github-attachment.sh",
+        "skills/pr-evidence/scripts/tests/test-upload-github-attachment.sh",
         "tests/test_route_subagent.py",
         "tests/test_loop_readiness.py",
         "tests/test_loop_contract.py",
@@ -542,6 +743,7 @@ def main() -> None:
     check_manifests()
     check_skill()
     check_discover_loops_skill()
+    check_pr_evidence_skill()
     check_codex_profiles()
     check_claude_profiles()
     check_replays_and_unit_tests()

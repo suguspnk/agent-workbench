@@ -2,7 +2,7 @@
 
 Portable task orchestration for Codex, Claude Code, and other Agent Skills-compatible harnesses.
 
-Agent Workbench provides three provider-neutral capabilities. `orchestrate-task` keeps the lead task focused on intake, routing, coordination, authorization, and acceptance while bounded child tasks perform the work. `discover-loops` finds recurring work, selects the safest artifact, and drafts evidence-backed loop proposals without activating or scheduling them. `implementation-quality-governance` applies risk-proportionate quality gates and final-state evidence to implementation and operational changes.
+Agent Workbench provides four provider-neutral capabilities. `orchestrate-task` keeps the lead task focused on intake, routing, coordination, authorization, and acceptance while bounded child tasks perform the work. `discover-loops` finds recurring work, selects the safest artifact, and drafts evidence-backed loop proposals without activating or scheduling them. `implementation-quality-governance` applies risk-proportionate quality gates and final-state evidence to implementation and operational changes. `pr-evidence` prepares privacy-safe, non-blocking pull-request evidence locally and keeps every GitHub mutation behind separate, current authorization.
 
 ## Design principles
 
@@ -17,6 +17,7 @@ Agent Workbench provides three provider-neutral capabilities. `orchestrate-task`
 - Require explicit authorization for pushes, pull requests, deployments, messages, global configuration changes, credentials, and destructive actions.
 - Prefer a manual workflow or normal skill when recurring work is not bounded, reversible, and verifiable enough for a loop.
 - Keep discovered loops proposal-only until independent dry-run evidence exists and a human separately authorizes activation.
+- Prepare pull-request evidence locally first; separately authorize each GitHub.com read, upload, comment mutation, cleanup, or incident response action for the exact target.
 
 ## Repository layout
 
@@ -49,7 +50,14 @@ skills/implementation-quality-governance/
 ├── SKILL.md
 ├── agents/openai.yaml
 └── references/                          # conditional safety and delivery guidance
-scripts/verify_repository.py            # dependency-free package validation
+skills/pr-evidence/
+├── SKILL.md
+├── agents/openai.yaml
+└── scripts/
+    ├── snapshot_artifact.py              # no-follow bounded private snapshot
+    ├── upload-github-attachment.sh       # authorized GitHub.com-only upload helper
+    └── tests/test-upload-github-attachment.sh  # strict offline fake-client tests
+scripts/verify_repository.py            # package and strict offline validation
 ```
 
 The Markdown workflows, normalized schemas, and contracts are the portable core. Harness-specific adapters map portable roles to capabilities the host actually exposes.
@@ -58,7 +66,7 @@ The Markdown workflows, normalized schemas, and contracts are the portable core.
 
 ### Codex
 
-Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$discover-loops`, or `$implementation-quality-governance`:
+Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$discover-loops`, `$implementation-quality-governance`, or `$pr-evidence`:
 
 ```sh
 codex plugin marketplace add suguspnk/agent-workbench
@@ -76,14 +84,14 @@ For personal roles, copy the files to `~/.codex/agents/` instead. Review existin
 
 ### Claude Code
 
-Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:discover-loops`, or `/agent-workbench:implementation-quality-governance`:
+Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:discover-loops`, `/agent-workbench:implementation-quality-governance`, or `/agent-workbench:pr-evidence`:
 
 ```sh
 claude plugin marketplace add suguspnk/agent-workbench
 claude plugin install agent-workbench@agent-workbench
 ```
 
-Invoke `/agent-workbench:orchestrate-task` for bounded delivery, `/agent-workbench:discover-loops` for loop discovery, or `/agent-workbench:implementation-quality-governance` to apply implementation quality gates. The plugin bundles scoped subagents such as `agent-workbench:awb-builder` and `agent-workbench:awb-security-reviewer`. Their model family and effort settings apply only to subagents. Claude plugin agents can narrow their tool lists, but plugin-level `permissionMode` is not enforced; shell-capable review and test roles therefore use before/after status checks and behavioral no-edit rules.
+Invoke `/agent-workbench:orchestrate-task` for bounded delivery, `/agent-workbench:discover-loops` for loop discovery, `/agent-workbench:implementation-quality-governance` for implementation quality gates, or `/agent-workbench:pr-evidence` for a local-first evidence receipt. The plugin bundles scoped subagents such as `agent-workbench:awb-builder` and `agent-workbench:awb-security-reviewer`. Their model family and effort settings apply only to subagents. Claude plugin agents can narrow their tool lists, but plugin-level `permissionMode` is not enforced; shell-capable review and test roles therefore use before/after status checks and behavioral no-edit rules.
 
 Test a checkout without installing it:
 
@@ -121,6 +129,23 @@ Successful validation reports `structurally_valid: true`, `semantic_review_requi
 
 For an implementation or operational change, explicitly invoke `$implementation-quality-governance`. It selects risk-proportionate architecture, security, accessibility, data-integrity, dependency, testing, rollout, documentation, and final-evidence gates; read only its conditional references that apply to the change.
 
+## Pull-request evidence
+
+Invoke `$pr-evidence` to classify a change, sanitize the smallest honest proof, and prepare a local `## Evidence` draft. Evidence is a non-blocking visibility receipt, never a condition for pull-request creation, review, or merge. Without separate authorization for the exact target and action, the workflow performs no GitHub read, artifact upload, comment creation or update, cleanup, credential rotation, or security notification.
+
+Authorized visual uploads use the bundled helper with an explicit acknowledgement. That authorization must name the exact repository and artifact and must explicitly include the GitHub.com canonical-repository lookup, use and retrieval of the `gh` credential, and the external upload; `--authorized-upload` never supplies authority on its own.
+
+```sh
+"$SKILL_ROOT/scripts/upload-github-attachment.sh" \
+  --authorized-upload owner/repo /path/to/sanitized-evidence.png
+```
+
+Before any GitHub interaction, the helper requires curl 8.4.0 or newer, then captures the source through an `O_NOFOLLOW` descriptor into a bounded mode-600 snapshot, checks descriptor stability, and validates and uploads only that snapshot. It accepts PNG, JPEG, GIF, WebP, MP4, MOV, or WebM artifacts up to 25 MiB, binds the numeric repository ID to the exact canonical `full_name`, uses bounded HTTPS-only upload options with no redirects or POST retry, caps unknown-length and declared-length responses at 64 KiB during capture, checks the captured size again before JSON parsing, sanitizes diagnostics, and accepts only ASCII letters, digits, underscores, or hyphens in the single returned asset-ID segment.
+
+Before authorization, disclose that **Endpoint compatibility: `needs-confirmation`.** Attachment visibility, retention, and deletion behavior also need confirmation. Treat uploads as externally hosted and potentially accessible to anyone with the URL. Once the POST begins, a timeout, response-capture failure, response over 64 KiB, any non-`201` response including 3xx or 5xx, or malformed/invalid `201 Created` response means no success was observed, creation state is unknown, and no cleanup was attempted. A later comment failure may leave a known unreferenced attachment. No automatic cleanup occurs, and cleanup requires separate authorization. Offline tests verify construction and handling only; a valid parsed `201` is the only observed-success outcome and does not trigger an automatic GET.
+
+Evidence comments are owned by the authenticated GitHub.com login plus a stable hidden actor marker. The workflow uses a complete bounded scan of at most 10 pages, 1,000 comments, 1 MiB per page, 10 MiB total, and 30 seconds per page; an exhausted limit or incomplete scan fails closed without mutation. It re-reads immediately before an authorized create or update, never changes another actor's comment, and stops on multiple matching comments. GitHub does not provide atomic marker uniqueness, so a concurrent duplicate remains possible; cleanup requires separate authorization.
+
 ## Automatic subagent routing
 
 Routing is automatic when the host follows the skill and exposes the requested child controls. The lead fills a normalized routing card; the dependency-free router returns a primary role, capability tier, effort, mandatory follow-ups, and downgrade guard:
@@ -134,16 +159,22 @@ The router is deterministic and provider-neutral. It does not spawn agents, modi
 
 ## Current scope
 
-Agent Workbench includes orchestration, proposal-only loop discovery, and `implementation-quality-governance` capabilities; deterministic routing and readiness scoring; replay and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, credential handling, telemetry upload, deployment logic, loop activation or scheduling, or automatic GitHub side effects.
+Agent Workbench includes orchestration, proposal-only loop discovery, `implementation-quality-governance`, and local-first `pr-evidence` capabilities; deterministic routing and readiness scoring; offline helper, replay, and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, telemetry upload, deployment logic, loop activation or scheduling, or automatic GitHub side effects. The attachment helper reads a GitHub.com token only during a separately authorized direct invocation and stores it only in a private temporary curl configuration removed on exit.
 
 ## Development
 
-Run all dependency-free repository and routing checks:
+Run repository, routing, unit, and strict offline attachment-helper checks:
 
 Repository checks require Python 3.11 or newer; CI and release verification use Python 3.12 where available:
 
 ```sh
 python3.12 scripts/verify_repository.py
+```
+
+The validator substitutes fake `gh` and `curl` executables and never calls the live user-attachment endpoint. Run the focused helper check with:
+
+```sh
+bash skills/pr-evidence/scripts/tests/test-upload-github-attachment.sh
 ```
 
 When Claude Code is installed, also run:

@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Evidence"
+  short_description: "Draft safe, non-blocking PR evidence"
+  default_prompt: "Use $pr-evidence to prepare a local evidence receipt, and perform each GitHub mutation only when I explicitly authorize it."

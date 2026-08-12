@@ -2,8 +2,8 @@
   "name": "agent-workbench",
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "displayName": "Agent Workbench",
-  "version": "0.7.0",
-  "description": "Portable task orchestration and evidence-backed agent loop discovery with independent verification.",
+  "version": "0.8.0",
+  "description": "Portable task orchestration, safe loop discovery, and opt-in pull-request evidence preparation.",
   "author": {
     "name": "suguspnk"
   },
@@ -15,6 +15,7 @@
     "subagents",
     "loop-discovery",
     "agent-loop",
+    "pr-evidence",
     "verification",
     "model-routing"
   ]
