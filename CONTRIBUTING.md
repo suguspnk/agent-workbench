@@ -10,6 +10,7 @@ Contributions are welcome through issues and pull requests.
 - Add or update routing replay cases whenever role precedence, risk overlays, capability tiers, effort, or adapter mappings change.
 - Add or update readiness replay cases whenever loop gates, scoring, outcomes, required changes, or approval rules change.
 - Keep loop discovery proposal-only and provider-neutral. Do not add activation, scheduling, credentials, provider calls, or external side effects.
+- Keep target, role, severity, evidence, checks, and output policy in `code-review`; overlays may add only evidence-based detection and domain concerns with official provenance.
 - Keep V1 contracts in draft with pending verification and activation plus an inactive scheduler. Record actual independent verification outside the structural contract.
 - Embed the exact readiness card, recompute its canonical SHA-256 and scorer outcome with the bundled scorer, and bind its opaque source citation. Treat source provenance as an independently reviewed claim.
 - Keep allowed tools/actions as closed `{id, operation_id, display_name, binding_status: unbound}` proposals. Derive semantics only from the operation ID; reject caller category/effect/runtime bindings. Require exact approval for every ID plus stronger external, credential, schedule, and activation gates.
@@ -46,6 +47,8 @@ For focused loop-contract work, also run:
 ```sh
 python3.12 skills/discover-loops/scripts/score_loop_readiness.py \
   --replay skills/discover-loops/tests/readiness-cases.json
+python3.12 skills/code-review/scripts/select_review_scope.py \
+  --replay skills/code-review/tests/scope-cases.json
 python3.12 -m unittest tests.test_loop_readiness tests.test_loop_contract -v
 ```
 

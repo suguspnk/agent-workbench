@@ -2,7 +2,7 @@
 
 Portable task orchestration for Codex, Claude Code, and other Agent Skills-compatible harnesses.
 
-Agent Workbench provides four provider-neutral capabilities. `orchestrate-task` keeps the lead task focused on intake, routing, coordination, authorization, and acceptance while bounded child tasks perform the work. `discover-loops` finds recurring work, selects the safest artifact, and drafts evidence-backed loop proposals without activating or scheduling them. `implementation-quality-governance` applies risk-proportionate quality gates and final-state evidence to implementation and operational changes. `pr-evidence` prepares privacy-safe, non-blocking pull-request evidence locally and keeps every GitHub mutation behind separate, current authorization.
+Agent Workbench provides five provider-neutral capabilities. `orchestrate-task` keeps the lead task focused on intake, routing, coordination, authorization, and acceptance while bounded child tasks perform the work. `code-review` selects one PR or local target and composes evidence-backed technology overlays for reviewer and verifier roles. `discover-loops` finds recurring work and drafts evidence-backed loop proposals without activating or scheduling them. `implementation-quality-governance` applies risk-proportionate quality gates and final-state evidence to implementation and operational changes. `pr-evidence` prepares privacy-safe, non-blocking pull-request evidence locally and keeps every GitHub mutation behind separate, current authorization.
 
 ## Design principles
 
@@ -46,6 +46,14 @@ skills/discover-loops/
 │   ├── score_loop_readiness.py         # deterministic artifact recommendation
 │   └── validate_loop_contract.py       # strict V1 proposal validation
 └── tests/readiness-cases.json           # readiness replay set
+skills/code-review/
+├── SKILL.md                             # target, severity, evidence, and output owner
+├── references/                          # review and target-selection contracts
+├── scripts/select_review_scope.py       # pure target and overlay selector
+└── tests/scope-cases.json                # scope replay set
+skills/code-review-{javascript-typescript,node-nestjs,react-nextjs,react-native}/
+├── SKILL.md                             # detection and domain concerns only
+└── references.md                        # official rule provenance
 skills/implementation-quality-governance/
 ├── SKILL.md
 ├── agents/openai.yaml
@@ -66,7 +74,7 @@ The Markdown workflows, normalized schemas, and contracts are the portable core.
 
 ### Codex
 
-Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$discover-loops`, `$implementation-quality-governance`, or `$pr-evidence`:
+Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$code-review`, `$discover-loops`, `$implementation-quality-governance`, or `$pr-evidence`:
 
 ```sh
 codex plugin marketplace add suguspnk/agent-workbench
@@ -84,7 +92,7 @@ For personal roles, copy the files to `~/.codex/agents/` instead. Review existin
 
 ### Claude Code
 
-Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:discover-loops`, `/agent-workbench:implementation-quality-governance`, or `/agent-workbench:pr-evidence`:
+Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:code-review`, `/agent-workbench:discover-loops`, `/agent-workbench:implementation-quality-governance`, or `/agent-workbench:pr-evidence`:
 
 ```sh
 claude plugin marketplace add suguspnk/agent-workbench
@@ -146,6 +154,14 @@ Before authorization, disclose that **Endpoint compatibility: `needs-confirmatio
 
 Evidence comments are owned by the authenticated GitHub.com login plus a stable hidden actor marker. The workflow uses a complete bounded scan of at most 10 pages, 1,000 comments, 1 MiB per page, 10 MiB total, and 30 seconds per page; an exhausted limit or incomplete scan fails closed without mutation. It re-reads immediately before an authorized create or update, never changes another actor's comment, and stops on multiple matching comments. GitHub does not provide atomic marker uniqueness, so a concurrent duplicate remains possible; cleanup requires separate authorization.
 
+## Deterministic code review
+
+Invoke `$code-review` with an explicit PR/local target or let it select a conclusively associated PR and otherwise the local working-tree diff. It composes the JavaScript/TypeScript, Node.js/NestJS, React/Next.js, and React Native overlays in a fixed order from repository evidence or a caller override. Review output stays in the task handoff; the workflow never submits a GitHub review or comment.
+
+```sh
+python3.12 skills/code-review/scripts/select_review_scope.py \
+  --replay skills/code-review/tests/scope-cases.json
+```
 ## Automatic subagent routing
 
 Routing is automatic when the host follows the skill and exposes the requested child controls. The lead fills a normalized routing card; the dependency-free router returns a primary role, capability tier, effort, mandatory follow-ups, and downgrade guard:
@@ -159,7 +175,7 @@ The router is deterministic and provider-neutral. It does not spawn agents, modi
 
 ## Current scope
 
-Agent Workbench includes orchestration, proposal-only loop discovery, `implementation-quality-governance`, and local-first `pr-evidence` capabilities; deterministic routing and readiness scoring; offline helper, replay, and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, telemetry upload, deployment logic, loop activation or scheduling, or automatic GitHub side effects. The attachment helper reads a GitHub.com token only during a separately authorized direct invocation and stores it only in a private temporary curl configuration removed on exit.
+Agent Workbench includes orchestration, deterministic code review, proposal-only loop discovery, `implementation-quality-governance`, and local-first `pr-evidence` capabilities; deterministic routing, readiness, and review-scope tools; replay and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, deployment logic, loop activation or scheduling, or automatic GitHub side effects. The attachment helper reads a GitHub.com token only during a separately authorized direct invocation and stores it only in a private temporary curl configuration removed on exit.
 
 ## Development
 

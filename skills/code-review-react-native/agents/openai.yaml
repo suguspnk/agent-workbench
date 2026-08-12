@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review: React Native"
+  short_description: "Add React Native and Expo defect checks"
+  default_prompt: "Use $code-review with $code-review-react-native for the selected mobile scope."

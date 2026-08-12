@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review: JavaScript and TypeScript"
+  short_description: "Add JS and TypeScript defect checks"
+  default_prompt: "Use $code-review with $code-review-javascript-typescript for the selected JS/TS scope."

@@ -10,6 +10,10 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 - Added a GitHub.com-only upload helper with strict repository and file validation, a 25 MiB raster/video allowlist, private temporary credential storage, bounded HTTPS-only upload behavior, sanitized diagnostics, and exact result-URL validation.
 - Recorded the user-attachment endpoint as `needs-confirmation` and treated HTTP `201 Created` as the upload result without a follow-up GET.
 - Added strict offline fake-`gh` and fake-`curl` regression coverage and wired it into bounded repository validation. No live endpoint behavior was tested.
+- Added the provider-neutral `code-review` core with deterministic PR-or-local scope selection, P0-P2 evidence rules, mandatory coverage, check recording, and auditable reviewer/verifier handoffs.
+- Added composable JavaScript/TypeScript, Node.js/NestJS, React/Next.js, and React Native overlays with monorepo-aware detection and official rule provenance.
+- Made the code-review core the mandatory operational contract for both `awb-reviewer` and `awb-verifier` provider profiles.
+- Added deterministic scope replay and focused unit coverage for explicit and discovered targets, failure/ambiguity handling, overlay composition, and caller overrides.
 
 ## 0.7.0 - 2026-08-11
 

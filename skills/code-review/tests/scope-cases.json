@@ -1,0 +1,290 @@
+[
+  {
+    "id": "explicit-pr-wins-when-probe-unavailable",
+    "card": {
+      "target_request": {"kind": "pr", "pr": {"number": 7, "base_ref": "main", "head_ref": "feature", "head_oid": "aaa", "files": ["src/view.tsx"], "patch": ""}},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "unavailable", "candidates": []},
+      "local_changes": {"staged": ["local.ts"], "unstaged": [], "untracked": []},
+      "workspace_files": ["package.json", "src/view.tsx"],
+      "manifests": [{"path": "package.json", "dependencies": ["react", "react-dom"]}],
+      "imports": {"src/view.tsx": ["react"]},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-pr", "target_kind": "pr", "target_number": 7, "overlays": ["javascript-typescript", "react-nextjs"]}
+  },
+  {
+    "id": "explicit-local-never-merges-pr-files",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": [{"number": 7, "base_ref": "main", "head_ref": "feature", "head_oid": "aaa", "files": ["pr-only.ts"], "patch": "fixture-pr-7"}]},
+      "local_changes": {"staged": ["staged.ts"], "unstaged": ["unstaged.ts"], "untracked": ["new.ts"]},
+      "workspace_files": ["staged.ts", "unstaged.ts", "new.ts", "pr-only.ts"],
+      "manifests": [],
+      "imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript"]}
+  },
+  {
+    "id": "unique-branch-pr",
+    "card": {
+      "target_request": {"kind": "auto"},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": [{"number": 8, "base_ref": "main", "head_ref": "feature", "head_oid": "bbb", "files": ["src/server.ts"], "patch": ""}]},
+      "local_changes": {"staged": [], "unstaged": [], "untracked": []},
+      "workspace_files": ["package.json", "src/server.ts"],
+      "manifests": [{"path": "package.json", "dependencies": ["express"]}],
+      "imports": {"src/server.ts": ["node:http"]},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "branch-pr", "target_kind": "pr", "target_number": 8, "overlays": ["javascript-typescript", "node-nestjs"]}
+  },
+  {
+    "id": "detached-head-unique-oid-match",
+    "card": {
+      "target_request": {"kind": "auto"},
+      "git": {"branch": null, "head_oid": "match"},
+      "pr_probe": {"status": "ok", "candidates": [{"number": 9, "base_ref": "main", "head_ref": "one", "head_oid": "other", "files": ["a.py"], "patch": "fixture-pr-9"}, {"number": 10, "base_ref": "main", "head_ref": "two", "head_oid": "match", "files": ["b.ts"], "patch": "fixture-pr-10"}]},
+      "local_changes": {"staged": [], "unstaged": [], "untracked": []},
+      "workspace_files": ["b.ts"],
+      "manifests": [],
+      "imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "detached-head-oid", "target_kind": "pr", "target_number": 10, "overlays": ["javascript-typescript"]}
+  },
+  {
+    "id": "conclusive-no-pr-falls-back-local",
+    "card": {
+      "target_request": {"kind": "auto"},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["src/local.ts"], "untracked": ["src/new.test.ts"]},
+      "workspace_files": ["src/local.ts", "src/new.test.ts"],
+      "manifests": [],
+      "imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "conclusive-no-associated-pr", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript"]}
+  },
+  {
+    "id": "branch-pr-ambiguity-needs-input",
+    "card": {
+      "target_request": {"kind": "auto"},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": [{"number": 11, "base_ref": "main", "head_ref": "feature", "head_oid": "aaa", "files": ["a.ts"], "patch": "fixture-pr-11"}, {"number": 12, "base_ref": "release", "head_ref": "feature", "head_oid": "aaa", "files": ["a.ts"], "patch": "fixture-pr-12"}]},
+      "local_changes": {"staged": [], "unstaged": ["local.ts"], "untracked": []},
+      "workspace_files": ["a.ts", "local.ts"],
+      "manifests": [],
+      "imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "needs_input", "reason": "ambiguous-branch-pr", "target_kind": null, "target_number": null, "overlays": []}
+  },
+  {
+    "id": "probe-failure-is-not-no-pr",
+    "card": {
+      "target_request": {"kind": "auto"},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "unavailable", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["local.ts"], "untracked": []},
+      "workspace_files": ["local.ts"],
+      "manifests": [],
+      "imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "needs_input", "reason": "pr-discovery-unavailable", "target_kind": null, "target_number": null, "overlays": []}
+  },
+  {
+    "id": "monorepo-nearest-boundary-prevents-rn-leakage",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["packages/web/src/page.tsx"], "untracked": []},
+      "workspace_files": ["package.json", "packages/mobile/package.json", "packages/mobile/metro.config.js", "packages/web/package.json", "packages/web/next.config.js", "packages/web/src/page.tsx"],
+      "manifests": [{"path": "package.json", "dependencies": ["react-native"]}, {"path": "packages/mobile/package.json", "dependencies": ["react", "react-native"]}, {"path": "packages/web/package.json", "dependencies": ["react", "react-dom", "next"]}],
+      "imports": {"packages/web/src/page.tsx": ["react", "next/navigation"]},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript", "react-nextjs"]}
+  },
+  {
+    "id": "react-native-does-not-imply-react-web",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "mobile", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": ["apps/mobile/App.tsx"], "unstaged": [], "untracked": []},
+      "workspace_files": ["apps/mobile/package.json", "apps/mobile/metro.config.js", "apps/mobile/App.tsx", "apps/mobile/android/app/build.gradle"],
+      "manifests": [{"path": "apps/mobile/package.json", "dependencies": ["react", "react-native"]}],
+      "imports": {"apps/mobile/App.tsx": ["react", "react-native"]},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript", "react-native"]}
+  },
+  {
+    "id": "all-specialists-compose-in-fixed-order",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": ["apps/api/main.ts"], "unstaged": ["apps/web/page.tsx"], "untracked": ["apps/mobile/App.tsx"]},
+      "workspace_files": ["apps/api/package.json", "apps/api/main.ts", "apps/web/package.json", "apps/web/next.config.js", "apps/web/page.tsx", "apps/mobile/package.json", "apps/mobile/metro.config.js", "apps/mobile/App.tsx"],
+      "manifests": [{"path": "apps/api/package.json", "dependencies": ["@nestjs/core"]}, {"path": "apps/web/package.json", "dependencies": ["react", "react-dom", "next"]}, {"path": "apps/mobile/package.json", "dependencies": ["react", "react-native"]}],
+      "imports": {"apps/api/main.ts": ["@nestjs/core"], "apps/web/page.tsx": ["react"], "apps/mobile/App.tsx": ["react-native"]},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript", "node-nestjs", "react-nextjs", "react-native"]}
+  },
+  {
+    "id": "native-only-android-change-in-rn-package",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "mobile", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": ["apps/mobile/android/app/src/main/java/com/example/MainActivity.kt"], "unstaged": [], "untracked": []},
+      "workspace_files": ["apps/mobile/package.json", "apps/mobile/android/app/src/main/java/com/example/MainActivity.kt"],
+      "manifests": [{"path": "apps/mobile/package.json", "dependencies": ["react-native"]}],
+      "imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript", "react-native"]}
+  },
+  {
+    "id": "native-only-ios-change-in-expo-package",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "mobile", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["apps/mobile/ios/Mobile/AppDelegate.swift"], "untracked": []},
+      "workspace_files": ["apps/mobile/package.json", "apps/mobile/ios/Mobile/AppDelegate.swift"],
+      "manifests": [{"path": "apps/mobile/package.json", "dependencies": ["expo"]}],
+      "imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript", "react-native"]}
+  },
+  {
+    "id": "ancestor-native-path-ignores-nested-rn-package",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "native", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["android/app/build.gradle"], "untracked": []},
+      "workspace_files": ["package.json", "android/app/build.gradle", "packages/mobile/package.json", "packages/mobile/ios/Mobile/AppDelegate.swift"],
+      "manifests": [{"path": "package.json", "dependencies": []}, {"path": "packages/mobile/package.json", "dependencies": ["react-native"]}],
+      "imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": []}
+  },
+  {
+    "id": "root-web-change-ignores-nested-mobile-native-tree",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["src/page.tsx"], "untracked": []},
+      "workspace_files": ["package.json", "src/page.tsx", "packages/mobile/package.json", "packages/mobile/metro.config.js", "packages/mobile/android/app/build.gradle"],
+      "manifests": [{"path": "package.json", "dependencies": ["react", "react-dom"]}, {"path": "packages/mobile/package.json", "dependencies": ["react", "react-native"]}],
+      "imports": {"src/page.tsx": ["react"]},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript", "react-nextjs"]}
+  },
+  {
+    "id": "caller-adds-overlay-and-specialist-implies-js-ts",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "docs", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["README.md"], "untracked": []},
+      "workspace_files": ["README.md"],
+      "manifests": [],
+      "imports": {},
+      "overlay_override": {"add": ["node-nestjs"]}
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript", "node-nestjs"]}
+  },
+  {
+    "id": "caller-exact-set-replaces-auto-and-keeps-order",
+    "card": {
+      "target_request": {"kind": "local"},
+      "git": {"branch": "feature", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["web.tsx"], "untracked": []},
+      "workspace_files": ["package.json", "web.tsx"],
+      "manifests": [{"path": "package.json", "dependencies": ["react-dom", "next"]}],
+      "imports": {"web.tsx": ["next"]},
+      "overlay_override": {"exact": ["react-native"]}
+    },
+    "expected": {"status": "selected", "reason": "explicit-local", "target_kind": "local", "target_number": null, "overlays": ["javascript-typescript", "react-native"]}
+  },
+  {
+    "id": "removed-next-dependency-selects-react-web",
+    "card": {
+      "target_request": {"kind": "pr", "pr": {"number": 31, "base_ref": "main", "head_ref": "remove-next", "head_oid": "aaa", "files": ["package.json"], "patch": "remove next"}},
+      "git": {"branch": "remove-next", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["package.json"], "untracked": []},
+      "workspace_files": ["package.json"],
+      "manifests": [{"path": "package.json", "dependencies": ["react"]}],
+      "before_manifests": [{"path": "package.json", "dependencies": ["react", "next"]}],
+      "imports": {},
+      "before_imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-pr", "target_kind": "pr", "target_number": 31, "overlays": ["javascript-typescript", "react-nextjs"]}
+  },
+  {
+    "id": "removed-nest-import-selects-node",
+    "card": {
+      "target_request": {"kind": "pr", "pr": {"number": 32, "base_ref": "main", "head_ref": "remove-nest", "head_oid": "aaa", "files": ["src/app.ts"], "patch": "remove nest"}},
+      "git": {"branch": "remove-nest", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["src/app.ts"], "untracked": []},
+      "workspace_files": ["package.json", "src/app.ts"],
+      "manifests": [{"path": "package.json", "dependencies": []}],
+      "before_manifests": [{"path": "package.json", "dependencies": []}],
+      "imports": {"src/app.ts": []},
+      "before_imports": {"src/app.ts": ["@nestjs/common"]},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-pr", "target_kind": "pr", "target_number": 32, "overlays": ["javascript-typescript", "node-nestjs"]}
+  },
+  {
+    "id": "removed-react-native-dependency-does-not-infer-react-web",
+    "card": {
+      "target_request": {"kind": "pr", "pr": {"number": 33, "base_ref": "main", "head_ref": "remove-rn", "head_oid": "aaa", "files": ["package.json"], "patch": "remove react native"}},
+      "git": {"branch": "remove-rn", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["package.json"], "untracked": []},
+      "workspace_files": ["package.json"],
+      "manifests": [{"path": "package.json", "dependencies": ["react"]}],
+      "before_manifests": [{"path": "package.json", "dependencies": ["react", "react-native"]}],
+      "imports": {},
+      "before_imports": {},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-pr", "target_kind": "pr", "target_number": 33, "overlays": ["javascript-typescript", "react-native"]}
+  },
+  {
+    "id": "removed-expo-import-does-not-infer-react-web",
+    "card": {
+      "target_request": {"kind": "pr", "pr": {"number": 34, "base_ref": "main", "head_ref": "remove-expo", "head_oid": "aaa", "files": ["src/router.ts"], "patch": "remove expo"}},
+      "git": {"branch": "remove-expo", "head_oid": "aaa"},
+      "pr_probe": {"status": "ok", "candidates": []},
+      "local_changes": {"staged": [], "unstaged": ["src/router.ts"], "untracked": []},
+      "workspace_files": ["package.json", "src/router.ts"],
+      "manifests": [{"path": "package.json", "dependencies": ["react"]}],
+      "before_manifests": [{"path": "package.json", "dependencies": ["react"]}],
+      "imports": {"src/router.ts": ["react"]},
+      "before_imports": {"src/router.ts": ["react", "expo-router"]},
+      "overlay_override": "auto"
+    },
+    "expected": {"status": "selected", "reason": "explicit-pr", "target_kind": "pr", "target_number": 34, "overlays": ["javascript-typescript", "react-native"]}
+  }
+]

@@ -1,7 +1,7 @@
 {
   "name": "agent-workbench",
   "version": "0.8.0",
-  "description": "Portable task orchestration, safe loop discovery, and opt-in pull-request evidence preparation.",
+  "description": "Portable task orchestration, deterministic code review, safe loop discovery, and opt-in pull-request evidence preparation.",
   "author": {
     "name": "suguspnk"
   },
@@ -15,13 +15,14 @@
     "agent-loop",
     "pr-evidence",
     "verification",
+    "code-review",
     "portable"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent Workbench",
-    "shortDescription": "Route work, discover loops, and draft PR evidence",
-    "longDescription": "Agent Workbench coordinates bounded, independently verified subagent work, discovers recurring work that may suit safe agent loops, and prepares privacy-safe pull-request evidence locally before any separately authorized GitHub mutation.",
+    "shortDescription": "Route work, review code, discover loops, and draft PR evidence",
+    "longDescription": "Agent Workbench coordinates bounded, independently verified subagent work, runs deterministic evidence-backed code review, discovers recurring work suitable for safe agent loops, and prepares privacy-safe pull-request evidence locally before separately authorized GitHub mutation. Loop proposals remain inactive until separately authorized.",
     "developerName": "suguspnk",
     "category": "Productivity",
     "capabilities": [
@@ -29,8 +30,8 @@
     ],
     "defaultPrompt": [
       "Use Agent Workbench to orchestrate this task through bounded subagents.",
-      "Use Agent Workbench to discover recurring work and draft a safe loop proposal.",
-      "Use Agent Workbench to prepare a local, privacy-safe pull-request evidence receipt."
+      "Use Agent Workbench to review one PR or local diff with applicable technology overlays.",
+      "Use Agent Workbench to discover safe loops or prepare local PR evidence."
     ]
   }
 }

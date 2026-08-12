@@ -20,6 +20,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.8.0"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+RULE_ID = re.compile(r"^[A-Z]+-\d{3}$")
+MAPPED_CONCERN = re.compile(r"^- \[([A-Z]+-\d{3})\] \S.*")
 EXPECTED_ROLES = {
     "awb_planner": ("gpt-5.6-sol", "high", "read-only"),
     "awb_fast_investigator": ("gpt-5.6-luna", "low", "read-only"),
@@ -41,6 +43,19 @@ CLAUDE_PROFILES = {
     "awb-test-engineer": ("sonnet", "high", True),
     "awb-reviewer": ("opus", "high", True),
     "awb-security-reviewer": ("opus", "xhigh", True),
+}
+CODE_REVIEW_SKILLS = (
+    "code-review",
+    "code-review-javascript-typescript",
+    "code-review-node-nestjs",
+    "code-review-react-nextjs",
+    "code-review-react-native",
+)
+CODE_REVIEW_SOURCE_HOSTS = {
+    "code-review-javascript-typescript": {"www.typescriptlang.org", "tc39.es"},
+    "code-review-node-nestjs": {"nodejs.org", "docs.nestjs.com"},
+    "code-review-react-nextjs": {"react.dev", "nextjs.org"},
+    "code-review-react-native": {"reactnative.dev", "react.dev"},
 }
 
 
@@ -526,6 +541,110 @@ def check_pr_evidence_skill() -> None:
     ):
         if phrase not in openai_yaml:
             fail(f"pr-evidence OpenAI metadata is missing: {phrase}")
+class OverlayProvenanceError(ValueError):
+    """Raised when review concerns and source rows are not one-to-one."""
+
+
+def validate_overlay_provenance(name: str, body: str, provenance: str) -> None:
+    marker = "## Mapped review concerns\n"
+    if marker not in body:
+        raise OverlayProvenanceError(f"{name} must contain a mapped review-concern section")
+    concern_section = body.split(marker, 1)[1].split("\nDo not report", 1)[0]
+    concern_lines = [line for line in concern_section.splitlines() if line.startswith("- ")]
+    if not concern_lines:
+        raise OverlayProvenanceError(f"{name} must contain mapped review concerns")
+
+    concern_ids: list[str] = []
+    for line in concern_lines:
+        match = MAPPED_CONCERN.fullmatch(line)
+        if not match:
+            raise OverlayProvenanceError(
+                f"{name} concern must map to exactly one Rule ID: {line}"
+            )
+        rule_id = match.group(1)
+        if rule_id in concern_ids:
+            raise OverlayProvenanceError(
+                f"{name} maps Rule ID {rule_id} to more than one concern"
+            )
+        concern_ids.append(rule_id)
+
+    reference_ids: list[str] = []
+    for line in provenance.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if not cells or not RULE_ID.fullmatch(cells[0]):
+            continue
+        rule_id = cells[0]
+        if len(cells) != 5 or not all(cells[1:4]) or cells[4] != "2026-08-11":
+            raise OverlayProvenanceError(
+                f"{name}/references.md has a malformed dated rule row: {line}"
+            )
+        if rule_id in reference_ids:
+            raise OverlayProvenanceError(
+                f"{name}/references.md repeats Rule ID {rule_id}"
+            )
+        urls = re.findall(r"\]\((https://[^)]+)\)", cells[3])
+        if not urls:
+            raise OverlayProvenanceError(
+                f"{name}/references.md Rule ID {rule_id} lacks an authoritative URL"
+            )
+        allowed_hosts = CODE_REVIEW_SOURCE_HOSTS[name]
+        for url in urls:
+            host = url.split("/", 3)[2].lower()
+            if host not in allowed_hosts:
+                raise OverlayProvenanceError(
+                    f"{name}/references.md Rule ID {rule_id} uses non-authoritative host {host}"
+                )
+        reference_ids.append(rule_id)
+
+    missing_rows = sorted(set(concern_ids) - set(reference_ids))
+    excess_rows = sorted(set(reference_ids) - set(concern_ids))
+    if missing_rows or excess_rows or len(concern_ids) != len(reference_ids):
+        raise OverlayProvenanceError(
+            f"{name} requires exactly one reference row per concern: "
+            f"missing={missing_rows}, excess={excess_rows}"
+        )
+
+
+def check_code_review_skills() -> None:
+    skill_dirs = sorted(path.name for path in (ROOT / "skills").glob("code-review*"))
+    if skill_dirs != sorted(CODE_REVIEW_SKILLS):
+        fail(f"expected exactly five code-review skills, found: {', '.join(skill_dirs)}")
+
+    for name in CODE_REVIEW_SKILLS:
+        root = ROOT / "skills" / name
+        frontmatter, body = parse_frontmatter(root / "SKILL.md")
+        if frontmatter.get("name") != name or not frontmatter.get("description"):
+            fail(f"{name} must have matching name and non-empty description")
+        require(root / "agents/openai.yaml")
+        if name != "code-review":
+            require(root / "references.md")
+            for phrase in ("Use only with `$code-review`", "core owns"):
+                if phrase not in body:
+                    fail(f"{name} must defer protocol ownership to code-review: {phrase}")
+            provenance = (root / "references.md").read_text(encoding="utf-8")
+            try:
+                validate_overlay_provenance(name, body, provenance)
+            except OverlayProvenanceError as error:
+                fail(str(error))
+
+    core = (ROOT / "skills/code-review/SKILL.md").read_text(encoding="utf-8")
+    for phrase in (
+        "pr-discovery-unavailable",
+        "Never merge PR and local targets",
+        "P0, P1, or P2",
+        "Mark a category `N/A`",
+        "without duplicating the reviewer's full open-ended defect hunt",
+        "Never submit, comment, approve, request changes",
+    ):
+        if phrase not in core:
+            fail(f"code-review core is missing protocol invariant: {phrase}")
+    for relative_path in (
+        "references/review-contract.md",
+        "references/scope-selection.md",
+        "scripts/select_review_scope.py",
+        "tests/scope-cases.json",
+    ):
+        require(ROOT / "skills/code-review" / relative_path)
 
 
 def check_codex_profiles() -> None:
@@ -559,6 +678,8 @@ def check_codex_profiles() -> None:
             fail(f"{relative(path)} must retain the trust boundary")
         if name in {"awb_verifier", "awb_test_engineer"} and "status before and after" not in instructions:
             fail(f"{relative(path)} must require before/after status evidence")
+        if name in {"awb_reviewer", "awb_verifier"} and "code-review skill as the mandatory operational contract" not in instructions:
+            fail(f"{relative(path)} must require the code-review core contract")
 
 
 def check_claude_profiles() -> None:
@@ -591,6 +712,19 @@ def check_claude_profiles() -> None:
             fail(f"{relative(path)} must retain the trust boundary")
         if behaviorally_read_only and "Bash" in tools and "status before and after" not in body:
             fail(f"{relative(path)} shell-capable read-only role must require status evidence")
+        if name in {"awb-reviewer", "awb-verifier"}:
+            if frontmatter.get("skills") != "[agent-workbench:code-review]":
+                fail(f"{relative(path)} must preload the namespaced code-review core")
+            for required_tool in ("Skill", "Read", "Bash"):
+                if required_tool not in tools:
+                    fail(f"{relative(path)} must expose {required_tool} for the review contract")
+            for phrase in (
+                "preloaded `agent-workbench:code-review` skill as the mandatory operational contract",
+                "load each selected overlay through the Skill tool",
+                "fully qualified `agent-workbench:code-review-*` ID",
+            ):
+                if phrase not in body:
+                    fail(f"{relative(path)} lacks effective code-review skill wiring: {phrase}")
 
 
 def check_replays_and_unit_tests() -> None:
@@ -633,6 +767,23 @@ def check_replays_and_unit_tests() -> None:
     if upload_test_result.returncode:
         fail(f"pr-evidence offline upload-helper tests failed:\n{upload_test_result.stdout}{upload_test_result.stderr}")
     print(upload_test_result.stdout.strip())
+
+    review_result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "skills/code-review/scripts/select_review_scope.py"),
+            "--replay",
+            str(ROOT / "skills/code-review/tests/scope-cases.json"),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if review_result.returncode:
+        fail(f"code-review scope replay failed:\n{review_result.stdout}{review_result.stderr}")
+    print(review_result.stdout.strip())
 
     unit_result = subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
@@ -744,6 +895,7 @@ def main() -> None:
     check_skill()
     check_discover_loops_skill()
     check_pr_evidence_skill()
+    check_code_review_skills()
     check_codex_profiles()
     check_claude_profiles()
     check_replays_and_unit_tests()

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review: Node.js and NestJS"
+  short_description: "Add Node and NestJS defect checks"
+  default_prompt: "Use $code-review with $code-review-node-nestjs for the selected Node/Nest scope."

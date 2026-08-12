@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review one PR or local diff with auditable evidence"
+  default_prompt: "Use $code-review to select one target, compose applicable overlays, and return only evidence-backed P0-P2 findings."
