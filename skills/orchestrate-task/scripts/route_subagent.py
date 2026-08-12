@@ -81,7 +81,7 @@ for _role in ("awb_builder", "awb_deep_worker", "awb_migration_worker"):
 ENABLED_ROLES = frozenset(set(ROLE_PROFILE) - {"awb_operator"})
 
 OUTPUT_KEYS = {
-    "primary_role", "task_class", "capability_tier", "effort", "required_followups",
+    "primary_role", "execution_path", "task_class", "capability_tier", "effort", "required_followups",
     "reroute_after_planning", "must_not_downgrade", "required_capabilities",
     "required_modalities", "required_tools", "required_skills", "skill_fallback_required",
     "reasons",
@@ -442,6 +442,24 @@ def _validate_role_requirements(role: str, card: dict[str, Any]) -> None:
             raise RoutingError(f"{role} lacks {field}: {', '.join(missing)}")
 
 
+def _is_fast_path(card: dict[str, str]) -> bool:
+    """Return whether an implementation packet can skip planning and review fan-out."""
+    return (
+        card["work_shape"] == "implement"
+        and card["scope"] in {"one file", "bounded component"}
+        and card["ambiguity"] == "settled"
+        and card["contract"] in {"none", "internal"}
+        and card["tool_loop"] in {"none", "one read/check", "repeated local tools"}
+        and card["impact"] in {"reversible", "user-visible"}
+        and card["evidence_bar"] in {"syntax", "focused test"}
+        and card["context_profile"] in {"compact facts", "focused source set"}
+        and card["parallelism"] == "none"
+        and card["change_authority"] == "owned local paths"
+        and card["router_confidence"] == "high"
+        and not any(card[field] for field in OPTIONAL_LIST_FIELDS)
+    )
+
+
 def route(card_value: Any) -> dict[str, Any]:
     card = validate_card(card_value)
     shape = card["work_shape"]
@@ -576,8 +594,10 @@ def route(card_value: Any) -> dict[str, Any]:
         authorization_reference = None
         authorization_binding = None
     tier, effort = ROLE_PROFILE[role]
+    fast_path = _is_fast_path(card)
     return {
         "primary_role": role,
+        "execution_path": "fast" if fast_path else "standard",
         "task_class": task_class,
         "capability_tier": tier,
         "effort": effort,
