@@ -1,7 +1,7 @@
 {
   "name": "agent-workbench",
   "version": "0.8.0",
-  "description": "Portable task orchestration, deterministic code review, safe loop discovery, opt-in pull-request evidence preparation, and implementation quality governance with independent verification.",
+  "description": "Portable task orchestration, deterministic code review, safe loop discovery, quality governance, opt-in pull-request evidence preparation, and draft-only tech-stack standards.",
   "author": {
     "name": "suguspnk"
   },
@@ -13,6 +13,8 @@
     "agent-workflow",
     "loop-discovery",
     "agent-loop",
+    "tech-stack-standards",
+    "documentation",
     "pr-evidence",
     "quality-governance",
     "ui-ux",
@@ -24,8 +26,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent Workbench",
-    "shortDescription": "Orchestrate work, review code, discover safe loops, and govern quality",
-    "longDescription": "Agent Workbench coordinates bounded, independently verified subagent work, runs deterministic code review, discovers recurring work suitable for safe agent loops, prepares privacy-safe pull-request evidence locally, and applies implementation quality governance. Deterministic readiness gates produce proposal-only loop contracts that remain inactive until separately authorized by a human.",
+    "shortDescription": "Orchestrate work, review code, govern quality, discover loops, and draft stack evidence",
+    "longDescription": "Agent Workbench coordinates bounded, independently verified subagent work, runs deterministic code review, discovers recurring work suitable for safe agent loops, applies implementation quality governance, prepares privacy-safe pull-request evidence locally, and prepares draft-only advisory tech-stack standards. Loop proposals remain inactive until separately authorized.",
     "developerName": "suguspnk",
     "category": "Productivity",
     "capabilities": [

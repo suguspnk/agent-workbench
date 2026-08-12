@@ -22,6 +22,8 @@ Contributions are welcome through issues and pull requests.
 - Keep the attachment helper GitHub.com-only, HTTPS-only, bounded, no-follow, no-POST-retry, curlrc-isolated, private-snapshot based, and strict about descriptor stability, canonical repository identity, regular files, size, MIME/extension agreement, and exact returned URL shape.
 - Keep attachment-helper tests strictly offline with fake `gh` and `curl` executables. Do not use a live endpoint or credential in repository validation.
 - Do not weaken `must_not_downgrade` boundaries without representative acceptance evidence.
+- Keep `tech-stack-standards` explicitly invoked and draft-only on current hosts: preserve both manual-invocation controls, bounded discovery/research, fail-closed privacy and evidence rules, exact manual-block preservation, claim-level citations, and the future host-owned safe-application contract.
+- When updating the personal `tech-stack-standards` source and packaged copy together, keep their complete file trees byte-identical. The unit test checks the personal copy when it is available under `CODEX_HOME` (or the default personal Codex directory).
 - Bump both plugin manifest versions together and update `CHANGELOG.md` for a release.
 - Avoid dependencies unless they provide a material benefit that cannot be achieved with the standard library.
 
