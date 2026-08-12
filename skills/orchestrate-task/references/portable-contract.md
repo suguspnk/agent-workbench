@@ -13,9 +13,39 @@ authorization: local edits; separately listed exact external actions; owned-path
 contract_boundaries: any combination of public API, persistent data, security boundary
 capabilities: observed delegation, identity, isolation, modalities, tools, skills, and unknowns
 routing: task class, primary role, tier, effort, follow-ups, and downgrade guard
+correction_limit / corrections_used: task-wide limit and monotonic used count
+terminal_outcome: active | blocked | cancelled | accepted; inherited by every child packet
 ```
 
 The legacy single `contract` value remains valid. Use `contract_boundaries` when boundaries coexist; never discard one to fit a single enum. Read [model-selection.md](model-selection.md) before routing a child.
+
+<!-- AWB_CORRECTION_CONTRACT_V1_BEGIN -->
+```json
+{
+  "acceptance_requires": "current-tree-evidence-and-fresh-required-verification-and-review",
+  "cancellation_outcome": "cancelled",
+  "corrections_used": "monotonic",
+  "count_event": "post-verification-or-post-review-mutation",
+  "default_correction_limit": 1,
+  "exhaustion_outcome": "blocked",
+  "inheritance": [
+    "replacement-child",
+    "packet-revision",
+    "reroute",
+    "nested-child"
+  ],
+  "reset_on": [],
+  "terminal_outcomes": [
+    "active",
+    "blocked",
+    "cancelled",
+    "accepted"
+  ]
+}
+```
+<!-- AWB_CORRECTION_CONTRACT_V1_END -->
+
+`reset_on` is empty: replacement-child, packet-revision, reroute, and model-effort-escalation are explicitly forbidden resets.
 
 ## Child packet
 
@@ -24,6 +54,8 @@ packet_id / revision: stable unique values
 role: implementation | investigation | operation | test | verification | review
 child_identity / parent_identity: stable harness identities
 fresh_or_reused: fresh | reused, with independence rationale
+correction_limit / corrections_used: inherited task-wide limit and monotonic used count
+terminal_outcome: active | blocked | cancelled | accepted; correction_inheritance: inherited lead outcome and values; reject assignment when exhausted
 objective / acceptance: bounded observable result
 verified_context / assumptions: clearly separated
 owned_paths / out_of_scope_paths: coordination boundaries, not claimed filesystem enforcement
@@ -113,6 +145,6 @@ Follow-ups run in this order: implementation, required test engineering, verifie
 
 ## Lead and portability boundaries
 
-The lead may classify, packetize, assign, monitor, request one budgeted correction, keep the ledger, and accept or block. It must not investigate, implement, test, verify, review, or operate, including after a child failure or timeout. If stable child identity, a required capability/modality/tool, equivalent bounded role, or required isolation is unavailable, block rather than collapse work into the lead. Each child must have a recorded wall-clock wait budget and no more than two total attempts; at timeout, make one supported concise recovery or interrupt attempt, then block rather than polling or replacing the child again. On user cancellation, request interruption where supported, start no further work or external lookup, and report partial state.
+The lead may classify, packetize, assign, monitor, request one budgeted correction cycle, keep the ledger, and accept or block. It must not investigate, implement, test, verify, review, or operate, including after a child failure or timeout. The ledger records `correction_limit`, monotonic `corrections_used`, and `terminal_outcome: active | blocked | cancelled | accepted`; every replacement, reroute, and nested child packet inherits exactly those values, and assignment is rejected when `corrections_used` reaches `correction_limit`. The default task-wide correction-cycle limit is one: every post-verification or post-review mutation increments `corrections_used`, and replacement children, packet revisions, rerouting, or model/effort escalation do not reset the count. When the limit is exhausted, a further required correction sets `terminal_outcome` to `blocked`, never accepted. Acceptance requires current-tree evidence and fresh required verification and review after the final mutation. If stable child identity, a required capability/modality/tool, equivalent bounded role, or required isolation is unavailable, block rather than collapse work into the lead. Each child must have a recorded wall-clock wait budget and no more than two total attempts; at timeout, make one supported concise recovery or interrupt attempt, then block rather than polling or replacing the child again. On user cancellation, set `terminal_outcome` to `cancelled`, request interruption where supported, start no further work or external lookup, and report partial state.
 
 Use native isolation only when observed. Tool lists and instructions do not prove filesystem, network, credential, or process containment. Map portable roles only to exposed provider capabilities and state unavailable controls honestly.

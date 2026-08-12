@@ -34,7 +34,16 @@ PROTECTED_ROOTS = (
     "agents",
     "scripts",
     "skills",
+    "tests",
 )
+PINNED_CANDIDATE_PATHS = {
+    "scripts/verify_repository.py",
+    "skills/orchestrate-task/scripts/route_subagent.py",
+    "skills/orchestrate-task/tests/routing-cases.json",
+    "tests/test_ci_sandbox.py",
+    "tests/test_code_review_scope.py",
+    "tests/test_verify_repository.py",
+}
 TRUSTED_COPY_PATHS = {
     ".github/ci/run_sandboxed_validation.py",
     ".github/ci/trusted_invariant_gate.py",
@@ -319,7 +328,7 @@ def document_contracts(
         )),
         ("CONTRIBUTING.md", "protected-set"): "\n".join((
             "### Complete protected validation set", "",
-            f"The authoritative policy is version `{policy_version}` and its `protected_set_digest` is `{set_digest}`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, and `skills`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 22 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.",
+            f"The authoritative policy is version `{policy_version}` and its `protected_set_digest` is `{set_digest}`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, `skills`, and `tests`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 22 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.",
         )),
         ("CONTRIBUTING.md", "initial-bootstrap"): "\n".join((
             "### Initial protected-base activation", "",
@@ -483,7 +492,7 @@ def generate(
     codex, claude = derive_profiles(root, seed, maximum)
     pinned_candidate_files = {
         path: sha256(strict_file(root, root / path, maximum)[0])
-        for path in sorted(seed["pinned_candidate_files"])
+        for path in sorted(PINNED_CANDIDATE_PATHS)
     }
     workflow_sha256 = sha256(strict_file(root, root / ".github/workflows/validate.yml", maximum)[0])
     trusted_copy_sha256 = {
