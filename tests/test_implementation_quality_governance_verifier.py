@@ -39,6 +39,16 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
         skill_root = self.fixture_root / "skills/implementation-quality-governance"
         skill_root.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(SKILL_SOURCE, skill_root)
+        # A read-only export intentionally preserves source modes.  Normalize
+        # this disposable fixture so each mutation test can write only inside
+        # its own temporary tree without weakening the export under test.
+        for directory, directory_names, file_names in os.walk(skill_root, topdown=False, followlinks=False):
+            for name in (*directory_names, *file_names):
+                path = Path(directory) / name
+                if path.is_symlink():
+                    continue
+                path.chmod(0o755 if path.is_dir() else 0o644)
+        skill_root.chmod(0o755)
         VERIFIER.ROOT = self.fixture_root
         return skill_root
 
@@ -53,6 +63,7 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
             destination = self.fixture_root / relative_path
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+            destination.chmod(0o644)
         VERIFIER.ROOT = self.fixture_root
 
     def manifest_data(self, relative_path: str) -> dict[str, object]:
@@ -557,6 +568,7 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
                     source = REPOSITORY_ROOT / f"skills/{skill_name}/agents/openai.yaml"
                     path = self.fixture_root / f"{skill_name}-{name}.yaml"
                     shutil.copy2(source, path)
+                    path.chmod(0o644)
                     text = path.read_text(encoding="utf-8")
                     line = next(line for line in text.splitlines() if old in line)
                     path.write_text(text.replace(line, "  " + new + line.split(old, 1)[1], 1), encoding="utf-8")

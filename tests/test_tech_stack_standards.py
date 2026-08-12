@@ -38,6 +38,15 @@ def relative_files(root: Path) -> set[str]:
     }
 
 
+def make_fixture_writable(root: Path) -> None:
+    """Allow mutation of a read-only export's copied fixtures without following symlinks."""
+    for path in sorted(root.rglob("*"), key=lambda candidate: len(candidate.parts), reverse=True):
+        if path.is_symlink():
+            continue
+        mode = path.stat().st_mode
+        path.chmod(mode | (0o700 if path.is_dir() else 0o600))
+
+
 def assert_repository_rejects_skill_package(
     test: unittest.TestCase,
     expected_error: str,
@@ -50,6 +59,7 @@ def assert_repository_rejects_skill_package(
         fixture_root = Path(directory)
         fixture_skill_root = fixture_root / "skills/tech-stack-standards"
         shutil.copytree(PACKAGE_ROOT, fixture_skill_root)
+        make_fixture_writable(fixture_skill_root)
         if skill is not None:
             (fixture_skill_root / "SKILL.md").write_text(skill, encoding="utf-8")
         if metadata is not None:
@@ -68,6 +78,7 @@ class TechStackStandardsTests(unittest.TestCase):
             fixture_root = Path(directory)
             fixture_agents = fixture_root / "agents"
             shutil.copytree(ROOT / "agents", fixture_agents)
+            make_fixture_writable(fixture_agents)
             profile = fixture_agents / "awb-builder.md"
             profile.write_text(
                 profile.read_text(encoding="utf-8").replace(
