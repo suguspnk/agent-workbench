@@ -25,7 +25,7 @@ from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping, NamedTuple
+from typing import Any, Iterable, Mapping, NamedTuple
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -135,7 +135,7 @@ CODEX_PROFILES: dict[str, tuple[Any, ...]] = {
     "awb_fast_investigator": ("awb_fast_investigator", "Fast read-only investigator for narrow, repeatable Agent Workbench evidence gathering.", "gpt-5.6-luna", "low", "read-only", "d30e6dbcd5ff921eaf21e6caee923a0c3a92d9ebecdf2082c259525fa3b1d83d"),
     "awb_migration_worker": ("awb_migration_worker", "Extra-high-reasoning worker for bounded schema, persistence, and compatibility migrations.", "gpt-5.6-sol", "xhigh", "workspace-write", "27a633e67f03671b7b6e73b8ef1a9bc00c69c9fc55f74f2ed35beeaeb60ba196"),
     "awb_operator": ("awb_operator", "Reserved unavailable operator profile; external and destructive execution is blocked without a constrained adapter.", "gpt-5.6-sol", "xhigh", "read-only", "80af1575db93d350251f307488ff26a4155e02c768701c2af2398799b1c96fa1"),
-    "awb_planner": ("awb_planner", "Read-only planner for Agent Workbench child-task discovery and implementation plans.", "gpt-5.6-sol", "high", "read-only", "9e2a8450629ab36e141f4b86f4db1c972ec9c2b47e54faadeddb109cbda6992b"),
+    "awb_planner": ("awb_planner", "Read-only planner for Agent Workbench child-task discovery and implementation plans.", "gpt-5.6-sol", "high", "read-only", "f29f8a167c3b849e76486ad4a11453c9526c71a9e14b8670539763910e5a3b7e"),
     "awb_reviewer": ("awb_reviewer", "Independent fresh defect finder using the Agent Workbench code-review contract.", "gpt-5.6-sol", "high", "read-only", "4a83db46c86f8307cf3f457ebc1a3f8ba51c11f873e81eab6731fabe315ce43c"),
     "awb_security_reviewer": ("awb_security_reviewer", "Extra-high-reasoning read-only reviewer for security-sensitive Agent Workbench changes.", "gpt-5.6-sol", "xhigh", "read-only", "1cdfb5e4bc070b22ed336ced00062504d13dc54311d42f60decbc59a8bbd3f4a"),
     "awb_test_engineer": ("awb_test_engineer", "Independent test engineer for Agent Workbench integration, regression, and failure-path validation.", "gpt-5.6-terra", "high", "workspace-write", "44e78e326e2d2df273d33229023af14bee89161dacfc7901072fe429a24f02ad"),
@@ -148,7 +148,7 @@ CLAUDE_PROFILE_TUPLES: dict[str, tuple[Any, ...]] = {
     "awb-fast-investigator": ("awb-fast-investigator", "Fast read-only investigator for settled maps, fixed-schema extraction, classification, and narrow evidence gathering.", "haiku", "low", frozenset({"Read", "Grep", "Glob", "Bash"}), "e8a9890ce8b48a9e6f111ebf13c05e47e36b9c617a28b9261b785f70888fc518"),
     "awb-migration-worker": ("awb-migration-worker", "Maximum-effort worker for bounded schema, persistence, compatibility, backfill, rollout, and rollback changes.", "opus", "xhigh", frozenset({"Read", "Edit", "Write", "Grep", "Glob", "Bash"}), "41816cc7928f1f4a3ffa5782424bf47585ad685a669d3bba6e2dd284037c8573"),
     "awb-operator": ("awb-operator", "Reserved unavailable operator profile; external and destructive execution is blocked without a constrained adapter.", "opus", "xhigh", frozenset({"Read", "Grep", "Glob"}), "d7513ccab0f5e497ce56835e99fcc8b97d716d24791cabeee6ab84557bd12d11"),
-    "awb-planner": ("awb-planner", "Read-only planner for unsettled architecture, ownership, dependency order, acceptance criteria, or child-task boundaries.", "opus", "high", frozenset({"Read", "Grep", "Glob", "Bash"}), "cc0a23e802e6ac575fe325a6eb7c9302a6b5e2a1c0578cd958cd723205723778"),
+    "awb-planner": ("awb-planner", "Read-only planner for unsettled architecture, ownership, dependency order, acceptance criteria, or child-task boundaries.", "opus", "high", frozenset({"Read", "Grep", "Glob", "Bash"}), "694618b323745d57d6716bfc808e85fd8d1af22fc106df43ab8a8e9c7ee8dbce"),
     "awb-reviewer": ("awb-reviewer", "Independent fresh defect finder using the code-review core contract and applicable technology overlays.", "opus", "high", frozenset({"Read", "Grep", "Glob", "Bash", "Skill"}), "bdbcb9613b30722e3cb6ebd30969550b243bcd3e9ff1a9d381d1c87420839209"),
     "awb-security-reviewer": ("awb-security-reviewer", "Maximum-effort findings-only reviewer for authorization, secrets, untrusted input, isolation, and privilege boundaries.", "opus", "xhigh", frozenset({"Read", "Grep", "Glob", "Bash"}), "11c62ce41918094856bf71e8a29884ef2c06ca177ccedf0c4ee6fa3496529cd3"),
     "awb-test-engineer": ("awb-test-engineer", "Independent test engineer for integration, regression, concurrency, migration, and failure-path validation.", "sonnet", "high", frozenset({"Read", "Grep", "Glob", "Bash"}), "039eea064255795f326f3e9bddd388b19ed776d039115b24a5b6cffad88b44a3"),
@@ -194,6 +194,45 @@ CORRECTION_CONTRACT = {
     "reset_on": [],
     "terminal_outcomes": ["active", "blocked", "cancelled", "accepted"],
 }
+PLANNER_LIFECYCLE_BEGIN = "<!-- AWB_PLANNER_LIFECYCLE_V1_BEGIN -->"
+PLANNER_LIFECYCLE_END = "<!-- AWB_PLANNER_LIFECYCLE_V1_END -->"
+PLANNER_LIFECYCLE_CONTRACT = {
+    "cutoff_action": "synthesize-only-already-gathered-evidence",
+    "default_budget_minutes": 12,
+    "default_hard_deadline_minutes": 12,
+    "default_work_cutoff_minutes": 10,
+    "handoff_reserve_minutes": 2,
+    "hard_deadline_outcome": "blocked-no-further-polling-replacement-recovery-or-lead-investigation",
+    "ownership_mismatch_outcomes": {
+        "known_owner": "blocked-or-needs-input-name-missing-objective-owning-repository",
+        "unknown_owner": "blocked-or-needs-input-require-exact-objective-owning-repository-identity-or-path",
+    },
+}
+PLANNER_LIFECYCLE_ACTIVE_DIGESTS = {
+    "orchestrate-task skill": "a16ef674cc75149d8c37ec927541270c4eb7c8c1249d2bd343663d8955e3934e",
+    "portable contract": "0e28db3882b173898bdc05182b232d7cdbdc5975f8c4d928e6509c0407b42e1e",
+}
+PLANNER_OWNERSHIP_OUTCOME_CONTRACT = (
+    "Ownership mismatch outcomes are explicit: `known_owner` returns compact `blocked` or `needs-input` evidence naming the exact supplied missing objective-owning repository; "
+    "`unknown_owner` returns compact `blocked` or `needs-input` evidence with `required_input: exact-objective-owning-repository-identity-or-path`."
+)
+PLANNER_LIFECYCLE_PROFILE_CONTRACT = (
+    "For a 12-minute child budget, set the work cutoff at 10 elapsed minutes and the hard deadline at 12 elapsed minutes, preserving a two-minute handoff reserve. "
+    "At the work cutoff, perform the single recovery action by synthesizing only evidence already gathered; do not start new discovery, a replacement child, another attempt, new polling, or lead investigation. "
+    "At the hard deadline, return `blocked` immediately and perform no further polling, replacement, recovery, or lead investigation. "
+    "Before deeper planning, confirm through bounded local reads that the current repository contains the artifacts that own the objective. "
+    + PLANNER_OWNERSHIP_OUTCOME_CONTRACT
+    + " Never invent a repository, fabricate artifacts, broaden scope, or perform external lookup. "
+    "Planning remains read-only and denies network and credentials. Do not change model, effort, or routing merely because this boundary was reached."
+)
+PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
+    "For a 12-minute child budget, use a 10-minute work cutoff and a 12-minute hard deadline, preserving two minutes for handoff",
+    "synthesize a compact handoff solely from evidence already gathered",
+    "At the hard deadline, set `terminal_outcome` to `blocked` and perform no further polling, replacement, recovery, or lead investigation",
+    PLANNER_OWNERSHIP_OUTCOME_CONTRACT,
+    "Never invent a repository",
+    "Machine planner-lifecycle authority: `portable-contract.md` block `AWB_PLANNER_LIFECYCLE_V1`.",
+)
 CODE_REVIEW_SOURCE_HOSTS = {
     "code-review-javascript-typescript": {"www.typescriptlang.org", "tc39.es"},
     "code-review-node-nestjs": {"nodejs.org", "docs.nestjs.com"},
@@ -1164,6 +1203,703 @@ def validate_portable_correction_contract(portable_contract: str) -> None:
             fail(f"portable correction contract JSON has an invalid value for {field}")
 
 
+def planner_active_markdown(text: str, label: str) -> str:
+    """Canonicalize rendered prose with bounded block then inline parsing."""
+    physical_lines = governance_physical_lines(text)
+    uncommented = [list(line) for line in physical_lines]
+    planner_remove_block_comments(uncommented, label)
+    uncommented_lines = ["".join(line) for line in uncommented]
+    blocks = planner_inline_blocks(uncommented_lines, label)
+    for block in blocks:
+        planner_scan_inline_block(uncommented, block, label)
+    uncommented_lines = ["".join(line) for line in uncommented]
+    active_line_numbers = [
+        number
+        for number, _, _, _ in planner_markdown_line_details(
+            uncommented_lines, label
+        )[0]
+    ]
+    return "\n".join(uncommented_lines[number - 1] for number in active_line_numbers) + "\n"
+
+
+def planner_remove_block_comments(lines: list[list[str]], label: str) -> None:
+    """Remove complete HTML block comments before Markdown code classification."""
+    original_lines = ["".join(line) for line in lines]
+    details, raw_html_lines = planner_markdown_line_details(original_lines, label)
+    contexts = {
+        number: (content, containers)
+        for number, content, containers, _ in details
+    }
+    candidates = {
+        (number, original_lines[number - 1].find("<!--"))
+        for number, (content, _) in contexts.items()
+        if number not in raw_html_lines
+        if (indent := len(content) - len(content.lstrip(" "))) <= 3
+        and content.startswith("<!--", indent)
+    }
+    code_comment_starts = planner_comment_starts_in_code(
+        original_lines, candidates, label
+    )
+    line_number = 1
+    while line_number <= len(lines):
+        context = contexts.get(line_number)
+        if context is None or line_number in raw_html_lines:
+            line_number += 1
+            continue
+        line = original_lines[line_number - 1]
+        content, containers = context
+        indent = len(content) - len(content.lstrip(" "))
+        if indent > 3 or not content.startswith("<!--", indent):
+            line_number += 1
+            continue
+        cursor = line.find("<!--")
+        if cursor < 0 or (line_number, cursor) in code_comment_starts:
+            line_number += 1
+            continue
+        if planner_malformed_comment_opener(line, cursor):
+            fail(f"{label} has a malformed HTML comment opener")
+        opening_line = line_number
+        lines[line_number - 1][cursor:cursor + 4] = [" "] * 4
+        cursor += 4
+        while True:
+            line = original_lines[line_number - 1]
+            if line_number > opening_line and containers:
+                list_only_blank = governance_ascii_blank(line) and all(
+                    kind == "list" for kind, _ in containers
+                )
+                if not list_only_blank:
+                    _, _, _, matched, _ = match_governance_container_prefix(
+                        line, containers
+                    )
+                if not list_only_blank and len(matched) != len(containers):
+                    fail(f"{label} has an HTML comment crossing a Markdown container boundary")
+            if planner_scan_block_comment_line(lines[line_number - 1], line, cursor, label) is None:
+                line_number += 1
+                if line_number > len(lines):
+                    fail(f"{label} has an unterminated HTML comment")
+                cursor = 0
+                continue
+            break
+        line_number += 1
+
+
+def planner_scan_block_comment_line(
+    mutable_line: list[str], line: str, cursor: int, label: str
+) -> int | None:
+    """Scan one comment-body suffix forward without allocating suffix strings."""
+    last_backtick = line.rfind("`")
+    while cursor < len(line):
+        if line.startswith("<!--", cursor):
+            fail(f"{label} has a nested HTML comment")
+        if line.startswith("--", cursor) and not line.startswith("-->", cursor):
+            fail(f"{label} has a malformed HTML comment token")
+        if line[cursor] in {"`", "~"}:
+            run = delimiter_run(line, cursor, line[cursor])
+            if run >= 3 and (line[cursor] == "~" or last_backtick < cursor + run):
+                fail(f"{label} has fence syntax inside an active HTML comment")
+            mutable_line[cursor:cursor + run] = [" "] * run
+            cursor += run
+            continue
+        mutable_line[cursor] = " "
+        if line.startswith("-->", cursor):
+            mutable_line[cursor:cursor + 3] = [" "] * 3
+            return cursor + 3
+        cursor += 1
+    return None
+
+
+def planner_comment_starts_in_code(
+    physical_lines: list[str],
+    candidates: Iterable[tuple[int, int]],
+    label: str = "planner Markdown",
+) -> set[tuple[int, int]]:
+    """Locate candidate comment starts with one monotonic code-span sweep."""
+    starts: set[tuple[int, int]] = set()
+    candidate_by_line = dict(candidates)
+    for block in planner_inline_blocks(physical_lines, label):
+        pieces = [physical_lines[number - 1] for number in block]
+        block_candidates: list[tuple[int, tuple[int, int]]] = []
+        text_offset = 0
+        for line_index, piece in enumerate(pieces):
+            number = block[line_index]
+            column = candidate_by_line.get(number)
+            if column is not None and 0 <= column < len(piece):
+                block_candidates.append((text_offset + column, (number, column)))
+            text_offset += len(piece) + 1
+        if not block_candidates:
+            continue
+        text = "\n".join(pieces)
+        closers = planner_inline_code_closers(text)
+        escaped_at = planner_escape_parity(text)
+        candidate_index = 0
+        cursor = 0
+        while cursor < len(text) and candidate_index < len(block_candidates):
+            if text[cursor] != "`" or escaped_at[cursor]:
+                cursor += 1
+                continue
+            run = delimiter_run(text, cursor, "`")
+            closing = closers.get(cursor)
+            if closing is None:
+                cursor += run
+                continue
+            end = closing + run
+            span_start = cursor + run
+            while (
+                candidate_index < len(block_candidates)
+                and block_candidates[candidate_index][0] < span_start
+            ):
+                candidate_index += 1
+            while (
+                candidate_index < len(block_candidates)
+                and block_candidates[candidate_index][0] < end
+            ):
+                starts.add(block_candidates[candidate_index][1])
+                candidate_index += 1
+            cursor = end
+    return starts
+
+
+def planner_inline_blocks(
+    physical_lines: list[str], label: str = "planner Markdown"
+) -> list[list[int]]:
+    """Classify complete paragraph/heading blocks, including valid lazy lines."""
+    contexts, raw_html_lines = planner_markdown_line_details(physical_lines, label)
+    blocks: list[list[int]] = []
+    current: list[int] = []
+    previous_number = 0
+    previous_containers: tuple[tuple[str, int], ...] | None = None
+    previous_content = ""
+    for number, content, containers, starts_item in contexts:
+        if number in raw_html_lines:
+            if current:
+                blocks.append(current)
+                current = []
+            previous_number = number
+            previous_containers = None
+            previous_content = ""
+            continue
+        boundary = number != previous_number + 1 or starts_item
+        boundary = boundary or bool(current and planner_paragraph_boundary(content, False))
+        if current and previous_containers is not None:
+            boundary = boundary or not governance_container_prefix_survives(
+                containers, previous_containers
+            )
+        if current and planner_paragraph_boundary(previous_content, len(current) > 1):
+            boundary = True
+        if boundary and current:
+            blocks.append(current)
+            current = []
+        current.append(number)
+        previous_number = number
+        previous_containers = containers
+        previous_content = content
+        if planner_paragraph_boundary(content, False):
+            blocks.append(current)
+            current = []
+            previous_containers = None
+    if current:
+        blocks.append(current)
+    return blocks
+
+
+def planner_markdown_line_details(
+    physical_lines: list[str], label: str
+) -> tuple[
+    list[tuple[int, str, tuple[tuple[str, int], ...], bool]], set[int]
+]:
+    """Classify planner Markdown and raw HTML in one bounded forward pass."""
+    active_lines: list[tuple[int, str, tuple[tuple[str, int], ...], bool]] = []
+    raw_html_lines: set[int] = set()
+    active_list: tuple[tuple[str, int], ...] | None = None
+    fence: tuple[tuple[str, int], tuple[tuple[str, int], ...]] | None = None
+    raw_html: tuple[str, str | None, tuple[tuple[str, int], ...]] | None = None
+    paragraph_open = False
+    paragraph_containers: tuple[tuple[str, int], ...] | None = None
+    for line_number, line in enumerate(physical_lines, start=1):
+        if raw_html is not None:
+            kind, terminator, prefix = raw_html
+            raw_content = planner_raw_html_container_content(line, prefix)
+            if raw_content is not None:
+                if kind == "blank" and governance_ascii_blank(raw_content):
+                    raw_html = None
+                else:
+                    raw_html_lines.add(line_number)
+                    if not governance_ascii_blank(raw_content):
+                        active_lines.append(
+                            (line_number, raw_content, prefix, False)
+                        )
+                    if terminator is not None and planner_raw_html_terminated(
+                        raw_content, terminator
+                    ):
+                        raw_html = None
+                    continue
+            else:
+                raw_html = None
+
+        if fence is not None:
+            if governance_ascii_blank(line):
+                _, prefix = fence
+                if any(kind == "quote" for kind, _ in prefix):
+                    surviving_lists: list[tuple[str, int]] = []
+                    for container in prefix:
+                        if container[0] == "quote":
+                            break
+                        surviving_lists.append(container)
+                    fence = None
+                    active_list = tuple(surviving_lists) or None
+                continue
+            marker, prefix = fence
+            index, column, baseline, matched, matched_list = (
+                match_governance_container_prefix(line, prefix)
+            )
+            if len(matched) == len(prefix):
+                if closes_fence(
+                    normalize_governance_remainder(line, index, column, baseline),
+                    marker,
+                ):
+                    fence = None
+                continue
+            fence = None
+            active_list = matched if matched_list else None
+
+        content, active_list, prefix, starts_list, depth, ambiguous = (
+            governance_markdown_content(line, active_list, paragraph_open)
+        )
+        if depth:
+            fail(
+                f"{label} exceeds the container depth limit "
+                f"of {MAX_GOVERNANCE_CONTAINER_DEPTH}"
+            )
+        if ambiguous:
+            fail(f"{label} has ambiguous container tab layout")
+        if starts_list or (
+            paragraph_open
+            and paragraph_containers is not None
+            and not governance_container_prefix_survives(prefix, paragraph_containers)
+        ):
+            paragraph_open = False
+            paragraph_containers = None
+        if governance_ascii_blank(content):
+            paragraph_open = False
+            paragraph_containers = None
+            continue
+        if leading_visual_indent(content) >= 4 and not paragraph_open:
+            continue
+        opener = fence_opener(content)
+        if opener is not None:
+            fence = opener, prefix
+            paragraph_open = False
+            paragraph_containers = None
+            continue
+
+        active_lines.append((line_number, content, prefix, starts_list))
+        raw_start = planner_raw_html_start(content)
+        if raw_start is not None:
+            kind, terminator = raw_start
+            raw_html_lines.add(line_number)
+            if terminator is None or not planner_raw_html_terminated(content, terminator):
+                raw_html = kind, terminator, prefix
+            paragraph_open = False
+            paragraph_containers = None
+            continue
+        if governance_paragraph_ending_block(content, paragraph_open):
+            paragraph_open = False
+            paragraph_containers = None
+        else:
+            if not paragraph_open:
+                paragraph_containers = prefix
+            paragraph_open = True
+    return active_lines, raw_html_lines
+
+
+def planner_raw_html_container_content(
+    line: str, prefix: tuple[tuple[str, int], ...]
+) -> str | None:
+    """Return raw-block content only while its concrete containers survive."""
+    index, column, baseline, matched, _ = match_governance_container_prefix(
+        line, prefix
+    )
+    content = normalize_governance_remainder(line, index, column, baseline)
+    if len(matched) == len(prefix):
+        return content
+    if governance_ascii_blank(content) and all(
+        kind == "list" for kind, _ in prefix[len(matched):]
+    ):
+        return ""
+    return None
+
+
+def planner_raw_html_start(line: str) -> tuple[str, str | None] | None:
+    """Recognize the bounded CommonMark raw blocks that interrupt paragraphs."""
+    indent = len(line) - len(line.lstrip(" "))
+    if indent > 3:
+        return None
+    content = line[indent:]
+    if content.startswith("<?"):
+        return "close", "?>"
+    if content.startswith("<![CDATA["):
+        return "close", "]] >".replace(" ", "")
+    if len(content) >= 3 and content.startswith("<!") and "A" <= content[2] <= "Z":
+        return "close", ">"
+    tag = planner_raw_html_tag_prefix(content)
+    if tag is None:
+        return None
+    name, closing, boundary = tag
+    if not closing and name in RAW_HTML_UNTIL_CLOSE and boundary != "/":
+        return "close", f"</{name}>"
+    if name in RAW_HTML_BLOCK_TAGS:
+        return "blank", None
+    return None
+
+
+def planner_raw_html_tag_prefix(line: str) -> tuple[str, bool, str] | None:
+    """Parse the CommonMark type-1/type-6 tag-name lookahead without backtracking."""
+    if not line.startswith("<"):
+        return None
+    cursor = 1
+    closing = cursor < len(line) and line[cursor] == "/"
+    if closing:
+        cursor += 1
+    name_start = cursor
+    if cursor >= len(line) or not (
+        "a" <= line[cursor] <= "z" or "A" <= line[cursor] <= "Z"
+    ):
+        return None
+    cursor += 1
+    while cursor < len(line) and (
+        "a" <= line[cursor] <= "z"
+        or "A" <= line[cursor] <= "Z"
+        or "0" <= line[cursor] <= "9"
+        or line[cursor] == "-"
+    ):
+        cursor += 1
+    if cursor == len(line):
+        return line[name_start:cursor].lower(), closing, ""
+    boundary = line[cursor]
+    if boundary in {" ", "\t", ">"}:
+        return line[name_start:cursor].lower(), closing, boundary
+    if boundary == "/" and line[cursor:cursor + 2] == "/>":
+        return line[name_start:cursor].lower(), closing, boundary
+    return None
+
+
+def planner_raw_html_terminated(line: str, terminator: str) -> bool:
+    """Check a close token once, case-insensitively only for HTML tag closes."""
+    if terminator.startswith("</"):
+        return terminator in line.lower()
+    return terminator in line
+
+
+def planner_paragraph_boundary(line: str, paragraph_open: bool) -> bool:
+    """Recognize block starts that stop CommonMark inline continuation."""
+    return governance_paragraph_ending_block(
+        line, paragraph_open
+    ) or planner_interrupting_raw_html_block(line)
+
+
+def planner_interrupting_raw_html_block(line: str) -> bool:
+    """Recognize the CommonMark raw HTML block types that interrupt paragraphs."""
+    indent = len(line) - len(line.lstrip(" "))
+    if indent > 3:
+        return False
+    content = line[indent:]
+    # HTML comments are classified first by planner_remove_block_comments(),
+    # which can distinguish a real block comment from a literal inside code.
+    if content.startswith(("<?", "<![CDATA[")):
+        return True
+    if len(content) >= 3 and content.startswith("<!") and "A" <= content[2] <= "Z":
+        return True
+    if not content.startswith("<"):
+        return False
+    cursor = 1
+    if cursor < len(content) and content[cursor] == "/":
+        cursor += 1
+    name_start = cursor
+    while cursor < len(content) and (
+        "a" <= content[cursor] <= "z"
+        or "A" <= content[cursor] <= "Z"
+        or "0" <= content[cursor] <= "9"
+        or content[cursor] == "-"
+    ):
+        cursor += 1
+    if cursor == name_start:
+        return False
+    if cursor < len(content) and content[cursor] not in {" ", "\t", "/", ">"}:
+        return False
+    if cursor < len(content) and content[cursor] == "/" and content[cursor:cursor + 2] != "/>":
+        return False
+    return content[name_start:cursor].lower() in (
+        RAW_HTML_BLOCK_TAGS | RAW_HTML_UNTIL_CLOSE
+    )
+
+
+def planner_scan_inline_block(lines: list[list[str]], block: list[int], label: str) -> None:
+    """Scan one complete inline block once; code bytes remain byte-for-byte inert."""
+    pieces = ["".join(lines[number - 1]) for number in block]
+    text = "\n".join(pieces)
+    closers = planner_inline_code_closers(text)
+    escaped_at = planner_escape_parity(text)
+    offsets: list[tuple[int, int]] = []
+    for line_index, piece in enumerate(pieces):
+        offsets.extend((block[line_index] - 1, column) for column in range(len(piece)))
+        if line_index + 1 < len(pieces):
+            offsets.append((-1, -1))
+    cursor = 0
+    comment_open = False
+    while cursor < len(text):
+        if comment_open:
+            if text.startswith("<!--", cursor):
+                fail(f"{label} has a nested HTML comment")
+            if text.startswith("--", cursor) and not text.startswith("-->", cursor):
+                fail(f"{label} has a malformed HTML comment token")
+            if offsets[cursor][0] >= 0:
+                row, column = offsets[cursor]
+                lines[row][column] = " "
+            if text.startswith("-->", cursor):
+                for index in range(cursor, cursor + 3):
+                    if offsets[index][0] >= 0:
+                        row, column = offsets[index]
+                        lines[row][column] = " "
+                comment_open = False
+                cursor += 3
+            else:
+                cursor += 1
+            continue
+        escaped = escaped_at[cursor]
+        if text[cursor] == "`" and not escaped:
+            run = delimiter_run(text, cursor, "`")
+            closing = closers.get(cursor)
+            if closing is not None:
+                cursor = closing + run
+                continue
+            cursor += run
+            continue
+        if text[cursor] == "<" and not escaped:
+            tag_end = planner_inline_html_tag_end(text, cursor, label)
+            if tag_end is not None:
+                cursor = tag_end
+                continue
+        if escaped and text.startswith("<!--->", cursor):
+            cursor += 6
+            continue
+        if escaped and text.startswith(("<!-->", "--!>"), cursor):
+            cursor += 5 if text.startswith("<!-->", cursor) else 4
+            continue
+        if text.startswith("--!>", cursor) and not escaped:
+            fail(f"{label} has a malformed HTML comment token")
+        if text.startswith("-->", cursor) and not escaped:
+            fail(f"{label} has an unmatched HTML comment closer")
+        if not text.startswith("<!--", cursor) or escaped:
+            cursor += 1
+            continue
+        if planner_malformed_comment_opener(text, cursor):
+            fail(f"{label} has a malformed HTML comment opener")
+        for index in range(cursor, cursor + 4):
+            row, column = offsets[index]
+            lines[row][column] = " "
+        comment_open = True
+        cursor += 4
+    if comment_open:
+        fail(f"{label} has an inline HTML comment crossing a Markdown block boundary")
+
+
+def planner_inline_html_tag_end(text: str, cursor: int, label: str) -> int | None:
+    """Return one valid inline HTML tag end while honoring quoted attributes."""
+    whitespace = {" ", "\t", "\n"}
+    index = cursor + 1
+    closing = index < len(text) and text[index] == "/"
+    if closing:
+        index += 1
+    if index >= len(text) or not (
+        "A" <= text[index] <= "Z" or "a" <= text[index] <= "z"
+    ):
+        return None
+    index += 1
+    while index < len(text) and (
+        "A" <= text[index] <= "Z"
+        or "a" <= text[index] <= "z"
+        or "0" <= text[index] <= "9"
+        or text[index] == "-"
+    ):
+        index += 1
+    if closing:
+        while index < len(text) and text[index] in whitespace:
+            index += 1
+        return index + 1 if index < len(text) and text[index] == ">" else None
+
+    while index < len(text):
+        attribute_boundary = index
+        while index < len(text) and text[index] in whitespace:
+            index += 1
+        if index < len(text) and text[index] == ">":
+            return index + 1
+        if text[index:index + 2] == "/>":
+            return index + 2
+        if index == attribute_boundary or index >= len(text) or not (
+            "A" <= text[index] <= "Z"
+            or "a" <= text[index] <= "z"
+            or text[index] in {"_", ":"}
+        ):
+            return None
+        index += 1
+        while index < len(text) and (
+            "A" <= text[index] <= "Z"
+            or "a" <= text[index] <= "z"
+            or "0" <= text[index] <= "9"
+            or text[index] in {"_", ".", ":", "-"}
+        ):
+            index += 1
+        value_boundary = index
+        while index < len(text) and text[index] in whitespace:
+            index += 1
+        if index >= len(text) or text[index] != "=":
+            index = value_boundary
+            continue
+        index += 1
+        while index < len(text) and text[index] in whitespace:
+            index += 1
+        if index >= len(text):
+            return None
+        if text[index] in {"\"", "'"}:
+            quote = text[index]
+            index += 1
+            while index < len(text) and text[index] != quote:
+                index += 1
+            if index >= len(text):
+                fail(f"{label} has an unterminated quoted inline HTML attribute")
+            index += 1
+            continue
+        value_start = index
+        while (
+            index < len(text)
+            and text[index] not in whitespace
+            and text[index] not in {"\"", "'", "=", "<", ">", "`"}
+        ):
+            index += 1
+        if index == value_start:
+            return None
+    return None
+
+
+def planner_escape_parity(text: str) -> bytearray:
+    """Precompute whether each byte follows an odd backslash run in one pass."""
+    escaped_at = bytearray(len(text))
+    odd_backslashes = False
+    for index, character in enumerate(text):
+        if character == "\\":
+            odd_backslashes = not odd_backslashes
+            continue
+        escaped_at[index] = odd_backslashes
+        odd_backslashes = False
+    return escaped_at
+
+
+def planner_malformed_comment_opener(text: str, cursor: int) -> bool:
+    """Recognize the two forbidden abrupt endings of an HTML comment opener."""
+    return text.startswith(("<!-->", "<!--->"), cursor)
+
+
+def planner_inline_code_closers(line: str) -> dict[int, int]:
+    """Map maximal runs to their next equal run; opener escaping is checked later."""
+    runs: list[tuple[int, int]] = []
+    index = 0
+    while index < len(line):
+        if line[index] != "`":
+            index += 1
+            continue
+        run = delimiter_run(line, index, "`")
+        runs.append((index, run))
+        index += run
+    next_by_run: dict[int, int] = {}
+    closers: dict[int, int] = {}
+    for start, run in reversed(runs):
+        if run in next_by_run:
+            closers[start] = next_by_run[run]
+        next_by_run[run] = start
+    return closers
+
+
+def validate_planner_lifecycle_contract(
+    skill_body: str,
+    portable_contract: str,
+    codex_planner_body: str,
+    claude_planner_body: str,
+) -> None:
+    active_skill_body = planner_active_markdown(skill_body, "orchestrate-task skill")
+    for phrase in PLANNER_LIFECYCLE_SKILL_REQUIREMENTS:
+        if phrase not in active_skill_body:
+            fail(f"orchestrate-task planner lifecycle is missing: {phrase}")
+    for label, body in (
+        ("orchestrate-task skill", skill_body),
+        ("portable contract", portable_contract),
+    ):
+        active_body = planner_active_markdown(body, label)
+        if active_body.count(PLANNER_OWNERSHIP_OUTCOME_CONTRACT) != 1:
+            fail(f"{label} must contain the canonical known_owner and unknown_owner outcomes")
+        actual_digest = hashlib.sha256(active_body.encode("utf-8")).hexdigest()
+        if actual_digest != PLANNER_LIFECYCLE_ACTIVE_DIGESTS[label]:
+            fail(f"{label} active planner lifecycle prose differs from the canonical surface")
+    if portable_contract.count(PLANNER_LIFECYCLE_BEGIN) != 1 or portable_contract.count(PLANNER_LIFECYCLE_END) != 1:
+        fail("portable contract must contain exactly one canonical planner lifecycle block")
+    begin = portable_contract.index(PLANNER_LIFECYCLE_BEGIN) + len(PLANNER_LIFECYCLE_BEGIN)
+    end = portable_contract.index(PLANNER_LIFECYCLE_END)
+    if begin >= end:
+        fail("portable planner lifecycle contract markers are out of order")
+    match = re.fullmatch(
+        r"\n```json\n(?P<payload>.*)\n```\n",
+        portable_contract[begin:end],
+        re.DOTALL,
+    )
+    if match is None:
+        fail("portable planner lifecycle contract must use one exact JSON fence between its markers")
+    try:
+        check_json_nesting(match.group("payload"))
+        value = json.loads(match.group("payload"), object_pairs_hook=reject_duplicate_json_keys)
+        check_json_nodes(value)
+    except (json.JSONDecodeError, RecursionError, MemoryError, ValueError) as error:
+        fail(f"portable planner lifecycle contract JSON is invalid: {safe_diagnostic(str(error))}")
+    if not isinstance(value, dict) or set(value) != set(PLANNER_LIFECYCLE_CONTRACT):
+        fail("portable planner lifecycle contract has missing or unknown fields")
+    for field, expected in PLANNER_LIFECYCLE_CONTRACT.items():
+        actual = value[field]
+        if type(actual) is not type(expected) or actual != expected:
+            fail(f"portable planner lifecycle contract has an invalid value for {field}")
+    cutoff = value["default_work_cutoff_minutes"]
+    deadline = value["default_hard_deadline_minutes"]
+    reserve = value["handoff_reserve_minutes"]
+    if not (0 < cutoff < deadline == value["default_budget_minutes"]):
+        fail("planner work cutoff must precede the positive hard deadline")
+    if deadline - cutoff != reserve or reserve <= 0:
+        fail("planner lifecycle must preserve the recorded positive handoff reserve")
+    for label, body, expected_digest in (
+        ("Codex", codex_planner_body, CODEX_PROFILES["awb_planner"][5]),
+        ("Claude", claude_planner_body, CLAUDE_PROFILE_TUPLES["awb-planner"][5]),
+    ):
+        if hashlib.sha256(body.encode("utf-8")).hexdigest() != expected_digest:
+            fail(f"{label} planner profile differs from the complete reviewed template")
+        if body.count(PLANNER_LIFECYCLE_PROFILE_CONTRACT) != 1:
+            fail(f"{label} planner profile differs from the canonical lifecycle and ownership gate")
+        if body.count(PLANNER_OWNERSHIP_OUTCOME_CONTRACT) != 1:
+            fail(f"{label} planner profile must contain the canonical known_owner and unknown_owner outcomes")
+        if NON_OPERATOR_AUTHORIZATION not in body:
+            fail(f"{label} planner profile must retain network and credential denial")
+
+
+def check_planner_lifecycle_contract() -> None:
+    skill_body = parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+    portable_contract = safe_read_text(ROOT / "skills/orchestrate-task/references/portable-contract.md")
+    codex_planner = parse_codex_profile(
+        ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+    )["developer_instructions"]
+    claude_planner = parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+    validate_planner_lifecycle_contract(
+        skill_body,
+        portable_contract,
+        codex_planner,
+        claude_planner,
+    )
+
+
 def reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -1841,7 +2577,11 @@ def consume_one_governance_list_marker(
         marker_end += 1
     else:
         digit_start = marker_end
-        while marker_end < len(line) and line[marker_end].isdigit() and marker_end - digit_start < 9:
+        while (
+            marker_end < len(line)
+            and "0" <= line[marker_end] <= "9"
+            and marker_end - digit_start < 9
+        ):
             marker_end += 1
         if (
             marker_end == digit_start
@@ -2275,12 +3015,43 @@ def check_direct_local_markdown_links(snapshot: GovernanceSnapshot) -> None:
 
 def governance_active_markdown_lines(text: str) -> list[tuple[int, str]]:
     """Return non-fenced, non-indented Markdown content with containers normalized."""
-    active_lines: list[tuple[int, str]] = []
+    return [
+        (line_number, content)
+        for line_number, content, _ in governance_active_markdown_line_contexts(text)
+    ]
+
+
+def governance_active_markdown_line_contexts(
+    text: str,
+) -> list[tuple[int, str, tuple[tuple[str, int], ...]]]:
+    """Return active Markdown content together with its concrete containers."""
+    return governance_active_markdown_line_contexts_from_lines(
+        governance_physical_lines(text)
+    )
+
+
+def governance_active_markdown_line_contexts_from_lines(
+    physical_lines: list[str],
+) -> list[tuple[int, str, tuple[tuple[str, int], ...]]]:
+    """Return active contexts from physical lines already split by the caller."""
+    return [
+        (line_number, content, containers)
+        for line_number, content, containers, _ in governance_active_markdown_line_details(
+            physical_lines
+        )
+    ]
+
+
+def governance_active_markdown_line_details(
+    physical_lines: list[str],
+) -> list[tuple[int, str, tuple[tuple[str, int], ...], bool]]:
+    """Return active contexts and CommonMark-valid list-item starts."""
+    active_lines: list[tuple[int, str, tuple[tuple[str, int], ...], bool]] = []
     active_list: tuple[tuple[str, int], ...] | None = None
     fence: tuple[tuple[str, int], tuple[tuple[str, int], ...]] | None = None
     paragraph_open = False
     paragraph_containers: tuple[tuple[str, int], ...] | None = None
-    for line_number, line in enumerate(governance_physical_lines(text), start=1):
+    for line_number, line in enumerate(physical_lines, start=1):
         if fence is not None:
             if governance_ascii_blank(line):
                 _, prefix = fence
@@ -2330,7 +3101,7 @@ def governance_active_markdown_lines(text: str) -> list[tuple[int, str]]:
             paragraph_open = False
             paragraph_containers = None
             continue
-        active_lines.append((line_number, content))
+        active_lines.append((line_number, content, prefix, starts_list))
         if governance_paragraph_ending_block(content, paragraph_open):
             paragraph_open = False
             paragraph_containers = None
@@ -2499,10 +3270,14 @@ def governance_snapshot_markdown_links(
 
 
 RAW_HTML_BLOCK_TAGS = frozenset({
-    "address", "article", "aside", "blockquote", "details", "dialog", "div", "dl",
-    "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4",
-    "h5", "h6", "header", "hr", "main", "menu", "nav", "ol", "p", "pre", "script",
-    "section", "style", "table", "textarea", "ul",
+    "address", "article", "aside", "base", "basefont", "blockquote", "body",
+    "caption", "center", "col", "colgroup", "dd", "details", "dialog", "dir",
+    "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form",
+    "frame", "frameset", "h1", "h2", "h3", "h4", "h5", "h6", "head",
+    "header", "hr", "html", "iframe", "legend", "li", "link", "main", "menu",
+    "menuitem", "nav", "noframes", "ol", "optgroup", "option", "p", "param",
+    "search", "section", "summary", "table", "tbody", "td", "tfoot", "th",
+    "thead", "title", "tr", "track", "ul",
 })
 RAW_HTML_UNTIL_CLOSE = frozenset({"pre", "script", "style", "textarea"})
 
@@ -2557,7 +3332,7 @@ def governance_raw_html_suppressed_lines(text: str) -> set[int]:
                 mode = ("declaration", None, 0)
             continue
         tag = raw_html_opening_tag(stripped)
-        if tag is None or tag not in RAW_HTML_BLOCK_TAGS:
+        if tag is None or tag not in RAW_HTML_BLOCK_TAGS | RAW_HTML_UNTIL_CLOSE:
             continue
         suppressed.add(line_number)
         depth = raw_html_tag_delta(stripped, tag)
@@ -2773,7 +3548,7 @@ def governance_container_line(line: str, active_list_indent: int | None) -> tupl
             index += 2
             continue
         digits_end = index
-        while digits_end < len(line) and line[digits_end].isdigit():
+        while digits_end < len(line) and "0" <= line[digits_end] <= "9":
             digits_end += 1
         if (
             digits_end > index
@@ -3734,6 +4509,7 @@ def main() -> None:
         check_tech_stack_standards_skill()
     check_codex_profiles()
     check_claude_profiles()
+    check_planner_lifecycle_contract()
     check_replays_and_unit_tests()
     governance_snapshot = check_implementation_quality_governance_skill()
     check_release_and_ci()

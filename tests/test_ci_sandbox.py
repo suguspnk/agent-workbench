@@ -12,6 +12,9 @@ from pathlib import Path
 from unittest import mock
 
 
+sys.dont_write_bytecode = True
+
+
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / ".github/ci/run_sandboxed_validation.py"
 SPEC = importlib.util.spec_from_file_location("run_sandboxed_validation", HELPER)
@@ -353,7 +356,11 @@ class InsidePreflightTests(unittest.TestCase):
 class TrustedInvariantGateTests(unittest.TestCase):
     def _candidate_copy(self, parent: Path) -> Path:
         candidate = parent / "candidate"
-        shutil.copytree(ROOT, candidate, ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"))
+        shutil.copytree(
+            ROOT,
+            candidate,
+            ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+        )
         for directory, directory_names, file_names in os.walk(candidate, topdown=False, followlinks=False):
             for name in file_names:
                 path = Path(directory) / name
@@ -398,6 +405,25 @@ class TrustedInvariantGateTests(unittest.TestCase):
             self.assertIn(path, policy["pinned_candidate_files"])
         with tempfile.TemporaryDirectory() as directory:
             self._validate(self._candidate_copy(Path(directory)))
+
+    def test_protected_surface_inventory_rejects_explicit_bytecode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            candidate = self._candidate_copy(Path(directory))
+            bytecode = candidate / "scripts/__pycache__/candidate.cpython-312.pyc"
+            bytecode.parent.mkdir()
+            bytecode.write_bytes(b"\xff\x00candidate-bytecode")
+            policy = GATE.load_policy(POLICY.read_bytes())
+            with mock.patch.object(GATE, "CANDIDATE_ROOT", os.fspath(candidate)):
+                reader = GATE.CandidateReader.open(
+                    os.fspath(candidate), policy["max_file_bytes"]
+                )
+            try:
+                with self.assertRaisesRegex(
+                    GATE.GateError, "protected surface inventory differs"
+                ):
+                    GATE.validate_protected_surfaces(reader, policy)
+            finally:
+                reader.close()
 
     def test_candidate_noop_validator_fails_the_authoritative_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -503,10 +529,66 @@ class TrustedInvariantGateTests(unittest.TestCase):
 
 
 class TrustedPolicyGeneratorTests(unittest.TestCase):
-    def _candidate_copy(self, parent: Path) -> Path:
+    def _candidate_copy(
+        self,
+        parent: Path,
+        source: Path = ROOT,
+        *,
+        include_ignored_bytecode: bool = False,
+    ) -> Path:
         candidate = parent / "candidate"
-        shutil.copytree(ROOT, candidate, ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"))
+        ignored = (".git",) if include_ignored_bytecode else (".git", "__pycache__", "*.pyc")
+        shutil.copytree(source, candidate, ignore=shutil.ignore_patterns(*ignored))
         return candidate
+
+    def test_candidate_copy_excludes_ignored_bytecode_from_ordinary_fixtures(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "ordinary.txt").write_text("ordinary", encoding="utf-8")
+            bytecode = source / "scripts/__pycache__/ambient.cpython-312.pyc"
+            bytecode.parent.mkdir(parents=True)
+            bytecode.write_bytes(b"\xff\x00ambient-bytecode")
+            candidate_parent = root / "copy"
+            candidate_parent.mkdir()
+
+            candidate = self._candidate_copy(candidate_parent, source)
+
+            self.assertEqual((candidate / "ordinary.txt").read_text(encoding="utf-8"), "ordinary")
+            self.assertEqual(list(candidate.rglob("*.pyc")), [])
+
+    def test_candidate_copy_retains_non_utf8_bytecode_rejection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = root / "candidate.cpython-312.pyc"
+            payload.write_bytes(b"\xff\x00candidate-bytecode")
+            source_parent = root / "source"
+            source_parent.mkdir()
+            source = self._candidate_copy(source_parent)
+            source_scripts = source / "scripts"
+            source_scripts.chmod(0o700)
+            bytecode = source_scripts / "__pycache__/candidate.cpython-312.pyc"
+            bytecode.parent.mkdir(exist_ok=True)
+            shutil.copyfile(payload, bytecode)
+            candidate_parent = root / "copy"
+            candidate_parent.mkdir()
+            candidate = self._candidate_copy(
+                candidate_parent,
+                source,
+                include_ignored_bytecode=True,
+            )
+            copied_bytecode = candidate / bytecode.relative_to(source)
+            self.assertEqual(
+                {path.relative_to(candidate) for path in candidate.rglob("*.pyc")},
+                {bytecode.relative_to(source)},
+            )
+            self.assertEqual(copied_bytecode.read_bytes(), payload.read_bytes())
+            baseline_sha256 = GENERATOR.sha256(POLICY.read_bytes())
+            with self.assertRaisesRegex(
+                GENERATOR.ProposalError, "unreadable or not UTF-8"
+            ):
+                GENERATOR.generate(candidate, None, POLICY, baseline_sha256)
 
     def test_changed_protected_state_requires_a_strictly_greater_version(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -580,10 +662,12 @@ class TrustedPolicyGeneratorTests(unittest.TestCase):
     @unittest.skipIf(os.environ.get("AWB_READ_ONLY_EXPORT_TEST") == "1", "policy regeneration requires preserved executable modes")
     def test_current_generated_policy_is_bounded_and_gate_loadable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            baseline = Path(directory) / "baseline.json"
+            root = Path(directory)
+            candidate = self._candidate_copy(root)
+            baseline = root / "baseline.json"
             baseline.write_bytes(POLICY.read_bytes())
             policy = GENERATOR.generate(
-                ROOT,
+                candidate,
                 GATE.load_policy(POLICY.read_bytes())["policy_version"],
                 baseline,
                 GENERATOR.sha256(baseline.read_bytes()),
@@ -595,10 +679,12 @@ class TrustedPolicyGeneratorTests(unittest.TestCase):
         current = GATE.load_policy(POLICY.read_bytes())["policy_version"]
         baseline_sha256 = GENERATOR.sha256(POLICY.read_bytes())
         with tempfile.TemporaryDirectory() as directory:
-            baseline = Path(directory) / "baseline.json"
+            root = Path(directory)
+            candidate = self._candidate_copy(root)
+            baseline = root / "baseline.json"
             baseline.write_bytes(POLICY.read_bytes())
             proposal = GATE.load_policy(
-                GENERATOR.generate(ROOT, current + 1, baseline, baseline_sha256)
+                GENERATOR.generate(candidate, current + 1, baseline, baseline_sha256)
             )
         inventory = {entry["path"] for entry in proposal["protected_surface_inventory"]}
         self.assertEqual(proposal["protected_surface_roots"], list(GENERATOR.PROTECTED_ROOTS))
