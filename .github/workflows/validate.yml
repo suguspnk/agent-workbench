@@ -31,12 +31,13 @@ jobs:
       - name: Check out candidate without credentials
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.sha }}
+          repository: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
           path: candidate
           persist-credentials: false
       - name: Enforce trusted repository invariants
         env:
-          EXPECTED_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merge_commit_sha || github.sha }}
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
         run: >-
           python3 -I trusted/.github/ci/run_sandboxed_validation.py
           --candidate "$GITHUB_WORKSPACE/candidate"
@@ -70,12 +71,13 @@ jobs:
       - name: Check out candidate without credentials
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.sha }}
+          repository: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
           path: candidate
           persist-credentials: false
       - name: Run non-authoritative candidate behavior checks
         env:
-          EXPECTED_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merge_commit_sha || github.sha }}
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
         run: >-
           python3 -I trusted/.github/ci/run_sandboxed_validation.py
           --candidate "$GITHUB_WORKSPACE/candidate"
