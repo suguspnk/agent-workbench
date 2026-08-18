@@ -66,6 +66,21 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
             destination.chmod(0o644)
         VERIFIER.ROOT = self.fixture_root
 
+    def create_valid_planner_lifecycle_fixture(self) -> None:
+        for relative_path in (
+            "skills/orchestrate-task/SKILL.md",
+            "skills/orchestrate-task/references/portable-contract.md",
+            "skills/orchestrate-task/references/model-selection.md",
+            "adapters/codex/.codex/agents/awb-planner.toml",
+            "agents/awb-planner.md",
+        ):
+            source = REPOSITORY_ROOT / relative_path
+            destination = self.fixture_root / relative_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+            destination.chmod(0o644)
+        VERIFIER.ROOT = self.fixture_root
+
     def manifest_data(self, relative_path: str) -> dict[str, object]:
         return json.loads((self.fixture_root / relative_path).read_text(encoding="utf-8"))
 
@@ -1099,6 +1114,7 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
 
     def test_full_main_never_rereads_governance_artifacts_after_snapshot(self) -> None:
         skill_root = self.create_valid_skill()
+        self.create_valid_planner_lifecycle_fixture()
         original_loader = VERIFIER.load_governance_snapshot
         original_reader = VERIFIER.read_governance_artifact
         original_read_text = Path.read_text
@@ -1250,6 +1266,7 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
                 )
 
     def test_full_main_checks_bounded_snapshot_links_in_containers(self) -> None:
+        self.create_valid_planner_lifecycle_fixture()
         mocked_checks = (
             "check_required_files", "check_manifests", "check_skill",
             "check_discover_loops_skill", "check_pr_evidence_skill",
