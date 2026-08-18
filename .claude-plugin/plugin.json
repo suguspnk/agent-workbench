@@ -2,7 +2,7 @@
   "name": "agent-workbench",
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "displayName": "Agent Workbench",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Portable task orchestration, deterministic code review, safe loop discovery, quality governance, opt-in pull-request evidence preparation, and draft-only tech-stack standards.",
   "author": {
     "name": "suguspnk"

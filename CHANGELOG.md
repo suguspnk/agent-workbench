@@ -4,6 +4,8 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 
 ## Unreleased
 
+## 0.9.0 - 2026-08-19
+
 - Hardened orchestration routing, role contracts, secure repository readers, bounded diagnostics, and replay coverage across Codex and Claude adapters.
 - Added fail-closed trusted pull-request validation with pinned container images, an independently baseline-bound protected-surface policy, and candidate behavior checks that cannot self-authorize.
 - Reconciled the protected inventory and validator with the current `main` skill tree, code-review contracts, manifests, and profile surfaces.

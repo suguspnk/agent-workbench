@@ -29,7 +29,7 @@ from typing import Any, Iterable, Mapping, NamedTuple
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 RULE_ID = re.compile(r"^[A-Z]+-\d{3}$")
 MAPPED_CONCERN = re.compile(r"^- \[([A-Z]+-\d{3})\] \S.*")
@@ -51,7 +51,7 @@ GOVERNANCE_ARTIFACT_DIGESTS = {
     "references/state-and-contract-integrity.md": "480c7b7b3886c10633f2814f9a9d6fedbe6c1c459a220a38e1d2c3bc30e22d49",
     "references/trust-and-domain-safety.md": "2b09f47191cd22908f0e20ecd4839173bc35beabe7f8a58aa9b7a3ee184a7eb1",
 }
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 CANONICAL_GOVERNANCE_PATH = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?(?:/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)*$"
@@ -3753,8 +3753,9 @@ def check_pr_evidence_skill() -> None:
     test_path = skill_root / "scripts/tests/test-upload-github-attachment.sh"
     test_script = test_path.read_text(encoding="utf-8")
     for phrase in (
-        'cat > "$TEST_ROOT/bin/gh"',
-        'cat > "$TEST_ROOT/bin/curl"',
+        "gh() {",
+        "curl() {",
+        "export -f gh file jq curl",
         "curlrc isolation flag must be first",
         "FAKE_UPLOAD_STATUS",
         "FAKE_ASSET_URL",
@@ -4361,8 +4362,8 @@ def check_release_and_ci() -> None:
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {VERSION} -" not in changelog:
         fail(f"CHANGELOG.md must document {VERSION}")
-    if VERSION == "0.8.0" and "## 0.8.0 - 2026-08-11" not in changelog:
-        fail("CHANGELOG.md must document the 0.8.0 governance capability release")
+    if VERSION == "0.9.0" and "## 0.9.0 - 2026-08-19" not in changelog:
+        fail("CHANGELOG.md must document the 0.9.0 trusted validation release")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for phrase in (
         "codex plugin marketplace add suguspnk/agent-workbench",

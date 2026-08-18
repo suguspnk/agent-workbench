@@ -71,7 +71,7 @@ assert_token_rejected_before_upload() {
   assert_no_upload_temp_dirs
 }
 
-mkdir -p "$TEST_ROOT/bin" "$TEST_ROOT/home" "$TEST_ROOT/tmp"
+mkdir -p "$TEST_ROOT/home" "$TEST_ROOT/tmp"
 : > "$TEST_ROOT/gh.log"
 : > "$TEST_ROOT/curl.log"
 : > "$TEST_ROOT/jq.log"
@@ -89,8 +89,7 @@ ln -s "$TEST_ROOT/evidence.png" "$TEST_ROOT/evidence-link.png"
 mkfifo "$TEST_ROOT/evidence-pipe.png"
 dd if=/dev/zero of="$TEST_ROOT/oversize.png" bs=1 count=0 seek=26214401 2>/dev/null
 
-cat > "$TEST_ROOT/bin/gh" <<'STUB'
-#!/usr/bin/env bash
+gh() {
 set -euo pipefail
 : "${GH_LOG:?}"
 {
@@ -124,10 +123,9 @@ case "${1:-}" in
     exit 2
     ;;
 esac
-STUB
+}
 
-cat > "$TEST_ROOT/bin/file" <<'STUB'
-#!/usr/bin/env bash
+file() {
 set -euo pipefail
 artifact=''
 for argument in "$@"; do
@@ -152,11 +150,11 @@ case "$artifact" in
   *.svg|*.SVG) printf '%s\n' 'image/svg+xml' ;;
   *) printf '%s\n' 'application/octet-stream' ;;
 esac
-[[ "${FAKE_FILE_EXIT_NONZERO:-0}" == 0 ]] || exit 9
-STUB
+[[ "${FAKE_FILE_EXIT_NONZERO:-0}" == 0 ]] || return 9
+}
 
-cat > "$TEST_ROOT/bin/jq" <<'STUB'
-#!/usr/bin/env python3
+jq() {
+  python3 -B -c '
 import json
 import os
 import sys
@@ -178,10 +176,10 @@ elif len(sys.argv) == 4 and sys.argv[1] == "-er":
     sys.stdout.write(url + "\n")
 else:
     raise SystemExit(2)
-STUB
+' "$@"
+}
 
-cat > "$TEST_ROOT/bin/curl" <<'STUB'
-#!/usr/bin/env bash
+curl() {
 set -euo pipefail
 : "${CURL_LOG:?}"
 : "${TEMP_PATH_LOG:?}"
@@ -201,8 +199,8 @@ set -euo pipefail
 
 if [[ "${2:-}" == "--version" ]]; then
   printf 'curl %s (offline test stub)\n' "${FAKE_CURL_VERSION:-8.4.0}"
-  [[ "${FAKE_CURL_VERSION_EXIT_NONZERO:-0}" == 0 ]] || exit 9
-  exit 0
+  [[ "${FAKE_CURL_VERSION_EXIT_NONZERO:-0}" == 0 ]] || return 9
+  return 0
 fi
 
 config=''
@@ -286,23 +284,23 @@ while (($#)); do
       ;;
     *)
       printf 'unexpected curl argument: %s\n' "$1" >&2
-      exit 91
+      return 91
       ;;
   esac
 done
 
-[[ "$request" == "POST" ]] || exit 92
-[[ "$proto" == "=https" && "$proto_redir" == "=https" ]] || exit 93
-[[ "$max_redirs" == "0" && "$connect_timeout" == "10" && "$max_time" == "60" ]] || exit 94
-[[ "$max_filesize" == "65536" ]] || exit 104
-[[ "$write_out" == "%{http_code}" && "$data_binary" == @* ]] || exit 95
-[[ "$saw_retry" == 0 && "$saw_location" == 0 ]] || exit 96
-[[ "$url" == https://uploads.github.com/user-attachments/assets\?* ]] || exit 97
-[[ -f "$config" && -n "$output" ]] || exit 98
+[[ "$request" == "POST" ]] || return 92
+[[ "$proto" == "=https" && "$proto_redir" == "=https" ]] || return 93
+[[ "$max_redirs" == "0" && "$connect_timeout" == "10" && "$max_time" == "60" ]] || return 94
+[[ "$max_filesize" == "65536" ]] || return 104
+[[ "$write_out" == "%{http_code}" && "$data_binary" == @* ]] || return 95
+[[ "$saw_retry" == 0 && "$saw_location" == 0 ]] || return 96
+[[ "$url" == https://uploads.github.com/user-attachments/assets\?* ]] || return 97
+[[ -f "$config" && -n "$output" ]] || return 98
 upload_path="${data_binary#@}"
-[[ -f "$upload_path" && "$upload_path" != "${REPLACE_SOURCE_PATH:-}" ]] || exit 102
+[[ -f "$upload_path" && "$upload_path" != "${REPLACE_SOURCE_PATH:-}" ]] || return 102
 if [[ -n "${EXPECTED_UPLOAD_BYTES_FILE:-}" ]]; then
-  cmp "$upload_path" "$EXPECTED_UPLOAD_BYTES_FILE" || exit 103
+  cmp "$upload_path" "$EXPECTED_UPLOAD_BYTES_FILE" || return 103
 fi
 
 if stat -f '%Lp' "$config" >/dev/null 2>&1; then
@@ -310,27 +308,27 @@ if stat -f '%Lp' "$config" >/dev/null 2>&1; then
 else
   config_mode="$(stat -c '%a' "$config")"
 fi
-[[ "$config_mode" == "600" ]] || exit 99
-grep -Fq 'Authorization: Bearer fake_token_not_for_production' "$config" || exit 100
+[[ "$config_mode" == "600" ]] || return 99
+grep -Fq 'Authorization: Bearer fake_token_not_for_production' "$config" || return 100
 if grep -Fq 'fake_token_not_for_production' "$CURL_LOG"; then
-  exit 101
+  return 101
 fi
 
 printf '%s\n' "$config" "$output" "$upload_path" >> "$TEMP_PATH_LOG"
 
 if [[ "${FAKE_CURL_MODE:-success}" == "transport" ]]; then
   printf '%s\n' 'simulated path and token-like diagnostic that must be suppressed' >&2
-  exit 28
+  return 28
 fi
 if [[ "${FAKE_CURL_MODE:-success}" == "oversize" ]]; then
   dd if=/dev/zero of="$output" bs=65537 count=1 2>/dev/null
   printf '%s' '201'
-  exit 63
+  return 63
 fi
 if [[ "${FAKE_CURL_MODE:-success}" == "oversize-zero" ]]; then
   dd if=/dev/zero of="$output" bs=65537 count=1 2>/dev/null
   printf '%s' '201'
-  exit 0
+  return 0
 fi
 
 status="${FAKE_UPLOAD_STATUS:-201}"
@@ -346,10 +344,9 @@ case "${FAKE_RESPONSE_KIND:-valid}" in
     ;;
 esac
 printf '%s' "$status"
-STUB
+}
 
-chmod +x "$TEST_ROOT/bin/gh" "$TEST_ROOT/bin/file" "$TEST_ROOT/bin/jq" "$TEST_ROOT/bin/curl"
-export PATH="$TEST_ROOT/bin:$PATH"
+export -f gh file jq curl
 export GH_LOG="$TEST_ROOT/gh.log"
 export CURL_LOG="$TEST_ROOT/curl.log"
 export JQ_LOG="$TEST_ROOT/jq.log"
