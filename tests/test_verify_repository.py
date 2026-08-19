@@ -1004,6 +1004,17 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             VERIFY.LEAD_OWNERSHIP_IDENTITY_COMPARISON_CONTRACT,
         )
         self.assertEqual(
+            preflight["mandatory_trigger"],
+            {
+                "action": "perform-bounded-metadata-only-identity-comparison-before-planner-routing",
+                "all_of": [
+                    "direct-user-supplied-exact-repository-or-path-identity-available",
+                    "host-provided-canonical-current-workspace-identity-available",
+                ],
+                "skip_to_planner": "prohibited",
+            },
+        )
+        self.assertEqual(
             set(preflight["outcomes"]),
             {
                 "current-owner-confirmed",
@@ -1012,6 +1023,55 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             },
         )
         self.assertNotIn("unknown-owner-needs-input", preflight["decision_provenance"])
+
+    def test_lead_ownership_preflight_rejects_absent_or_relaxed_mandatory_trigger(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        trigger = (
+            '    "mandatory_trigger": {\n'
+            '      "action": "perform-bounded-metadata-only-identity-comparison-before-planner-routing",\n'
+            '      "all_of": [\n'
+            '        "direct-user-supplied-exact-repository-or-path-identity-available",\n'
+            '        "host-provided-canonical-current-workspace-identity-available"\n'
+            '      ],\n'
+            '      "skip_to_planner": "prohibited"\n'
+            '    },\n'
+        )
+        mutations = (
+            portable.replace(trigger, ""),
+            portable.replace('"skip_to_planner": "prohibited"', '"skip_to_planner": "permitted"'),
+        )
+        for mutation in mutations:
+            self.assertNotEqual(mutation, portable)
+            with self.subTest(), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_planner_lifecycle_contract(skill, mutation, codex, claude)
+
+    def test_lead_ownership_declared_outcome_count_cannot_be_blessed_by_digest(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        incorrect = portable.replace(
+            "only the three declared outcomes",
+            "only the four declared outcomes",
+        )
+        self.assertNotEqual(incorrect, portable)
+        blessed_digest = VERIFY.hashlib.sha256(
+            VERIFY.planner_active_markdown(incorrect, "portable contract").encode("utf-8")
+        ).hexdigest()
+        stderr = io.StringIO()
+        with mock.patch.dict(
+            VERIFY.PLANNER_LIFECYCLE_ACTIVE_DIGESTS,
+            {"portable contract": blessed_digest},
+        ), contextlib.redirect_stderr(stderr), self.assertRaisesRegex(SystemExit, "1"):
+            VERIFY.validate_planner_lifecycle_contract(skill, incorrect, codex, claude)
+        self.assertIn("declared outcome count differs", stderr.getvalue())
 
     def test_lead_ownership_preflight_rejects_mismatch_without_host_comparison(self) -> None:
         skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]

@@ -240,6 +240,14 @@ LEAD_OWNERSHIP_PREFLIGHT_CONTRACT = {
     ],
     "identity_comparison": LEAD_OWNERSHIP_IDENTITY_COMPARISON_CONTRACT,
     "implementation_governance": "implementation-child-only-after-ownership-settled",
+    "mandatory_trigger": {
+        "action": "perform-bounded-metadata-only-identity-comparison-before-planner-routing",
+        "all_of": [
+            "direct-user-supplied-exact-repository-or-path-identity-available",
+            "host-provided-canonical-current-workspace-identity-available",
+        ],
+        "skip_to_planner": "prohibited",
+    },
     "max_host_metadata_reads": 3,
     "mechanism": "non-executing-source-free-host-native-metadata-only",
     "missing_direct_user_identity_outcome": "inconclusive-delegate",
@@ -265,8 +273,8 @@ PLANNER_LIFECYCLE_CONTRACT = {
     },
 }
 PLANNER_LIFECYCLE_ACTIVE_DIGESTS = {
-    "orchestrate-task skill": "442657e9d3b051fcaf1935f38007d8d1e87ad94d2085f17e07826f11b0904dd4",
-    "portable contract": "e3e1812f22294c15648667e63fcb7a536f7f516ead97f1acdf5c3b84d2fc81ac",
+    "orchestrate-task skill": "729cbb470c867e0e993125a8e84561a87339441c2b1a136f08abfe3eeb660b99",
+    "portable contract": "ef68ef84b5bfa35d085aa79735463c4a797152d5ecdd7e12cd7735ab34350dd3",
 }
 PLANNER_OWNERSHIP_OUTCOME_CONTRACT = (
     "Ownership mismatch outcomes are explicit: `known_owner` returns compact `blocked` or `needs-input` evidence naming the exact supplied missing objective-owning repository; "
@@ -284,7 +292,7 @@ PLANNER_LIFECYCLE_PROFILE_CONTRACT = (
 PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
     "## Ownership-only lead preflight",
     "at most three non-executing, source-free host-native filesystem/workspace metadata reads",
-    "The outcomes are exhaustive",
+    "Only the three declared outcomes are allowed, and they are exhaustive",
     "Direct-user evidence alone cannot authorize `known-owner-mismatch`",
     "an unambiguous definitive nonmatch",
     "Missing direct-user repository/path identity is `inconclusive-delegate`",
@@ -1932,9 +1940,17 @@ def validate_planner_lifecycle_contract(
             "missing direct-user repository/path identity is `inconclusive-delegate`",
             "existing bounded planner ownership-establishment flow",
             "do not ask redundant user input during the preflight",
+            "when both an exact direct-user repository/path identity and a host-provided canonical current-workspace identity are available",
+            "must perform",
+            "must not skip directly to the planner",
         ):
             if phrase not in active_lower:
                 fail(f"{label} lead ownership preflight is missing: {phrase}")
+        expected_outcome_count = len(LEAD_OWNERSHIP_PREFLIGHT_CONTRACT["outcomes"])
+        expected_count_word = {3: "three"}.get(expected_outcome_count)
+        declared_counts = re.findall(r"only the ([a-z0-9-]+) declared outcomes", active_lower)
+        if expected_count_word is None or declared_counts != [expected_count_word]:
+            fail(f"{label} lead ownership declared outcome count differs from the machine contract")
         if active_body.count(PLANNER_OWNERSHIP_OUTCOME_CONTRACT) != 1:
             fail(f"{label} must contain the canonical known_owner and unknown_owner outcomes")
         actual_digest = hashlib.sha256(active_body.encode("utf-8")).hexdigest()
