@@ -221,9 +221,8 @@ LEAD_OWNERSHIP_PREFLIGHT_CONTRACT = {
     "ambiguity_outcome": "inconclusive-delegate",
     "decision_provenance": {
         "current-owner-confirmed": "direct-user-objective-exactly-matches-current-host-canonical-identity",
-        "inconclusive-delegate": "direct-user-exact-identity-present-but-permitted-host-metadata-cannot-decide",
+        "inconclusive-delegate": "direct-user-exact-identity-missing-or-permitted-host-metadata-cannot-decide",
         "known-owner-mismatch": "direct-user-exact-identity-definitively-does-not-match-host-canonical-current-workspace-identity",
-        "unknown-owner-needs-input": "direct-user-evidence-supplies-no-exact-repository-or-path",
     },
     "forbidden_authority": [
         "shell-or-repository-commands",
@@ -243,11 +242,11 @@ LEAD_OWNERSHIP_PREFLIGHT_CONTRACT = {
     "implementation_governance": "implementation-child-only-after-ownership-settled",
     "max_host_metadata_reads": 3,
     "mechanism": "non-executing-source-free-host-native-metadata-only",
+    "missing_direct_user_identity_outcome": "inconclusive-delegate",
     "outcomes": {
         "current-owner-confirmed": "resume-existing-routing-and-delegation",
-        "inconclusive-delegate": "delegate-to-existing-planner-flow-never-terminate-or-proceed-without-delegation",
+        "inconclusive-delegate": "delegate-to-existing-bounded-planner-ownership-establishment-flow-never-terminate-never-ask-redundant-user-input-and-never-proceed-without-delegation",
         "known-owner-mismatch": "exit-immediately-blocked-or-needs-input-only-after-canonical-host-comparison-proves-unambiguous-definitive-nonmatch-name-direct-user-supplied-identity-no-planning",
-        "unknown-owner-needs-input": "exit-immediately-needs-input-require-exact-objective-owning-repository-identity-or-path-no-planning",
     },
     "phase": "before-portable-or-model-selection-routing-and-implementation-governance",
     "single_preflight": True,
@@ -266,8 +265,8 @@ PLANNER_LIFECYCLE_CONTRACT = {
     },
 }
 PLANNER_LIFECYCLE_ACTIVE_DIGESTS = {
-    "orchestrate-task skill": "c92a22aa52e826460c641589e433da8a1fa2a24cbe0c173d08ac7b2dc05c740d",
-    "portable contract": "e83c56520dbf05d50f06416820c8bf8d93312430a2a76e4665ac71b401406d24",
+    "orchestrate-task skill": "442657e9d3b051fcaf1935f38007d8d1e87ad94d2085f17e07826f11b0904dd4",
+    "portable contract": "e3e1812f22294c15648667e63fcb7a536f7f516ead97f1acdf5c3b84d2fc81ac",
 }
 PLANNER_OWNERSHIP_OUTCOME_CONTRACT = (
     "Ownership mismatch outcomes are explicit: `known_owner` returns compact `blocked` or `needs-input` evidence naming the exact supplied missing objective-owning repository; "
@@ -288,6 +287,9 @@ PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
     "The outcomes are exhaustive",
     "Direct-user evidence alone cannot authorize `known-owner-mismatch`",
     "an unambiguous definitive nonmatch",
+    "Missing direct-user repository/path identity is `inconclusive-delegate`",
+    "existing bounded planner ownership-establishment flow",
+    "Do not ask redundant user input during the preflight",
     "Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`",
     "Any ambiguity is `inconclusive-delegate`",
     "Never infer ownership from repository content or unspecified provenance",
@@ -1926,8 +1928,10 @@ def validate_planner_lifecycle_contract(
             "acceptance",
             "current-owner-confirmed",
             "known-owner-mismatch",
-            "unknown-owner-needs-input",
             "inconclusive-delegate",
+            "missing direct-user repository/path identity is `inconclusive-delegate`",
+            "existing bounded planner ownership-establishment flow",
+            "do not ask redundant user input during the preflight",
         ):
             if phrase not in active_lower:
                 fail(f"{label} lead ownership preflight is missing: {phrase}")

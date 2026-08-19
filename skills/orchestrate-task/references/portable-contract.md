@@ -95,9 +95,8 @@ handoff: use the format below
     "ambiguity_outcome": "inconclusive-delegate",
     "decision_provenance": {
       "current-owner-confirmed": "direct-user-objective-exactly-matches-current-host-canonical-identity",
-      "inconclusive-delegate": "direct-user-exact-identity-present-but-permitted-host-metadata-cannot-decide",
-      "known-owner-mismatch": "direct-user-exact-identity-definitively-does-not-match-host-canonical-current-workspace-identity",
-      "unknown-owner-needs-input": "direct-user-evidence-supplies-no-exact-repository-or-path"
+      "inconclusive-delegate": "direct-user-exact-identity-missing-or-permitted-host-metadata-cannot-decide",
+      "known-owner-mismatch": "direct-user-exact-identity-definitively-does-not-match-host-canonical-current-workspace-identity"
     },
     "forbidden_authority": [
       "shell-or-repository-commands",
@@ -133,11 +132,11 @@ handoff: use the format below
     "implementation_governance": "implementation-child-only-after-ownership-settled",
     "max_host_metadata_reads": 3,
     "mechanism": "non-executing-source-free-host-native-metadata-only",
+    "missing_direct_user_identity_outcome": "inconclusive-delegate",
     "outcomes": {
       "current-owner-confirmed": "resume-existing-routing-and-delegation",
-      "inconclusive-delegate": "delegate-to-existing-planner-flow-never-terminate-or-proceed-without-delegation",
-      "known-owner-mismatch": "exit-immediately-blocked-or-needs-input-only-after-canonical-host-comparison-proves-unambiguous-definitive-nonmatch-name-direct-user-supplied-identity-no-planning",
-      "unknown-owner-needs-input": "exit-immediately-needs-input-require-exact-objective-owning-repository-identity-or-path-no-planning"
+      "inconclusive-delegate": "delegate-to-existing-bounded-planner-ownership-establishment-flow-never-terminate-never-ask-redundant-user-input-and-never-proceed-without-delegation",
+      "known-owner-mismatch": "exit-immediately-blocked-or-needs-input-only-after-canonical-host-comparison-proves-unambiguous-definitive-nonmatch-name-direct-user-supplied-identity-no-planning"
     },
     "phase": "before-portable-or-model-selection-routing-and-implementation-governance",
     "single_preflight": true
@@ -152,7 +151,7 @@ handoff: use the format below
 
 Before portable/model-selection routing setup or any implementation-governance load, the lead may perform one lead-owned ownership-only classification preflight using at most three non-executing, source-free host-native filesystem/workspace metadata reads. This is the only exception to the lead investigation prohibition. It may read only host-provided canonical workspace/repository identity fields or filesystem metadata for a user-named exact path. Shell or repository commands; repository, source, file, or path-inventory content reads; repository configuration, hook, or helper evaluation; remotes or credentials; repository-declared ownership; source investigation; interface or design work; tests; mutation; verification; review; and acceptance are prohibited.
 
-The exhaustive outcomes are `current-owner-confirmed` (only when the direct user-supplied objective exactly matches this workspace/repository through a host-provided canonical identity field; resume existing routing and delegation), `known-owner-mismatch` (only when the direct user supplies an exact repository/path, the host supplies the canonical current-workspace identity, and comparing those two identities proves an unambiguous definitive nonmatch; exit immediately with compact `blocked` or `needs-input` evidence naming the user-supplied identity; no planning), `unknown-owner-needs-input` (when direct user-provided evidence supplies no exact repository/path; exit immediately with compact `needs-input` evidence and `required_input: exact-objective-owning-repository-identity-or-path`; no planning), and `inconclusive-delegate` (when direct user-provided exact identity exists but permitted host metadata cannot decide unambiguously; delegate to the existing planner flow; never terminate or proceed without delegation). Direct-user evidence alone cannot authorize `known-owner-mismatch`. Any ambiguity is `inconclusive-delegate`. Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`; none may be mapped to `known-owner-mismatch`. Never infer ownership from repository content or unspecified provenance. The lead must not load or invoke `implementation-quality-governance`; require it only in an implementation child after ownership is settled. The preflight does not relax eventual test, verifier, reviewer, or security-review overlays.
+The exhaustive outcomes are `current-owner-confirmed` (only when the direct user-supplied objective exactly matches this workspace/repository through a host-provided canonical identity field; resume existing routing and delegation), `known-owner-mismatch` (only when the direct user supplies an exact repository/path, the host supplies the canonical current-workspace identity, and comparing those two identities proves an unambiguous definitive nonmatch; exit immediately with compact `blocked` or `needs-input` evidence naming the user-supplied identity; no planning), and `inconclusive-delegate` (when direct user-provided evidence supplies no exact repository/path or permitted host metadata cannot decide unambiguously; delegate to the existing bounded planner ownership-establishment flow; never terminate, ask redundant user input during the preflight, or proceed without delegation). Missing direct-user repository/path identity is `inconclusive-delegate`; an ordinary workspace-scoped prompt is not a terminal preflight mismatch or needs-input result. Do not ask redundant user input during the preflight. Direct-user evidence alone cannot authorize `known-owner-mismatch`. Any ambiguity is `inconclusive-delegate`. Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`; none may be mapped to `known-owner-mismatch`. Never infer ownership from repository content or unspecified provenance. The lead must not load or invoke `implementation-quality-governance`; require it only in an implementation child after ownership is settled. The preflight does not relax eventual test, verifier, reviewer, or security-review overlays.
 
 The work cutoff must precede the hard deadline by the recorded positive handoff reserve. At cutoff, the single recovery action may synthesize only evidence already gathered; it must not begin discovery, replacement, another attempt, polling, or lead investigation. At the hard deadline, set the outcome to `blocked` and stop all polling, replacement, recovery, and lead investigation. Reaching either boundary alone does not justify a model, effort, or routing change.
 
