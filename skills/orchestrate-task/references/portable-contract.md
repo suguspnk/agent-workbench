@@ -87,6 +87,61 @@ handoff: use the format below
   "default_work_cutoff_minutes": 10,
   "handoff_reserve_minutes": 2,
   "hard_deadline_outcome": "blocked-no-further-polling-replacement-recovery-or-lead-investigation",
+  "lead_ownership_preflight": {
+    "allowed_metadata_reads": [
+      "host-provided-canonical-workspace-or-repository-identity",
+      "host-filesystem-metadata-for-user-named-exact-path"
+    ],
+    "ambiguity_outcome": "inconclusive-delegate",
+    "decision_provenance": {
+      "current-owner-confirmed": "direct-user-objective-exactly-matches-current-host-canonical-identity",
+      "inconclusive-delegate": "direct-user-exact-identity-present-but-permitted-host-metadata-cannot-decide",
+      "known-owner-mismatch": "direct-user-exact-identity-definitively-does-not-match-host-canonical-current-workspace-identity",
+      "unknown-owner-needs-input": "direct-user-evidence-supplies-no-exact-repository-or-path"
+    },
+    "forbidden_authority": [
+      "shell-or-repository-commands",
+      "repository-source-file-or-path-inventory-content-reads",
+      "repository-config-hook-or-helper-evaluation",
+      "repository-declared-ownership",
+      "source-investigation",
+      "interface-or-design-work",
+      "tests",
+      "remote-or-credential-access",
+      "mutation",
+      "verification",
+      "review",
+      "acceptance"
+    ],
+    "identity_comparison": {
+      "ambiguities": [
+        "alias",
+        "symlink-or-path-indirection",
+        "normalization",
+        "missing-host-identity",
+        "conflicting-host-identity",
+        "noncanonical-host-identity"
+      ],
+      "ambiguity_outcome": "inconclusive-delegate",
+      "known_owner_mismatch_requires": [
+        "direct-user-supplied-exact-repository-or-path",
+        "host-provided-canonical-current-workspace-identity",
+        "unambiguous-definitive-nonmatch-between-direct-user-and-host-identities"
+      ],
+      "missing_factor_outcome": "inconclusive-delegate"
+    },
+    "implementation_governance": "implementation-child-only-after-ownership-settled",
+    "max_host_metadata_reads": 3,
+    "mechanism": "non-executing-source-free-host-native-metadata-only",
+    "outcomes": {
+      "current-owner-confirmed": "resume-existing-routing-and-delegation",
+      "inconclusive-delegate": "delegate-to-existing-planner-flow-never-terminate-or-proceed-without-delegation",
+      "known-owner-mismatch": "exit-immediately-blocked-or-needs-input-only-after-canonical-host-comparison-proves-unambiguous-definitive-nonmatch-name-direct-user-supplied-identity-no-planning",
+      "unknown-owner-needs-input": "exit-immediately-needs-input-require-exact-objective-owning-repository-identity-or-path-no-planning"
+    },
+    "phase": "before-portable-or-model-selection-routing-and-implementation-governance",
+    "single_preflight": true
+  },
   "ownership_mismatch_outcomes": {
     "known_owner": "blocked-or-needs-input-name-missing-objective-owning-repository",
     "unknown_owner": "blocked-or-needs-input-require-exact-objective-owning-repository-identity-or-path"
@@ -94,6 +149,10 @@ handoff: use the format below
 }
 ```
 <!-- AWB_PLANNER_LIFECYCLE_V1_END -->
+
+Before portable/model-selection routing setup or any implementation-governance load, the lead may perform one lead-owned ownership-only classification preflight using at most three non-executing, source-free host-native filesystem/workspace metadata reads. This is the only exception to the lead investigation prohibition. It may read only host-provided canonical workspace/repository identity fields or filesystem metadata for a user-named exact path. Shell or repository commands; repository, source, file, or path-inventory content reads; repository configuration, hook, or helper evaluation; remotes or credentials; repository-declared ownership; source investigation; interface or design work; tests; mutation; verification; review; and acceptance are prohibited.
+
+The exhaustive outcomes are `current-owner-confirmed` (only when the direct user-supplied objective exactly matches this workspace/repository through a host-provided canonical identity field; resume existing routing and delegation), `known-owner-mismatch` (only when the direct user supplies an exact repository/path, the host supplies the canonical current-workspace identity, and comparing those two identities proves an unambiguous definitive nonmatch; exit immediately with compact `blocked` or `needs-input` evidence naming the user-supplied identity; no planning), `unknown-owner-needs-input` (when direct user-provided evidence supplies no exact repository/path; exit immediately with compact `needs-input` evidence and `required_input: exact-objective-owning-repository-identity-or-path`; no planning), and `inconclusive-delegate` (when direct user-provided exact identity exists but permitted host metadata cannot decide unambiguously; delegate to the existing planner flow; never terminate or proceed without delegation). Direct-user evidence alone cannot authorize `known-owner-mismatch`. Any ambiguity is `inconclusive-delegate`. Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`; none may be mapped to `known-owner-mismatch`. Never infer ownership from repository content or unspecified provenance. The lead must not load or invoke `implementation-quality-governance`; require it only in an implementation child after ownership is settled. The preflight does not relax eventual test, verifier, reviewer, or security-review overlays.
 
 The work cutoff must precede the hard deadline by the recorded positive handoff reserve. At cutoff, the single recovery action may synthesize only evidence already gathered; it must not begin discovery, replacement, another attempt, polling, or lead investigation. At the hard deadline, set the outcome to `blocked` and stop all polling, replacement, recovery, and lead investigation. Reaching either boundary alone does not justify a model, effort, or routing change.
 
@@ -167,6 +226,6 @@ Follow-ups run in this order: implementation, required test engineering, verifie
 
 ## Lead and portability boundaries
 
-The lead may classify, packetize, assign, monitor, request one budgeted correction cycle, keep the ledger, and accept or block. It must not investigate, implement, test, verify, review, or operate, including after a child failure or timeout. The ledger records `correction_limit`, monotonic `corrections_used`, and `terminal_outcome: active | blocked | cancelled | accepted`; every replacement, reroute, and nested child packet inherits exactly those values, and assignment is rejected when `corrections_used` reaches `correction_limit`. The default task-wide correction-cycle limit is one: every post-verification or post-review mutation increments `corrections_used`, and replacement children, packet revisions, rerouting, or model/effort escalation do not reset the count. When the limit is exhausted, a further required correction sets `terminal_outcome` to `blocked`, never accepted. Acceptance requires current-tree evidence and fresh required verification and review after the final mutation. If stable child identity, a required capability/modality/tool, equivalent bounded role, or required isolation is unavailable, block rather than collapse work into the lead. Each child must have an earlier work cutoff, later hard deadline, positive handoff reserve, and no more than two total attempts. At cutoff, the single recovery request synthesizes only already-gathered evidence; at the hard deadline, block with no further polling, replacement, recovery, or lead investigation. On user cancellation, set `terminal_outcome` to `cancelled`, request interruption where supported, start no further work or external lookup, and report partial state.
+The lead may classify, packetize, assign, monitor, request one budgeted correction cycle, keep the ledger, and accept or block. Its sole read-only investigation exception is the ownership-only preflight in `AWB_PLANNER_LIFECYCLE_V1`: one preflight, no more than three permitted non-executing host-native metadata reads, direct-user provenance for terminal decisions, and only the four declared outcomes. Otherwise it must not investigate, implement, test, verify, review, or operate, including after a child failure or timeout. The lead never loads or invokes implementation governance; an implementation child invokes it only after ownership is settled. The ledger records `correction_limit`, monotonic `corrections_used`, and `terminal_outcome: active | blocked | cancelled | accepted`; every replacement, reroute, and nested child packet inherits exactly those values, and assignment is rejected when `corrections_used` reaches `correction_limit`. The default task-wide correction-cycle limit is one: every post-verification or post-review mutation increments `corrections_used`, and replacement children, packet revisions, rerouting, or model/effort escalation do not reset the count. When the limit is exhausted, a further required correction sets `terminal_outcome` to `blocked`, never accepted. Acceptance requires current-tree evidence and fresh required verification and review after the final mutation. If stable child identity, a required capability/modality/tool, equivalent bounded role, or required isolation is unavailable, block rather than collapse work into the lead. Each child must have an earlier work cutoff, later hard deadline, positive handoff reserve, and no more than two total attempts. At cutoff, the single recovery request synthesizes only already-gathered evidence; at the hard deadline, block with no further polling, replacement, recovery, or lead investigation. On user cancellation, set `terminal_outcome` to `cancelled`, request interruption where supported, start no further work or external lookup, and report partial state.
 
 Use native isolation only when observed. Tool lists and instructions do not prove filesystem, network, credential, or process containment. Map portable roles only to exposed provider capabilities and state unavailable controls honestly.

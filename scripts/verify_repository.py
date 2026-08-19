@@ -196,6 +196,62 @@ CORRECTION_CONTRACT = {
 }
 PLANNER_LIFECYCLE_BEGIN = "<!-- AWB_PLANNER_LIFECYCLE_V1_BEGIN -->"
 PLANNER_LIFECYCLE_END = "<!-- AWB_PLANNER_LIFECYCLE_V1_END -->"
+LEAD_OWNERSHIP_IDENTITY_COMPARISON_CONTRACT = {
+    "ambiguities": [
+        "alias",
+        "symlink-or-path-indirection",
+        "normalization",
+        "missing-host-identity",
+        "conflicting-host-identity",
+        "noncanonical-host-identity",
+    ],
+    "ambiguity_outcome": "inconclusive-delegate",
+    "known_owner_mismatch_requires": [
+        "direct-user-supplied-exact-repository-or-path",
+        "host-provided-canonical-current-workspace-identity",
+        "unambiguous-definitive-nonmatch-between-direct-user-and-host-identities",
+    ],
+    "missing_factor_outcome": "inconclusive-delegate",
+}
+LEAD_OWNERSHIP_PREFLIGHT_CONTRACT = {
+    "allowed_metadata_reads": [
+        "host-provided-canonical-workspace-or-repository-identity",
+        "host-filesystem-metadata-for-user-named-exact-path",
+    ],
+    "ambiguity_outcome": "inconclusive-delegate",
+    "decision_provenance": {
+        "current-owner-confirmed": "direct-user-objective-exactly-matches-current-host-canonical-identity",
+        "inconclusive-delegate": "direct-user-exact-identity-present-but-permitted-host-metadata-cannot-decide",
+        "known-owner-mismatch": "direct-user-exact-identity-definitively-does-not-match-host-canonical-current-workspace-identity",
+        "unknown-owner-needs-input": "direct-user-evidence-supplies-no-exact-repository-or-path",
+    },
+    "forbidden_authority": [
+        "shell-or-repository-commands",
+        "repository-source-file-or-path-inventory-content-reads",
+        "repository-config-hook-or-helper-evaluation",
+        "repository-declared-ownership",
+        "source-investigation",
+        "interface-or-design-work",
+        "tests",
+        "remote-or-credential-access",
+        "mutation",
+        "verification",
+        "review",
+        "acceptance",
+    ],
+    "identity_comparison": LEAD_OWNERSHIP_IDENTITY_COMPARISON_CONTRACT,
+    "implementation_governance": "implementation-child-only-after-ownership-settled",
+    "max_host_metadata_reads": 3,
+    "mechanism": "non-executing-source-free-host-native-metadata-only",
+    "outcomes": {
+        "current-owner-confirmed": "resume-existing-routing-and-delegation",
+        "inconclusive-delegate": "delegate-to-existing-planner-flow-never-terminate-or-proceed-without-delegation",
+        "known-owner-mismatch": "exit-immediately-blocked-or-needs-input-only-after-canonical-host-comparison-proves-unambiguous-definitive-nonmatch-name-direct-user-supplied-identity-no-planning",
+        "unknown-owner-needs-input": "exit-immediately-needs-input-require-exact-objective-owning-repository-identity-or-path-no-planning",
+    },
+    "phase": "before-portable-or-model-selection-routing-and-implementation-governance",
+    "single_preflight": True,
+}
 PLANNER_LIFECYCLE_CONTRACT = {
     "cutoff_action": "synthesize-only-already-gathered-evidence",
     "default_budget_minutes": 12,
@@ -203,14 +259,15 @@ PLANNER_LIFECYCLE_CONTRACT = {
     "default_work_cutoff_minutes": 10,
     "handoff_reserve_minutes": 2,
     "hard_deadline_outcome": "blocked-no-further-polling-replacement-recovery-or-lead-investigation",
+    "lead_ownership_preflight": LEAD_OWNERSHIP_PREFLIGHT_CONTRACT,
     "ownership_mismatch_outcomes": {
         "known_owner": "blocked-or-needs-input-name-missing-objective-owning-repository",
         "unknown_owner": "blocked-or-needs-input-require-exact-objective-owning-repository-identity-or-path",
     },
 }
 PLANNER_LIFECYCLE_ACTIVE_DIGESTS = {
-    "orchestrate-task skill": "a16ef674cc75149d8c37ec927541270c4eb7c8c1249d2bd343663d8955e3934e",
-    "portable contract": "0e28db3882b173898bdc05182b232d7cdbdc5975f8c4d928e6509c0407b42e1e",
+    "orchestrate-task skill": "c92a22aa52e826460c641589e433da8a1fa2a24cbe0c173d08ac7b2dc05c740d",
+    "portable contract": "e83c56520dbf05d50f06416820c8bf8d93312430a2a76e4665ac71b401406d24",
 }
 PLANNER_OWNERSHIP_OUTCOME_CONTRACT = (
     "Ownership mismatch outcomes are explicit: `known_owner` returns compact `blocked` or `needs-input` evidence naming the exact supplied missing objective-owning repository; "
@@ -226,6 +283,16 @@ PLANNER_LIFECYCLE_PROFILE_CONTRACT = (
     "Planning remains read-only and denies network and credentials. Do not change model, effort, or routing merely because this boundary was reached."
 )
 PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
+    "## Ownership-only lead preflight",
+    "at most three non-executing, source-free host-native filesystem/workspace metadata reads",
+    "The outcomes are exhaustive",
+    "Direct-user evidence alone cannot authorize `known-owner-mismatch`",
+    "an unambiguous definitive nonmatch",
+    "Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`",
+    "Any ambiguity is `inconclusive-delegate`",
+    "Never infer ownership from repository content or unspecified provenance",
+    "The lead must not load or invoke `implementation-quality-governance`; require it only in an implementation child after ownership is settled",
+    "This preflight does not relax eventual test, verifier, reviewer, or security-review overlays",
     "For a 12-minute child budget, use a 10-minute work cutoff and a 12-minute hard deadline, preserving two minutes for handoff",
     "synthesize a compact handoff solely from evidence already gathered",
     "At the hard deadline, set `terminal_outcome` to `blocked` and perform no further polling, replacement, recovery, or lead investigation",
@@ -1829,11 +1896,41 @@ def validate_planner_lifecycle_contract(
     for phrase in PLANNER_LIFECYCLE_SKILL_REQUIREMENTS:
         if phrase not in active_skill_body:
             fail(f"orchestrate-task planner lifecycle is missing: {phrase}")
+    preflight_heading = active_skill_body.index("## Ownership-only lead preflight")
+    if preflight_heading >= active_skill_body.index("## Discover capabilities"):
+        fail("lead ownership preflight must precede routing capability discovery")
     for label, body in (
         ("orchestrate-task skill", skill_body),
         ("portable contract", portable_contract),
     ):
         active_body = planner_active_markdown(body, label)
+        active_lower = active_body.lower()
+        for phrase in (
+            "at most three non-executing, source-free host-native filesystem/workspace metadata reads",
+            "host-provided canonical workspace/repository identity",
+            "user-named exact path",
+            "shell or repository commands",
+            "repository-declared ownership",
+            "direct user",
+            "direct-user evidence alone cannot authorize `known-owner-mismatch`",
+            "an unambiguous definitive nonmatch",
+            "alias, symlink/path indirection, normalization ambiguity",
+            "missing, conflicting, or noncanonical host identity",
+            "never infer ownership from repository content or unspecified provenance",
+            "source investigation",
+            "tests",
+            "credentials",
+            "mutation",
+            "verification",
+            "review",
+            "acceptance",
+            "current-owner-confirmed",
+            "known-owner-mismatch",
+            "unknown-owner-needs-input",
+            "inconclusive-delegate",
+        ):
+            if phrase not in active_lower:
+                fail(f"{label} lead ownership preflight is missing: {phrase}")
         if active_body.count(PLANNER_OWNERSHIP_OUTCOME_CONTRACT) != 1:
             fail(f"{label} must contain the canonical known_owner and unknown_owner outcomes")
         actual_digest = hashlib.sha256(active_body.encode("utf-8")).hexdigest()
@@ -1864,6 +1961,8 @@ def validate_planner_lifecycle_contract(
         actual = value[field]
         if type(actual) is not type(expected) or actual != expected:
             fail(f"portable planner lifecycle contract has an invalid value for {field}")
+    if value["lead_ownership_preflight"] != LEAD_OWNERSHIP_PREFLIGHT_CONTRACT:
+        fail("portable lead ownership preflight differs from its fail-closed contract")
     cutoff = value["default_work_cutoff_minutes"]
     deadline = value["default_hard_deadline_minutes"]
     reserve = value["handoff_reserve_minutes"]

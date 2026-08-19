@@ -983,6 +983,179 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             with self.subTest(), self.assertRaisesRegex(SystemExit, "1"):
                 VERIFY.validate_planner_lifecycle_contract(skill, mutation, codex, claude)
 
+    def test_lead_ownership_preflight_accepts_only_the_canonical_contract(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+
+        VERIFY.validate_planner_lifecycle_contract(skill, portable, codex, claude)
+        preflight = VERIFY.PLANNER_LIFECYCLE_CONTRACT["lead_ownership_preflight"]
+        self.assertEqual(preflight, VERIFY.LEAD_OWNERSHIP_PREFLIGHT_CONTRACT)
+        self.assertEqual(preflight["max_host_metadata_reads"], 3)
+        self.assertEqual(
+            preflight["mechanism"],
+            "non-executing-source-free-host-native-metadata-only",
+        )
+        self.assertEqual(
+            preflight["identity_comparison"],
+            VERIFY.LEAD_OWNERSHIP_IDENTITY_COMPARISON_CONTRACT,
+        )
+        self.assertEqual(
+            set(preflight["outcomes"]),
+            {
+                "current-owner-confirmed",
+                "known-owner-mismatch",
+                "unknown-owner-needs-input",
+                "inconclusive-delegate",
+            },
+        )
+
+    def test_lead_ownership_preflight_rejects_mismatch_without_host_comparison(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        missing = portable.replace(
+            '        "host-provided-canonical-current-workspace-identity",\n',
+            "",
+        )
+        self.assertNotEqual(missing, portable)
+        with self.assertRaisesRegex(SystemExit, "1"):
+            VERIFY.validate_planner_lifecycle_contract(skill, missing, codex, claude)
+
+    def test_lead_ownership_preflight_rejects_mismatch_without_definitive_nonmatch(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        missing = portable.replace(
+            '        "host-provided-canonical-current-workspace-identity",\n'
+            '        "unambiguous-definitive-nonmatch-between-direct-user-and-host-identities"\n',
+            '        "host-provided-canonical-current-workspace-identity"\n',
+        )
+        self.assertNotEqual(missing, portable)
+        with self.assertRaisesRegex(SystemExit, "1"):
+            VERIFY.validate_planner_lifecycle_contract(skill, missing, codex, claude)
+
+    def test_lead_ownership_preflight_rejects_ambiguity_mapped_to_mismatch(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        canonical = '      "ambiguity_outcome": "inconclusive-delegate",\n      "known_owner_mismatch_requires"'
+        widened = portable.replace(
+            canonical,
+            '      "ambiguity_outcome": "known-owner-mismatch",\n      "known_owner_mismatch_requires"',
+        )
+        self.assertNotEqual(widened, portable)
+        with self.assertRaisesRegex(SystemExit, "1"):
+            VERIFY.validate_planner_lifecycle_contract(skill, widened, codex, claude)
+
+    def test_lead_ownership_preflight_rejects_more_than_three_metadata_reads(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        widened = portable.replace(
+            '"max_host_metadata_reads": 3',
+            '"max_host_metadata_reads": 4',
+        )
+        self.assertNotEqual(widened, portable)
+        with self.assertRaisesRegex(SystemExit, "1"):
+            VERIFY.validate_planner_lifecycle_contract(skill, widened, codex, claude)
+
+    def test_lead_ownership_preflight_rejects_widened_evidence_or_authority(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        evidence_tail = '      "host-filesystem-metadata-for-user-named-exact-path"\n    ]'
+        for authority in (
+            "source-investigation",
+            "tests",
+            "network",
+            "credentials",
+            "mutation",
+        ):
+            widened = portable.replace(
+                evidence_tail,
+                f'      "host-filesystem-metadata-for-user-named-exact-path",\n      "{authority}"\n    ]',
+            )
+            self.assertNotEqual(widened, portable)
+            with self.subTest(authority=authority), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_planner_lifecycle_contract(skill, widened, codex, claude)
+
+    def test_lead_ownership_preflight_rejects_shell_or_repository_commands(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        for mechanism in ("read-only-shell-commands", "repository-status-command"):
+            widened = portable.replace(
+                "non-executing-source-free-host-native-metadata-only",
+                mechanism,
+            )
+            self.assertNotEqual(widened, portable)
+            with self.subTest(mechanism=mechanism), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_planner_lifecycle_contract(skill, widened, codex, claude)
+
+    def test_lead_ownership_preflight_rejects_untrusted_or_unspecified_provenance(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        canonical = VERIFY.LEAD_OWNERSHIP_PREFLIGHT_CONTRACT["decision_provenance"]["current-owner-confirmed"]
+        for provenance in ("repository-declared-ownership", "unspecified-provenance"):
+            widened = portable.replace(canonical, provenance)
+            self.assertNotEqual(widened, portable)
+            with self.subTest(provenance=provenance), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_planner_lifecycle_contract(skill, widened, codex, claude)
+
+    def test_lead_ownership_preflight_rejects_mismatch_that_continues_planning(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        for outcome in ("known-owner-mismatch", "unknown-owner-needs-input"):
+            canonical = VERIFY.LEAD_OWNERSHIP_PREFLIGHT_CONTRACT["outcomes"][outcome]
+            widened = portable.replace(canonical, "continue-existing-planner-flow")
+            self.assertNotEqual(widened, portable)
+            with self.subTest(outcome=outcome), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_planner_lifecycle_contract(skill, widened, codex, claude)
+
+    def test_lead_ownership_preflight_rejects_inconclusive_without_delegation(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(
+            ROOT / "adapters/codex/.codex/agents/awb-planner.toml"
+        )["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        canonical = VERIFY.LEAD_OWNERSHIP_PREFLIGHT_CONTRACT["outcomes"]["inconclusive-delegate"]
+        for invalid in ("terminate-needs-input", "resume-existing-routing-without-delegation"):
+            widened = portable.replace(canonical, invalid)
+            self.assertNotEqual(widened, portable)
+            with self.subTest(outcome=invalid), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_planner_lifecycle_contract(skill, widened, codex, claude)
+
     def test_planner_ownership_outcome_labels_are_explicit_on_every_surface(self) -> None:
         skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
         portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")

@@ -20,6 +20,19 @@ Use this workflow for multi-file changes, risky refactors, migrations, security-
 - External operation and external verification are unavailable because the repository has no constrained network adapter capable of safely providing mandatory independent external verification. The `awb_operator`, `operate`, `operation_authorization`, `verify-external`, and `external_verification` names and schemas remain reserved for diagnostic compatibility, but complete cards fail with `external execution unavailable: no constrained network adapter is configured`.
 - Never treat static routing-card or URL checks as runtime SSRF protection. A future adapter must meet the complete adapter-owned allowlist, HTTPS canonicalization, address/DNS/TLS, redirect, rebinding, bounded-I/O, and sanitized-evidence requirements in [model-selection.md](references/model-selection.md). Ordinary verifier packets remain network-denied, while local shell verification remains supported.
 
+## Ownership-only lead preflight
+
+Before portable/model-selection routing setup or any implementation-governance load, the lead may perform one lead-owned ownership-only classification preflight using at most three non-executing, source-free host-native filesystem/workspace metadata reads. This is the only exception to the lead's investigation prohibition. It may read only host-provided canonical workspace/repository identity fields or filesystem metadata for a user-named exact path. It must not use shell or repository commands; read repository, source, file, or path-inventory content; evaluate repository configuration, hooks, or helpers; access remotes or credentials; or trust repository-declared ownership. Source investigation, interface or design work, tests, mutation, verification, review, and acceptance are also prohibited. If a read or conclusion would exceed those limits, stop the preflight and delegate through the existing flow.
+
+The outcomes are exhaustive:
+
+- `current-owner-confirmed`: only when the direct user-supplied objective explicitly identifies this workspace/repository by exact match to a host-provided canonical identity field; resume the existing routing and delegation flow.
+- `known-owner-mismatch`: only when the direct user supplies an exact repository/path, the host supplies the canonical current-workspace identity, and comparing those two identities proves an unambiguous definitive nonmatch; exit immediately with compact `blocked` or `needs-input` evidence naming the user-supplied identity. Do not start planning. Direct-user evidence alone cannot authorize `known-owner-mismatch`.
+- `unknown-owner-needs-input`: when direct user-provided evidence supplies no exact repository/path; exit immediately with compact `needs-input` evidence and `required_input: exact-objective-owning-repository-identity-or-path`. Do not start planning.
+- `inconclusive-delegate`: when direct user-provided exact identity exists but permitted host metadata cannot establish an unambiguous match or mismatch; delegate ownership establishment and all deeper investigation to the existing planner flow. It never terminates the workflow or proceeds without delegation.
+
+Any ambiguity is `inconclusive-delegate`. Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`; none may be mapped to `known-owner-mismatch`. Never infer ownership from repository content or unspecified provenance. The lead must not load or invoke `implementation-quality-governance`; require it only in an implementation child after ownership is settled. This preflight does not relax eventual test, verifier, reviewer, or security-review overlays. Machine authority: `portable-contract.md` block `AWB_PLANNER_LIFECYCLE_V1`.
+
 ## Discover capabilities
 
 Before delegating, inspect what the current harness actually exposes:
