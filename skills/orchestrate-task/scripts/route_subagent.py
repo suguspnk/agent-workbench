@@ -112,8 +112,22 @@ PROBE_LIFECYCLE = {
     "hard_deadline_outcome": "inconclusive-delegate",
 }
 MAX_PROBE_MATCHES = 64
-PROBE_DESCRIPTOR_VERSION = 3
+PROBE_DESCRIPTOR_VERSION = 4
 PROBE_PARENT_CONTEXT_VERSION = 2
+PROBE_STABILITY_PASSES = 2
+PROBE_METADATA_TOKEN_FIELDS = [
+    "st_dev",
+    "st_ino",
+    "st_mode",
+    "st_nlink",
+    "st_uid",
+    "st_gid",
+    "st_size",
+    "st_mtime_ns",
+    "st_ctime_ns",
+]
+PROBE_STABILITY_COMPARISON = "byte-identical-canonical-metadata-receipts-and-query-results"
+PROBE_STABILITY_FAILURE_ACTION = "all-query-results-incomplete"
 CODEX_PROFILE_SCHEMA_KEYS = (
     "name",
     "description",
@@ -262,6 +276,15 @@ def ownership_probe_descriptor() -> dict[str, Any]:
             "max_depth": 32,
             "max_entries": 50000,
             "deadline_seconds": 45,
+        },
+        "stability": {
+            "passes": PROBE_STABILITY_PASSES,
+            "entry_budget_scope": "cumulative-across-passes",
+            "deadline_scope": "cumulative-across-passes",
+            "metadata_token_fields": list(PROBE_METADATA_TOKEN_FIELDS),
+            "directory_tokens": "pre-and-post-fstat-must-match",
+            "comparison": PROBE_STABILITY_COMPARISON,
+            "failure_action": PROBE_STABILITY_FAILURE_ACTION,
         },
         "excluded_directories": [
             ".git", ".hg", ".svn", ".tox", ".venv", "__pycache__", "node_modules", "vendor"

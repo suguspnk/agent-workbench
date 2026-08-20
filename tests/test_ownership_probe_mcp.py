@@ -18,6 +18,12 @@ if SPEC is None or SPEC.loader is None:
     raise RuntimeError("could not load ownership probe MCP server")
 SERVER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SERVER)
+ROUTER_PATH = ROOT / "skills/orchestrate-task/scripts/route_subagent.py"
+ROUTER_SPEC = importlib.util.spec_from_file_location("ownership_probe_router", ROUTER_PATH)
+if ROUTER_SPEC is None or ROUTER_SPEC.loader is None:
+    raise RuntimeError("could not load ownership probe router")
+ROUTER = importlib.util.module_from_spec(ROUTER_SPEC)
+ROUTER_SPEC.loader.exec_module(ROUTER)
 
 
 class OwnershipProbeScannerTests(unittest.TestCase):
@@ -40,7 +46,7 @@ class OwnershipProbeScannerTests(unittest.TestCase):
             result = self.scan(root)
         self.assertEqual(result["workspace_identity"], str(root.resolve()))
         self.assertEqual(result["tool_name"], "scan_required_artifacts")
-        self.assertEqual(result["descriptor_version"], 3)
+        self.assertEqual(result["descriptor_version"], 4)
         for query in result["query_results"]:
             self.assertTrue(query["complete"])
             self.assertFalse(query["truncated"])
@@ -140,8 +146,97 @@ class OwnershipProbeScannerTests(unittest.TestCase):
         self.assertTrue(all(not item["complete"] for item in result["query_results"]))
         self.assertTrue(all(item["matches"] == [] for item in result["query_results"]))
 
+    def test_interpass_create_delete_rename_and_replacement_fail_closed(self) -> None:
+        actions = ("create", "delete", "rename", "replace")
+        for action in actions:
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                artifact = root / "service-task-definition.json"
+                if action != "create":
+                    artifact.touch()
+                original_scan_pass = SERVER._scan_pass
+                calls = 0
+
+                def racing_scan_pass(deadline, entries_seen):
+                    nonlocal calls
+                    value = original_scan_pass(deadline, entries_seen)
+                    calls += 1
+                    if calls == 1:
+                        if action == "create":
+                            artifact.touch()
+                        elif action == "delete":
+                            artifact.unlink()
+                        elif action == "rename":
+                            artifact.rename(root / "renamed.txt")
+                        else:
+                            replacement = root / "replacement"
+                            replacement.touch()
+                            os.replace(replacement, artifact)
+                    return value
+
+                with mock.patch.object(SERVER, "_scan_pass", side_effect=racing_scan_pass):
+                    result = self.scan(root)
+                self.assertTrue(all(not item["complete"] for item in result["query_results"]))
+
+    def test_intrapass_create_delete_rename_and_replacement_fail_closed(self) -> None:
+        actions = ("create", "delete", "rename", "replace")
+        for action in actions:
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                artifact = root / "service-task-definition.json"
+                if action != "create":
+                    artifact.touch()
+                original_fstat = SERVER.os.fstat
+                calls = 0
+
+                def racing_fstat(fd):
+                    nonlocal calls
+                    calls += 1
+                    if calls == 2:
+                        if action == "create":
+                            artifact.touch()
+                        elif action == "delete":
+                            artifact.unlink()
+                        elif action == "rename":
+                            artifact.rename(root / "renamed.txt")
+                        else:
+                            replacement = root / "replacement"
+                            replacement.touch()
+                            os.replace(replacement, artifact)
+                    return original_fstat(fd)
+
+                with mock.patch.object(SERVER.os, "fstat", side_effect=racing_fstat):
+                    result = self.scan(root)
+                self.assertTrue(all(not item["complete"] for item in result["query_results"]))
+
+    def test_server_and_router_descriptor_constants_have_exact_parity(self) -> None:
+        descriptor = ROUTER.ownership_probe_descriptor()
+        self.assertEqual(SERVER.DESCRIPTOR_VERSION, descriptor["version"])
+        self.assertEqual(SERVER.DESCRIPTOR_SHA256, ROUTER.ownership_probe_descriptor_sha256())
+        self.assertEqual(list(SERVER.ARTIFACT_PATTERNS), [item["artifact_class"] for item in descriptor["class_queries"]])
+        self.assertEqual(
+            [pattern.pattern for pattern in SERVER.ARTIFACT_PATTERNS.values()],
+            [item["accepted_path_pattern"] for item in descriptor["class_queries"]],
+        )
+        self.assertEqual(sorted(SERVER.EXCLUDED_DIRECTORY_NAMES), sorted(descriptor["excluded_directories"]))
+        self.assertEqual(
+            {
+                "max_classes": SERVER.MAX_CLASSES,
+                "max_matches_per_class": SERVER.MAX_MATCHES_PER_CLASS,
+                "max_depth": SERVER.MAX_DEPTH,
+                "max_entries": SERVER.MAX_ENTRIES,
+                "deadline_seconds": SERVER.DEADLINE_SECONDS,
+            },
+            descriptor["limits"],
+        )
+        self.assertEqual(SERVER.STABILITY_PASSES, descriptor["stability"]["passes"])
+        self.assertEqual(list(SERVER.METADATA_TOKEN_FIELDS), descriptor["stability"]["metadata_token_fields"])
+        self.assertEqual(SERVER.STABILITY_COMPARISON, descriptor["stability"]["comparison"])
+        self.assertEqual(SERVER.STABILITY_FAILURE_ACTION, descriptor["stability"]["failure_action"])
+
     def test_source_has_no_process_network_environment_or_write_capability(self) -> None:
         source = SERVER_PATH.read_text(encoding="utf-8")
+        self.assertTrue(source.startswith("#!/usr/bin/python3 -I\n"))
         for forbidden in (
             "subprocess",
             "socket",
@@ -221,6 +316,34 @@ class OwnershipProbeMcpProtocolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             responses, _stderr = self.run_protocol(requests, Path(directory))
         self.assertEqual([item["error"]["code"] for item in responses], [-32601, -32601, -32602])
+
+    def test_fixed_isolated_launcher_ignores_hostile_path_pythonpath_and_sitecustomize(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            hostile_bin = root / "bin"
+            hostile_modules = root / "modules"
+            hostile_bin.mkdir()
+            hostile_modules.mkdir()
+            marker = root / "sitecustomize-ran"
+            (hostile_bin / "python3").write_text("#!/bin/sh\nexit 97\n", encoding="utf-8")
+            (hostile_bin / "python3").chmod(0o755)
+            (hostile_modules / "sitecustomize.py").write_text(
+                "from pathlib import Path\nPath(%r).touch()\n" % str(marker), encoding="utf-8"
+            )
+            request = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+            result = subprocess.run(
+                ["/usr/bin/python3", "-I", str(SERVER_PATH)],
+                cwd=root,
+                input=json.dumps(request) + "\n",
+                text=True,
+                capture_output=True,
+                env={"PATH": str(hostile_bin), "PYTHONPATH": str(hostile_modules), "PYTHONUSERBASE": str(hostile_modules)},
+                check=False,
+                timeout=10,
+            )
+            self.assertFalse(marker.exists())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["result"]["tools"][0]["name"], "scan_required_artifacts")
 
 
 if __name__ == "__main__":

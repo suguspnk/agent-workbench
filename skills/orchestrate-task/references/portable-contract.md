@@ -203,7 +203,7 @@ handoff: use the format below
     "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
     "query_order": "protected-server-canonical-order",
     "registry_descriptor": {
-      "version": 3,
+      "version": 4,
       "phase": "probe-ownership",
       "class_queries": [
         {
@@ -225,6 +225,25 @@ handoff: use the format below
         "max_depth": 32,
         "max_entries": 50000,
         "deadline_seconds": 45
+      },
+      "stability": {
+        "passes": 2,
+        "entry_budget_scope": "cumulative-across-passes",
+        "deadline_scope": "cumulative-across-passes",
+        "metadata_token_fields": [
+          "st_dev",
+          "st_ino",
+          "st_mode",
+          "st_nlink",
+          "st_uid",
+          "st_gid",
+          "st_size",
+          "st_mtime_ns",
+          "st_ctime_ns"
+        ],
+        "directory_tokens": "pre-and-post-fstat-must-match",
+        "comparison": "byte-identical-canonical-metadata-receipts-and-query-results",
+        "failure_action": "all-query-results-incomplete"
       },
       "excluded_directories": [
         ".git",
@@ -306,7 +325,7 @@ handoff: use the format below
         "hard_deadline_outcome": "inconclusive-delegate"
       }
     },
-    "registry_descriptor_sha256": "8e4fbe2315ec2ac0427c74dbcd03c67eb4980e5d542cc33f5e6c851ed4fb6029",
+    "registry_descriptor_sha256": "4a5993ebc44201cbc76ab0ea2e5411d2bf4e5d923b39383c94388e3f7de38e08",
     "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
     "tool": "awb_ownership.scan_required_artifacts",
     "work_cutoff_seconds": 45
@@ -327,7 +346,7 @@ After `inconclusive-delegate`, the lead reads the protected `ownership_probe.reg
 
 When at least one registered artifact class must exist in the objective-owning repository, the lead makes exactly one direct lead-owned zero-argument call. The protected server owns the complete bounded startup-workspace scan and returns only path metadata for `ecs-task-definition-manifests`, `deployment-pipeline-manifests`, and `infrastructure-as-code`, in canonical order and with at most 64 matches per class. It reads no contents or target code, imports no repository code, follows no symlinks, executes no subprocess, hook, helper, configuration, or repository command, uses no network, credentials, prompt, or mutable environment, and performs no write, test, or governance load.
 
-The protected registry descriptor is version 3. The lead retains parent context version 2 with exactly `context_version`, `phase`, `descriptor_version`, `descriptor_sha256`, `required_artifact_classes`, `declaration_conflict`, `direct_user_objective_repository_identity`, `host_canonical_workspace_identity`, and the full `adapter_result`, plus its canonical SHA-256 integrity binding. The adapter result has exactly `adapter_result_version`, `tool_name`, `descriptor_version`, `descriptor_sha256`, `workspace_identity`, and three complete bounded `query_results`. The lead derives the outcome only from that retained context and never trusts tool-returned task criteria or an outcome.
+The protected registry descriptor is version 4. The server uses two bounded no-follow metadata passes under one cumulative 50,000-entry budget and 45-second deadline. Every directory has matching pre/post `fstat` tokens; complete evidence requires byte-identical canonical metadata receipts and query results across both passes, while any create, delete, rename, replacement, metadata drift, pass mismatch, or unsupported isolated host makes all classes incomplete. The lead retains parent context version 2 with exactly `context_version`, `phase`, `descriptor_version`, `descriptor_sha256`, `required_artifact_classes`, `declaration_conflict`, `direct_user_objective_repository_identity`, `host_canonical_workspace_identity`, and the full `adapter_result`, plus its canonical SHA-256 integrity binding. The adapter result has exactly `adapter_result_version`, `tool_name`, `descriptor_version`, `descriptor_sha256`, `workspace_identity`, and three complete bounded `query_results`. The lead derives the outcome only from that retained context and never trusts tool-returned task criteria or an outcome.
 
 Any missing, malformed, stale, replayed, mixed-version, descriptor- or workspace-binding-mismatched, tampered, noncanonical, oversized, incomplete, truncated, symlink-affected, unsupported, conflicting, or internally inconsistent evidence is `inconclusive-delegate`. `owner-artifact-present` resumes ordinary rerouting when any retained required class has a match. `known-artifact-mismatch` stops before a planner only when all three exact results are complete and untruncated, no symlink was encountered or followed, retained declaration conflict is false, every retained required class is supported, and every retained required class has zero matches; name the exact retained direct owner when supplied, otherwise return `required_input: exact-objective-owning-repository-identity-or-path`. The lifecycle is one MCP call, zero children, zero waits, a 45-second cutoff, 60-second hard deadline, and 15-second reserve. A hard deadline yields `inconclusive-delegate` and continues through the full flow.
 

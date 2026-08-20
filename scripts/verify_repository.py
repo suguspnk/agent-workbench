@@ -282,7 +282,7 @@ DIRECT_DIAGNOSIS_CONTRACT = {
     "work_cutoff_seconds": 90,
     "work_shape": "diagnose",
 }
-OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {'version': 3,
+OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {'version': 4,
  'phase': 'probe-ownership',
  'class_queries': [{'artifact_class': 'ecs-task-definition-manifests',
                     'accepted_path_pattern': '(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:json|yaml|yml)\\Z'},
@@ -295,6 +295,21 @@ OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {'version': 3,
             'max_depth': 32,
             'max_entries': 50000,
             'deadline_seconds': 45},
+ 'stability': {'passes': 2,
+               'entry_budget_scope': 'cumulative-across-passes',
+               'deadline_scope': 'cumulative-across-passes',
+               'metadata_token_fields': ['st_dev',
+                                         'st_ino',
+                                         'st_mode',
+                                         'st_nlink',
+                                         'st_uid',
+                                         'st_gid',
+                                         'st_size',
+                                         'st_mtime_ns',
+                                         'st_ctime_ns'],
+               'directory_tokens': 'pre-and-post-fstat-must-match',
+               'comparison': 'byte-identical-canonical-metadata-receipts-and-query-results',
+               'failure_action': 'all-query-results-incomplete'},
  'excluded_directories': ['.git', '.hg', '.svn', '.tox', '.venv', '__pycache__', 'node_modules', 'vendor'],
  'query_result_schema': {'required_fields': ['artifact_class',
                                              'complete',
@@ -372,7 +387,7 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
               'owner-artifact-present': 'normal-reroute'},
  'phase': 'after-inconclusive-identity-preflight-before-ordinary-routing',
  'query_order': 'protected-server-canonical-order',
- 'registry_descriptor': {'version': 3,
+ 'registry_descriptor': {'version': 4,
                          'phase': 'probe-ownership',
                          'class_queries': [{'artifact_class': 'ecs-task-definition-manifests',
                                             'accepted_path_pattern': '(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:json|yaml|yml)\\Z'},
@@ -385,6 +400,21 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
                                     'max_depth': 32,
                                     'max_entries': 50000,
                                     'deadline_seconds': 45},
+                         'stability': {'passes': 2,
+                                       'entry_budget_scope': 'cumulative-across-passes',
+                                       'deadline_scope': 'cumulative-across-passes',
+                                       'metadata_token_fields': ['st_dev',
+                                                                 'st_ino',
+                                                                 'st_mode',
+                                                                 'st_nlink',
+                                                                 'st_uid',
+                                                                 'st_gid',
+                                                                 'st_size',
+                                                                 'st_mtime_ns',
+                                                                 'st_ctime_ns'],
+                                       'directory_tokens': 'pre-and-post-fstat-must-match',
+                                       'comparison': 'byte-identical-canonical-metadata-receipts-and-query-results',
+                                       'failure_action': 'all-query-results-incomplete'},
                          'excluded_directories': ['.git',
                                                   '.hg',
                                                   '.svn',
@@ -444,7 +474,7 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
                                        'max_children': 0,
                                        'max_waits': 0,
                                        'hard_deadline_outcome': 'inconclusive-delegate'}},
- 'registry_descriptor_sha256': '8e4fbe2315ec2ac0427c74dbcd03c67eb4980e5d542cc33f5e6c851ed4fb6029',
+ 'registry_descriptor_sha256': '4a5993ebc44201cbc76ab0ea2e5411d2bf4e5d923b39383c94388e3f7de38e08',
  'required_assertion': 'at-least-one-named-class-must-exist-in-objective-owning-repository',
  'tool': 'awb_ownership.scan_required_artifacts',
  'work_cutoff_seconds': 45}
@@ -470,8 +500,8 @@ PLANNER_LIFECYCLE_CONTRACT = {
     },
 }
 PLANNER_LIFECYCLE_ACTIVE_DIGESTS = {
-    "orchestrate-task skill": "872835ef570719b7e60b1bf60eac67c83d153868ec015f05fca6549da34186b0",
-    "portable contract": "b5f75581013ed3df8de1146e76d14af4c56ef02916b9bd1ecb560735db045c93",
+    "orchestrate-task skill": "a88f66022a8e0b43b66f9191a8e0f5c8e89dc8a3a685f85754a2b695c6729e92",
+    "portable contract": "77d12eee0d6c29dbf407851f9b139b045cb48ddec31742f6f52762a7d6fc84bc",
 }
 PLANNER_OWNERSHIP_OUTCOME_CONTRACT = (
     "Ownership mismatch outcomes are explicit: `known_owner` returns compact `blocked` or `needs-input` evidence naming the exact supplied missing objective-owning repository; "
@@ -505,7 +535,7 @@ PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
     "canonical SHA-256 binding",
     "`awb_ownership.scan_required_artifacts`",
     "one direct, lead-owned, zero-argument call",
-    "protected descriptor is version 3",
+    "protected descriptor is version 4",
     "immutable context version 2",
     "direct user objective repository identity string or null",
     "host canonical workspace identity",
@@ -1325,7 +1355,6 @@ def check_manifests() -> None:
         "mcpServers": {
             "awb_ownership": {
                 "command": "./servers/ownership_probe_mcp.py",
-                "env_vars": ["PATH"],
                 "startup_timeout_sec": 10,
                 "tool_timeout_sec": 60,
             }
@@ -1338,6 +1367,11 @@ def check_manifests() -> None:
         fail("ownership probe MCP server must be a regular non-symlink file")
     if not server_metadata.st_mode & 0o111:
         fail("ownership probe MCP server must retain its executable bit")
+    server_source = safe_read_text(server_path)
+    if not server_source.startswith("#!/usr/bin/python3 -I\n"):
+        fail("ownership probe MCP server must use the fixed isolated /usr/bin/python3 -I launcher")
+    if "os.environ.clear()" not in server_source:
+        fail("ownership probe MCP server must clear its inherited environment")
     interface = codex.get("interface")
     if not isinstance(interface, dict):
         fail("Codex manifest must contain an interface object")
@@ -2277,7 +2311,7 @@ def validate_runtime_ownership_probe_surfaces(
             "zero-argument",
             "zero probe children, waits, or syntheses",
             "role name, read-only",
-            "version 3",
+            "version 4",
             "version 2",
             "retained",
             "workspace",

@@ -335,6 +335,23 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         for field in ("work_cutoff_seconds", "hard_deadline_seconds", "handoff_reserve_seconds", "max_mcp_calls", "max_children", "max_waits", "hard_deadline_outcome"):
             self.assertEqual(ROUTER.PROBE_LIFECYCLE[field], probe[field])
 
+    def test_ownership_probe_launcher_and_registration_are_isolated(self) -> None:
+        registration = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            registration,
+            {
+                "mcpServers": {
+                    "awb_ownership": {
+                        "command": "./servers/ownership_probe_mcp.py",
+                        "startup_timeout_sec": 10,
+                        "tool_timeout_sec": 60,
+                    }
+                }
+            },
+        )
+        server = ROOT / "servers/ownership_probe_mcp.py"
+        self.assertTrue(server.read_text(encoding="utf-8").startswith("#!/usr/bin/python3 -I\n"))
+
     def test_ownership_probe_profiles_are_exact_read_only_and_least_tool(self) -> None:
         codex_path = ROOT / "adapters/codex/.codex/agents/awb-ownership-probe.toml"
         codex = VERIFY.parse_codex_profile(codex_path)

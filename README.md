@@ -190,7 +190,7 @@ The router is deterministic and provider-neutral. It does not spawn agents, modi
 
 ## Current scope
 
-Agent Workbench includes orchestration, deterministic code review, proposal-only loop discovery, `implementation-quality-governance`, local-first `pr-evidence`, and bundled UI/UX design intelligence capabilities; deterministic routing, readiness, and review-scope tools; replay and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no MCP server, lifecycle hooks, deployment logic, loop activation or scheduling, or automatic GitHub side effects. The attachment helper reads a GitHub.com token only during a separately authorized direct invocation and stores it only in a private temporary curl configuration removed on exit.
+Agent Workbench includes orchestration, deterministic code review, proposal-only loop discovery, `implementation-quality-governance`, local-first `pr-evidence`, bundled UI/UX design intelligence, and a bundled read-only ownership-metadata MCP server; deterministic routing, readiness, and review-scope tools; replay and unit tests; Claude subagent profiles; and optional Codex profiles. It contains no lifecycle hooks, deployment logic, loop activation or scheduling, or automatic GitHub side effects. The ownership server makes two bounded no-follow metadata passes, reads no file contents, executes no target code, and falls back to the normal flow when its isolated host requirements or stability proof are unavailable. The attachment helper reads a GitHub.com token only during a separately authorized direct invocation and stores it only in a private temporary curl configuration removed on exit.
 
 ## Development
 

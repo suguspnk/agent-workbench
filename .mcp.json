@@ -2,9 +2,6 @@
   "mcpServers": {
     "awb_ownership": {
       "command": "./servers/ownership_probe_mcp.py",
-      "env_vars": [
-        "PATH"
-      ],
       "startup_timeout_sec": 10,
       "tool_timeout_sec": 60
     }
