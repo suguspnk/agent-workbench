@@ -457,6 +457,23 @@ class TrustedInvariantGateTests(unittest.TestCase):
             finally:
                 reader.close()
 
+    def test_root_protected_file_deletion_mode_and_tamper_are_rejected(self) -> None:
+        cases = (
+            ("deletion", lambda path: path.unlink(), "protected surface entry cannot be opened safely"),
+            ("mode", lambda path: path.chmod(path.stat().st_mode | 0o111), "protected surface executable mode differs"),
+            (
+                "tamper",
+                lambda path: path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8"),
+                "protected surface hash differs",
+            ),
+        )
+        for name, mutate, diagnostic in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                candidate = self._candidate_copy(Path(directory))
+                mutate(candidate / ".mcp.json")
+                with self.assertRaisesRegex(GATE.GateError, diagnostic):
+                    self._validate(candidate)
+
     def test_candidate_noop_validator_fails_the_authoritative_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             candidate = self._candidate_copy(Path(directory))

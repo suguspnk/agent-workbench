@@ -1672,12 +1672,14 @@
     }
   },
   {
-    "id": "ownership-probe-descriptor-first",
+  "id": "healthpal-api-pipeline-owner-artifacts-absent",
     "probe": {
-      "required_artifact_classes": [
-        "ecs-task-definition-manifests"
-      ],
-      "direct_user_objective_repository_identity": null,
+    "required_artifact_classes": [
+      "ecs-task-definition-manifests",
+      "deployment-pipeline-manifests",
+      "infrastructure-as-code"
+    ],
+    "direct_user_objective_repository_identity": "healthpal-infrastructure",
       "declaration_conflict": false,
       "query_results": [
         {
@@ -1708,7 +1710,7 @@
     },
     "expected": {
       "phase": "probe-ownership",
-      "primary_role": "awb_ownership_probe",
+    "primary_role": "lead-owned-protected-mcp",
       "execution_path": "probe",
       "capability_tier": "efficient",
       "effort": "low",
@@ -1716,38 +1718,43 @@
       "artifact_queries": [
         {
           "artifact_class": "ecs-task-definition-manifests",
-          "query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}",
+        "scan": "protected-startup-cwd-metadata",
           "max_matches": 64
         },
         {
           "artifact_class": "deployment-pipeline-manifests",
-          "query_pattern": "{.github/workflows/*,**/{*bitbucket-pipelines*,*cloudbuild*,*buildspec*,*pipeline*,*Jenkinsfile*}}",
+        "scan": "protected-startup-cwd-metadata",
           "max_matches": 64
         },
         {
           "artifact_class": "infrastructure-as-code",
-          "query_pattern": "**/{*.tf,*.tf.json,cdk.json,Pulumi*.yaml,Pulumi*.yml,serverless*.yaml,serverless*.yml,sam*.yaml,sam*.yml,cloudformation*.yaml,cloudformation*.yml,template*.yaml,template*.yml}",
+        "scan": "protected-startup-cwd-metadata",
           "max_matches": 64
         }
       ],
-      "required_artifact_classes": [
-        "ecs-task-definition-manifests"
-      ],
+    "required_artifact_classes": [
+      "ecs-task-definition-manifests",
+      "deployment-pipeline-manifests",
+      "infrastructure-as-code"
+    ],
       "matched_required_classes": [],
       "outcome": "known-artifact-mismatch",
       "routing_action": "stop-before-planner",
-      "expected_owner_identity": null,
-      "required_input": "exact-objective-owning-repository-identity-or-path",
+    "expected_owner_identity": "healthpal-infrastructure",
+    "required_input": null,
       "lifecycle": {
         "work_cutoff_seconds": 45,
         "hard_deadline_seconds": 60,
-        "handoff_reserve_seconds": 15,
-        "max_waits": 2,
-        "max_syntheses": 1,
-        "replacement": "prohibited",
-        "model_escalation": "prohibited",
-        "hard_deadline_outcome": "inconclusive-delegate"
-      }
-    }
+      "handoff_reserve_seconds": 15,
+      "max_mcp_calls": 1,
+      "max_children": 0,
+      "max_waits": 0,
+      "hard_deadline_outcome": "inconclusive-delegate"
+    },
+    "planner_count": 0,
+    "probe_child_count": 0,
+    "wait_count": 0,
+    "virtual_elapsed_seconds_upper_bound": 59
   }
+}
 ]

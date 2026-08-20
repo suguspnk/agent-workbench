@@ -101,20 +101,19 @@ DIRECT_DIAGNOSIS_LIFECYCLE = {
     "model_escalation": "prohibited",
     "implementation_governance": "prohibited",
 }
-PROBE_ROLE = "awb_ownership_probe"
+PROBE_ROLE = "lead-owned-protected-mcp"
 PROBE_LIFECYCLE = {
     "work_cutoff_seconds": 45,
     "hard_deadline_seconds": 60,
     "handoff_reserve_seconds": 15,
-    "max_waits": 2,
-    "max_syntheses": 1,
-    "replacement": "prohibited",
-    "model_escalation": "prohibited",
+    "max_mcp_calls": 1,
+    "max_children": 0,
+    "max_waits": 0,
     "hard_deadline_outcome": "inconclusive-delegate",
 }
 MAX_PROBE_MATCHES = 64
-PROBE_DESCRIPTOR_VERSION = 2
-PROBE_PARENT_CONTEXT_VERSION = 1
+PROBE_DESCRIPTOR_VERSION = 3
+PROBE_PARENT_CONTEXT_VERSION = 2
 CODEX_PROFILE_SCHEMA_KEYS = (
     "name",
     "description",
@@ -125,14 +124,12 @@ CODEX_PROFILE_SCHEMA_KEYS = (
 )
 PROBE_ARTIFACT_REGISTRY: dict[str, dict[str, Any]] = {
     "ecs-task-definition-manifests": {
-        "query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}",
         "accepted_path_pattern": (
             r"(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?"
             r"task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\.(?:json|yaml|yml)\Z"
         ),
     },
     "deployment-pipeline-manifests": {
-        "query_pattern": "{.github/workflows/*,**/{*bitbucket-pipelines*,*cloudbuild*,*buildspec*,*pipeline*,*Jenkinsfile*}}",
         "accepted_path_pattern": (
             r"(?:[A-Za-z0-9._@+-]+/)*(?:\.github/workflows/[A-Za-z0-9._-]+\.(?:ya?ml)|"
             r"(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?bitbucket-pipelines"
@@ -146,7 +143,6 @@ PROBE_ARTIFACT_REGISTRY: dict[str, dict[str, Any]] = {
         ),
     },
     "infrastructure-as-code": {
-        "query_pattern": "**/{*.tf,*.tf.json,cdk.json,Pulumi*.yaml,Pulumi*.yml,serverless*.yaml,serverless*.yml,sam*.yaml,sam*.yml,cloudformation*.yaml,cloudformation*.yml,template*.yaml,template*.yml}",
         "accepted_path_pattern": (
             r"(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9._-]+\.tf(?:\.json)?|cdk\.json|Pulumi[A-Za-z0-9._-]*\.ya?ml|"
             r"(?:serverless|sam|cloudformation|template)[A-Za-z0-9._-]*\.ya?ml)\Z"
@@ -154,17 +150,16 @@ PROBE_ARTIFACT_REGISTRY: dict[str, dict[str, Any]] = {
     },
 }
 PROBE_TOOL_CONSTRAINTS = {
-    "codex_sandbox_mode": "read-only",
-    "codex_profile_schema_keys": list(CODEX_PROFILE_SCHEMA_KEYS),
-    "codex_declared_tools": [],
-    "claude_tools": ["Glob"],
-    "required_host_primitive": "verified-bounded-host-native-path-metadata",
-    "missing_or_unobservable_action": "normal-full-flow-zero-probe-child-waits-or-synthesis",
-    "role_sandbox_or_prose_is_not_capability": True,
+    "mcp_server": "awb_ownership",
+    "mcp_tool": "scan_required_artifacts",
+    "invocation": "one-direct-lead-owned-zero-argument-call",
+    "required_observation": "exact-protected-mcp-tool-registered-and-enabled",
+    "missing_or_unobservable_action": "normal-full-flow-zero-probe-children-waits-or-synthesis",
     "forbidden": [
-        "caller-supplied-patterns",
+        "ownership-probe-child",
+        "caller-supplied-input",
         "file-content-reads",
-        "shell-or-repository-commands",
+        "shell-or-repository-commands-or-imports",
         "hooks-helpers-or-configuration-evaluation",
         "network-or-credentials",
         "mutation-or-tests",
@@ -178,21 +173,17 @@ PROBE_INPUT_KEYS = {
     "registry_descriptor_sha256",
     "required_artifact_classes",
     "direct_user_objective_repository_identity",
+    "host_canonical_workspace_identity",
     "declaration_conflict",
-    "parent_context_sha256",
     "query_results",
 }
-PROBE_HANDOFF_KEYS = {
-    "phase",
+PROBE_ADAPTER_RESULT_KEYS = {
+    "adapter_result_version",
+    "tool_name",
     "descriptor_version",
     "descriptor_sha256",
-    "required_artifact_classes",
-    "declaration_conflict",
-    "parent_context_sha256",
+    "workspace_identity",
     "query_results",
-    "filtered_accepted_matches",
-    "ambiguity_flags",
-    "outcome",
 }
 PROBE_PARENT_CONTEXT_KEYS = {
     "context_version",
@@ -201,6 +192,9 @@ PROBE_PARENT_CONTEXT_KEYS = {
     "descriptor_sha256",
     "required_artifact_classes",
     "declaration_conflict",
+    "direct_user_objective_repository_identity",
+    "host_canonical_workspace_identity",
+    "adapter_result",
 }
 PROBE_AMBIGUITY_KEYS = {
     "declaration_conflict",
@@ -233,11 +227,16 @@ PROBE_OUTPUT_KEYS = {
     "expected_owner_identity",
     "required_input",
     "lifecycle",
+    "planner_count",
+    "probe_child_count",
+    "wait_count",
+    "virtual_elapsed_seconds_upper_bound",
 }
 PROBE_CAPABILITY_GATE_KEYS = {
     "harness",
     "probe_supported",
     "spawn_probe_child",
+    "direct_mcp_call",
     "max_waits",
     "max_syntheses",
     "routing_action",
@@ -253,7 +252,6 @@ def ownership_probe_descriptor() -> dict[str, Any]:
         "class_queries": [
             {
                 "artifact_class": name,
-                "query_pattern": details["query_pattern"],
                 "accepted_path_pattern": details["accepted_path_pattern"],
             }
             for name, details in PROBE_ARTIFACT_REGISTRY.items()
@@ -261,23 +259,23 @@ def ownership_probe_descriptor() -> dict[str, Any]:
         "limits": {
             "max_classes": len(PROBE_ARTIFACT_REGISTRY),
             "max_matches_per_class": MAX_PROBE_MATCHES,
+            "max_depth": 32,
+            "max_entries": 50000,
+            "deadline_seconds": 45,
         },
+        "excluded_directories": [
+            ".git", ".hg", ".svn", ".tox", ".venv", "__pycache__", "node_modules", "vendor"
+        ],
         "query_result_schema": {
             "required_fields": sorted(PROBE_QUERY_KEYS),
             "matches": "unique-sorted-canonical-repository-relative-paths",
             "classification": "validate-all-paths-then-filter-by-accepted-path-pattern",
         },
-        "handoff_result_schema": {
-            "required_fields": sorted(PROBE_HANDOFF_KEYS),
+        "adapter_result_schema": {
+            "required_fields": sorted(PROBE_ADAPTER_RESULT_KEYS),
             "descriptor_binding": "sha256-canonical-json-of-registry-descriptor",
-            "filtered_accepted_matches": "canonical-class-order-with-unique-sorted-accepted-paths",
-            "ambiguity_flags": sorted(PROBE_AMBIGUITY_KEYS),
-            "allowed_outcomes": [
-                "owner-artifact-present",
-                "known-artifact-mismatch",
-                "inconclusive-delegate",
-            ],
-            "parent_context_binding": "sha256-canonical-json-of-immutable-parent-context-v1",
+            "workspace_binding": "exact-host-canonical-workspace-identity",
+            "classification": "lead-recomputes-from-retained-context-and-exact-adapter-result",
         },
         "parent_context_schema": {
             "version": PROBE_PARENT_CONTEXT_VERSION,
@@ -287,15 +285,11 @@ def ownership_probe_descriptor() -> dict[str, Any]:
             "parent_retention": "exact-object-and-digest",
         },
         "tool_constraints": {
-            "codex_sandbox_mode": PROBE_TOOL_CONSTRAINTS["codex_sandbox_mode"],
-            "codex_profile_schema_keys": list(PROBE_TOOL_CONSTRAINTS["codex_profile_schema_keys"]),
-            "codex_declared_tools": list(PROBE_TOOL_CONSTRAINTS["codex_declared_tools"]),
-            "claude_tools": list(PROBE_TOOL_CONSTRAINTS["claude_tools"]),
-            "required_host_primitive": PROBE_TOOL_CONSTRAINTS["required_host_primitive"],
+            "mcp_server": PROBE_TOOL_CONSTRAINTS["mcp_server"],
+            "mcp_tool": PROBE_TOOL_CONSTRAINTS["mcp_tool"],
+            "invocation": PROBE_TOOL_CONSTRAINTS["invocation"],
+            "required_observation": PROBE_TOOL_CONSTRAINTS["required_observation"],
             "missing_or_unobservable_action": PROBE_TOOL_CONSTRAINTS["missing_or_unobservable_action"],
-            "role_sandbox_or_prose_is_not_capability": PROBE_TOOL_CONSTRAINTS[
-                "role_sandbox_or_prose_is_not_capability"
-            ],
             "forbidden": list(PROBE_TOOL_CONSTRAINTS["forbidden"]),
         },
         "lifecycle": dict(PROBE_LIFECYCLE),
@@ -318,6 +312,9 @@ def ownership_probe_parent_context(
     descriptor: Any,
     required_artifact_classes: Any,
     declaration_conflict: Any,
+    direct_user_objective_repository_identity: Any,
+    host_canonical_workspace_identity: Any,
+    adapter_result: Any,
 ) -> dict[str, Any]:
     """Build the immutable parent-retained context for an ownership probe."""
     if descriptor != ownership_probe_descriptor():
@@ -333,6 +330,13 @@ def ownership_probe_parent_context(
             raise RoutingError("required_artifact_classes must contain exact trimmed non-control names")
     if type(declaration_conflict) is not bool:
         raise RoutingError("ownership probe declaration_conflict must be a boolean")
+    if direct_user_objective_repository_identity is not None and not _is_clean_text(
+        direct_user_objective_repository_identity
+    ):
+        raise RoutingError("direct user objective repository identity must be null or exact trimmed non-control text")
+    if not _is_canonical_workspace_identity(host_canonical_workspace_identity):
+        raise RoutingError("host canonical workspace identity must be an exact canonical absolute path")
+    _validate_probe_adapter_result(adapter_result, host_canonical_workspace_identity)
     context = {
         "context_version": PROBE_PARENT_CONTEXT_VERSION,
         "phase": "probe-ownership",
@@ -340,6 +344,9 @@ def ownership_probe_parent_context(
         "descriptor_sha256": ownership_probe_descriptor_sha256(),
         "required_artifact_classes": list(required_artifact_classes),
         "declaration_conflict": declaration_conflict,
+        "direct_user_objective_repository_identity": direct_user_objective_repository_identity,
+        "host_canonical_workspace_identity": host_canonical_workspace_identity,
+        "adapter_result": adapter_result,
     }
     if set(context) != PROBE_PARENT_CONTEXT_KEYS:
         raise AssertionError("ownership probe parent context schema drifted")
@@ -354,6 +361,9 @@ def ownership_probe_parent_context_sha256(context: Any) -> str:
         ownership_probe_descriptor(),
         context.get("required_artifact_classes"),
         context.get("declaration_conflict"),
+        context.get("direct_user_objective_repository_identity"),
+        context.get("host_canonical_workspace_identity"),
+        context.get("adapter_result"),
     )
     if context != expected:
         raise RoutingError("ownership probe parent context differs from the canonical retained context")
@@ -362,39 +372,37 @@ def ownership_probe_parent_context_sha256(context: Any) -> str:
 
 def ownership_probe_capability_gate(
     harness: Any,
-    role_available: Any,
+    tool_registered: Any,
     observed_tools: Any,
 ) -> dict[str, Any]:
-    """Decide whether the runtime may spawn the bounded probe child."""
+    """Decide whether the lead may call the protected MCP tool directly."""
     if harness not in {"codex", "claude"}:
         raise RoutingError("ownership probe harness must be codex or claude")
-    if type(role_available) is not bool:
-        raise RoutingError("ownership probe role_available must be a boolean")
+    if type(tool_registered) is not bool:
+        raise RoutingError("ownership probe tool_registered must be a boolean")
     if (
         not isinstance(observed_tools, list)
         or observed_tools != sorted(set(observed_tools))
         or any(not _is_clean_text(tool) for tool in observed_tools)
     ):
         raise RoutingError("ownership probe observed_tools must be unique sorted exact names")
-    supported = harness == "claude" and role_available and observed_tools == ["Glob"]
+    supported = tool_registered and observed_tools == ["awb_ownership.scan_required_artifacts"]
     if supported:
-        reason = "verified-claude-glob-path-metadata-primitive"
+        reason = "verified-protected-awb-ownership-mcp-tool"
         routing_action = "probe-ownership"
-    elif not role_available:
-        reason = "ownership-probe-role-unavailable"
-        routing_action = "normal-full-flow"
-    elif harness == "codex":
-        reason = "codex-profile-schema-exposes-no-verified-path-metadata-primitive"
+    elif not tool_registered:
+        reason = "protected-awb-ownership-mcp-server-unregistered"
         routing_action = "normal-full-flow"
     else:
-        reason = "verified-bounded-host-native-path-metadata-primitive-unavailable"
+        reason = "exact-protected-awb-ownership-mcp-tool-unavailable"
         routing_action = "normal-full-flow"
     result = {
         "harness": harness,
         "probe_supported": supported,
-        "spawn_probe_child": supported,
-        "max_waits": PROBE_LIFECYCLE["max_waits"] if supported else 0,
-        "max_syntheses": PROBE_LIFECYCLE["max_syntheses"] if supported else 0,
+        "spawn_probe_child": False,
+        "direct_mcp_call": supported,
+        "max_waits": 0,
+        "max_syntheses": 0,
         "routing_action": routing_action,
         "reason": reason,
     }
@@ -1001,6 +1009,8 @@ def _validate_probe_query(value: Any) -> tuple[dict[str, Any], list[str]]:
             raise RoutingError(f"ownership probe query {field} must be a boolean")
     if value["symlinks_followed"]:
         raise RoutingError("ownership probe query must not follow symlinks")
+    if value["complete"] and (value["truncated"] or value["symlink_encountered"]):
+        raise RoutingError("ownership probe query cannot be complete when truncated or symlink-affected")
     matches = value["matches"]
     if not isinstance(matches, list):
         raise RoutingError("ownership probe query matches must be an array")
@@ -1015,6 +1025,8 @@ def _validate_probe_query(value: Any) -> tuple[dict[str, Any], list[str]]:
             raise RoutingError(f"ownership probe match must be a canonical repository-relative path: {_display(match)}")
         if path_pattern.fullmatch(match) is not None:
             accepted_matches.append(match)
+        else:
+            raise RoutingError("ownership probe adapter returned a path outside its accepted class pattern")
     validated = {
         "artifact_class": artifact_class,
         "complete": value["complete"],
@@ -1026,8 +1038,40 @@ def _validate_probe_query(value: Any) -> tuple[dict[str, Any], list[str]]:
     return validated, accepted_matches
 
 
-def build_ownership_probe_handoff(value: Any) -> dict[str, Any]:
-    """Build the exact host-native child handoff for offline validation and replay."""
+def _is_canonical_workspace_identity(value: Any) -> bool:
+    return (
+        _is_clean_text(value)
+        and os.path.isabs(value)
+        and os.path.normpath(value) == value
+        and os.path.realpath(value) == value
+    )
+
+
+def _validate_probe_adapter_result(value: Any, expected_workspace_identity: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, dict) or set(value) != PROBE_ADAPTER_RESULT_KEYS:
+        raise RoutingError("ownership probe adapter result has an invalid schema")
+    if value["adapter_result_version"] != 1 or value["tool_name"] != "scan_required_artifacts":
+        raise RoutingError("ownership probe adapter identity differs from the protected tool contract")
+    if (
+        value["descriptor_version"] != PROBE_DESCRIPTOR_VERSION
+        or value["descriptor_sha256"] != ownership_probe_descriptor_sha256()
+    ):
+        raise RoutingError("ownership probe adapter descriptor binding differs from the protected contract")
+    if value["workspace_identity"] != expected_workspace_identity or not _is_canonical_workspace_identity(
+        value["workspace_identity"]
+    ):
+        raise RoutingError("ownership probe adapter workspace differs from the host canonical workspace")
+    raw_queries = value["query_results"]
+    if not isinstance(raw_queries, list) or len(raw_queries) != len(PROBE_ARTIFACT_REGISTRY):
+        raise RoutingError("ownership probe adapter requires exactly three artifact-class results")
+    queries = [_validate_probe_query(query)[0] for query in raw_queries]
+    if [query["artifact_class"] for query in queries] != list(PROBE_ARTIFACT_REGISTRY):
+        raise RoutingError("ownership probe adapter results must use every class in canonical order")
+    return queries
+
+
+def build_ownership_probe_adapter_result(value: Any) -> dict[str, Any]:
+    """Build a protected adapter result for offline validation and replay only."""
     if not isinstance(value, dict):
         raise RoutingError("ownership probe packet must be a JSON object")
     missing, extra = sorted(PROBE_INPUT_KEYS - set(value)), sorted(set(value) - PROBE_INPUT_KEYS)
@@ -1043,141 +1087,87 @@ def build_ownership_probe_handoff(value: Any) -> dict[str, Any]:
         raise RoutingError("ownership probe registry descriptor differs from the canonical pre-query contract")
     if value["registry_descriptor_sha256"] != descriptor_sha256:
         raise RoutingError("ownership probe registry descriptor binding differs from the canonical pre-query contract")
-    if type(value["declaration_conflict"]) is not bool:
-        raise RoutingError("ownership probe declaration_conflict must be a boolean")
-    direct_identity = value["direct_user_objective_repository_identity"]
-    if direct_identity is not None and not _is_clean_text(direct_identity):
-        raise RoutingError("direct user objective repository identity must be null or exact trimmed non-control text")
-    required = value["required_artifact_classes"]
-    if not isinstance(required, list) or not 1 <= len(required) <= len(PROBE_ARTIFACT_REGISTRY):
-        raise RoutingError("required_artifact_classes must contain one to three class names")
-    if required != list(dict.fromkeys(required)):
-        raise RoutingError("required_artifact_classes must not contain duplicates")
-    for artifact_class in required:
-        if not _is_clean_text(artifact_class):
-            raise RoutingError("required_artifact_classes must contain exact trimmed non-control names")
-    parent_context = ownership_probe_parent_context(descriptor, required, value["declaration_conflict"])
-    parent_context_sha256 = ownership_probe_parent_context_sha256(parent_context)
-    if value["parent_context_sha256"] != parent_context_sha256:
-        raise RoutingError("ownership probe parent context binding differs from the parent-retained context")
+    if not _is_canonical_workspace_identity(value["host_canonical_workspace_identity"]):
+        raise RoutingError("host canonical workspace identity must be an exact canonical absolute path")
     raw_queries = value["query_results"]
     if not isinstance(raw_queries, list) or len(raw_queries) != len(PROBE_ARTIFACT_REGISTRY):
         raise RoutingError("ownership probe requires exactly three fixed artifact-class query results")
-    validated_pairs = [_validate_probe_query(query) for query in raw_queries]
-    queries = [pair[0] for pair in validated_pairs]
-    accepted_by_class = [
-        {"artifact_class": pair[0]["artifact_class"], "matches": pair[1]}
-        for pair in validated_pairs
-    ]
+    queries = [_validate_probe_query(query)[0] for query in raw_queries]
     query_classes = [query["artifact_class"] for query in queries]
     expected_classes = list(PROBE_ARTIFACT_REGISTRY)
     if query_classes != expected_classes:
         raise RoutingError("ownership probe query results must use every fixed artifact class in canonical order")
 
-    unsupported_required = [item for item in required if item not in PROBE_ARTIFACT_REGISTRY]
-    ambiguity_flags = {
-        "declaration_conflict": value["declaration_conflict"],
-        "unsupported_required_classes": unsupported_required,
-        "incomplete_query_classes": [query["artifact_class"] for query in queries if not query["complete"]],
-        "truncated_query_classes": [query["artifact_class"] for query in queries if query["truncated"]],
-        "symlink_encountered_query_classes": [
-            query["artifact_class"] for query in queries if query["symlink_encountered"]
-        ],
-        "symlinks_followed_query_classes": [
-            query["artifact_class"] for query in queries if query["symlinks_followed"]
-        ],
-    }
-    accepted_map = {item["artifact_class"]: item["matches"] for item in accepted_by_class}
-    matched_required = [item for item in required if item in accepted_map and accepted_map[item]]
-    if any(
-        value
-        for key, value in ambiguity_flags.items()
-        if key != "declaration_conflict"
-    ) or ambiguity_flags["declaration_conflict"]:
-        outcome = "inconclusive-delegate"
-    elif matched_required:
-        outcome = "owner-artifact-present"
-    else:
-        outcome = "known-artifact-mismatch"
-    handoff = {
-        "phase": "probe-ownership",
+    adapter_result = {
+        "adapter_result_version": 1,
+        "tool_name": "scan_required_artifacts",
         "descriptor_version": descriptor["version"],
         "descriptor_sha256": descriptor_sha256,
-        "required_artifact_classes": list(required),
-        "declaration_conflict": value["declaration_conflict"],
-        "parent_context_sha256": parent_context_sha256,
+        "workspace_identity": value["host_canonical_workspace_identity"],
         "query_results": queries,
-        "filtered_accepted_matches": accepted_by_class,
-        "ambiguity_flags": ambiguity_flags,
-        "outcome": outcome,
     }
-    if set(handoff) != PROBE_HANDOFF_KEYS or set(handoff["ambiguity_flags"]) != PROBE_AMBIGUITY_KEYS:
-        raise AssertionError("ownership probe handoff schema drifted")
-    return handoff
+    _validate_probe_adapter_result(adapter_result, value["host_canonical_workspace_identity"])
+    return adapter_result
 
 
-def evaluate_ownership_probe_handoff(
+def evaluate_ownership_probe_result(
     descriptor: Any,
     expected_parent_context: Any,
     expected_parent_context_sha256: Any,
-    handoff: Any,
 ) -> str:
-    """Fail-closed lead comparison for offline parity tests; runtime uses host reasoning only."""
+    """Fail-closed parity evaluator using only the exact parent-retained context."""
     try:
-        if descriptor != ownership_probe_descriptor() or not isinstance(handoff, dict):
+        if descriptor != ownership_probe_descriptor():
             return "inconclusive-delegate"
         if not isinstance(expected_parent_context_sha256, str):
             return "inconclusive-delegate"
         retained_digest = ownership_probe_parent_context_sha256(expected_parent_context)
         if expected_parent_context_sha256 != retained_digest:
             return "inconclusive-delegate"
-        if set(handoff) != PROBE_HANDOFF_KEYS:
-            return "inconclusive-delegate"
-        if handoff.get("parent_context_sha256") != retained_digest:
-            return "inconclusive-delegate"
-        if handoff.get("required_artifact_classes") != expected_parent_context["required_artifact_classes"]:
-            return "inconclusive-delegate"
-        if handoff.get("declaration_conflict") != expected_parent_context["declaration_conflict"]:
-            return "inconclusive-delegate"
-        packet = {
-            "phase": expected_parent_context["phase"],
-            "registry_descriptor": descriptor,
-            "registry_descriptor_sha256": expected_parent_context["descriptor_sha256"],
-            "required_artifact_classes": expected_parent_context["required_artifact_classes"],
-            "direct_user_objective_repository_identity": None,
-            "declaration_conflict": expected_parent_context["declaration_conflict"],
-            "parent_context_sha256": retained_digest,
-            "query_results": handoff.get("query_results"),
-        }
-        expected = build_ownership_probe_handoff(packet)
+        queries = _validate_probe_adapter_result(
+            expected_parent_context["adapter_result"],
+            expected_parent_context["host_canonical_workspace_identity"],
+        )
     except (RoutingError, TypeError, ValueError):
         return "inconclusive-delegate"
-    if handoff != expected:
+    required = expected_parent_context["required_artifact_classes"]
+    if expected_parent_context["declaration_conflict"] or any(
+        artifact_class not in PROBE_ARTIFACT_REGISTRY for artifact_class in required
+    ):
         return "inconclusive-delegate"
-    return expected["outcome"]
+    if any(
+        not query["complete"]
+        or query["truncated"]
+        or query["symlink_encountered"]
+        or query["symlinks_followed"]
+        for query in queries
+    ):
+        return "inconclusive-delegate"
+    matches = {query["artifact_class"]: query["matches"] for query in queries}
+    return "owner-artifact-present" if any(matches[item] for item in required) else "known-artifact-mismatch"
 
 
 def probe_ownership(value: Any) -> dict[str, Any]:
     """Classify an ownership packet using offline validation/test tooling only."""
-    handoff = build_ownership_probe_handoff(value)
+    adapter_result = build_ownership_probe_adapter_result(value)
     direct_identity = value["direct_user_objective_repository_identity"]
-    required = handoff["required_artifact_classes"]
-    accepted_map = {
-        item["artifact_class"]: item["matches"]
-        for item in handoff["filtered_accepted_matches"]
-    }
+    required = value["required_artifact_classes"]
+    accepted_map = {item["artifact_class"]: item["matches"] for item in adapter_result["query_results"]}
     matched_required = [item for item in required if item in accepted_map and accepted_map[item]]
     descriptor = ownership_probe_descriptor()
     parent_context = ownership_probe_parent_context(
         descriptor,
-        value["required_artifact_classes"],
+        required,
         value["declaration_conflict"],
+        direct_identity,
+        value["host_canonical_workspace_identity"],
+        adapter_result,
     )
-    outcome = evaluate_ownership_probe_handoff(
+    parent_context_sha256 = ownership_probe_parent_context_sha256(parent_context)
+    outcome = evaluate_ownership_probe_result(
         descriptor,
         parent_context,
-        value["parent_context_sha256"],
-        handoff,
+        parent_context_sha256,
     )
     if outcome == "inconclusive-delegate":
         routing_action = "normal-full-flow"
@@ -1192,10 +1182,10 @@ def probe_ownership(value: Any) -> dict[str, Any]:
     artifact_queries = [
         {
             "artifact_class": name,
-            "query_pattern": details["query_pattern"],
+            "scan": "protected-startup-cwd-metadata",
             "max_matches": MAX_PROBE_MATCHES,
         }
-        for name, details in PROBE_ARTIFACT_REGISTRY.items()
+        for name in PROBE_ARTIFACT_REGISTRY
     ]
     result = {
         "phase": "probe-ownership",
@@ -1212,6 +1202,10 @@ def probe_ownership(value: Any) -> dict[str, Any]:
         "expected_owner_identity": direct_identity if outcome == "known-artifact-mismatch" else None,
         "required_input": required_input,
         "lifecycle": dict(PROBE_LIFECYCLE),
+        "planner_count": 0,
+        "probe_child_count": 0,
+        "wait_count": 0,
+        "virtual_elapsed_seconds_upper_bound": 59,
     }
     if set(result) != PROBE_OUTPUT_KEYS:
         raise AssertionError("ownership probe output schema drifted")
@@ -1267,7 +1261,7 @@ def check_replay(path: Path) -> int:
                     "phase",
                     "registry_descriptor",
                     "registry_descriptor_sha256",
-                    "parent_context_sha256",
+                    "host_canonical_workspace_identity",
                 }
                 missing_probe = sorted(replay_probe_keys - set(case["probe"]))
                 extra_probe = sorted(set(case["probe"]) - replay_probe_keys)
@@ -1281,16 +1275,9 @@ def check_replay(path: Path) -> int:
                     "phase": descriptor["phase"],
                     "registry_descriptor": descriptor,
                     "registry_descriptor_sha256": ownership_probe_descriptor_sha256(),
+                    "host_canonical_workspace_identity": "/workspace/current",
                     **case["probe"],
                 }
-                parent_context = ownership_probe_parent_context(
-                    descriptor,
-                    packet["required_artifact_classes"],
-                    packet["declaration_conflict"],
-                )
-                packet["parent_context_sha256"] = ownership_probe_parent_context_sha256(
-                    parent_context
-                )
                 actual = probe_ownership(packet)
             else:
                 actual = route(case["card"])

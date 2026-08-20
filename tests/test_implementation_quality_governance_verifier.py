@@ -55,6 +55,8 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
     def create_valid_manifest_fixture(self) -> None:
         for relative_path in (
             ".codex-plugin/plugin.json",
+            ".mcp.json",
+            "servers/ownership_probe_mcp.py",
             ".claude-plugin/plugin.json",
             ".claude-plugin/marketplace.json",
             ".agents/plugins/marketplace.json",
@@ -63,7 +65,7 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
             destination = self.fixture_root / relative_path
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
-            destination.chmod(0o644)
+            destination.chmod(0o755 if relative_path == "servers/ownership_probe_mcp.py" else 0o644)
         VERIFIER.ROOT = self.fixture_root
 
     def create_valid_planner_lifecycle_fixture(self) -> None:

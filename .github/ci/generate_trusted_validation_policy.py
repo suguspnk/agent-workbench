@@ -33,16 +33,20 @@ PROTECTED_ROOTS = (
     "adapters/codex/.codex",
     "agents",
     "scripts",
+    "servers",
     "skills",
     "tests",
 )
+PROTECTED_FILES = (".mcp.json",)
 PINNED_CANDIDATE_PATHS = {
     "scripts/verify_repository.py",
+    "servers/ownership_probe_mcp.py",
     "skills/orchestrate-task/scripts/route_subagent.py",
     "skills/orchestrate-task/tests/routing-cases.json",
     "tests/test_ci_sandbox.py",
     "tests/test_code_review_scope.py",
     "tests/test_verify_repository.py",
+    "tests/test_ownership_probe_mcp.py",
 }
 TRUSTED_COPY_PATHS = {
     ".github/ci/run_sandboxed_validation.py",
@@ -148,6 +152,16 @@ def strict_file(root: Path, path: Path, maximum: int) -> tuple[bytes, os.stat_re
 def collect_inventory(root: Path, maximum: int) -> list[dict[str, Any]]:
     inventory: list[dict[str, Any]] = []
     nodes = 0
+    for file_name in PROTECTED_FILES:
+        content, metadata = strict_file(root, root / file_name, maximum)
+        inventory.append({
+            "binding": "sha256",
+            "executable": bool(metadata.st_mode & 0o111),
+            "kind": "file",
+            "path": file_name,
+            "sha256": sha256(content),
+        })
+        nodes += 1
     for root_name in PROTECTED_ROOTS:
         root_path = root / root_name
         safe_components(root_name)
@@ -328,7 +342,7 @@ def document_contracts(
         )),
         ("CONTRIBUTING.md", "protected-set"): "\n".join((
             "### Complete protected validation set", "",
-            f"The authoritative policy is version `{policy_version}` and its `protected_set_digest` is `{set_digest}`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, `skills`, and `tests`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 24 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.",
+            f"The authoritative policy is version `{policy_version}` and its `protected_set_digest` is `{set_digest}`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, `servers`, `skills`, and `tests`, plus the root `.mcp.json` file. The trusted inventory binds every file and directory below those roots, including manifests, MCP registration/server code, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 24 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.",
         )),
         ("CONTRIBUTING.md", "initial-bootstrap"): "\n".join((
             "### Initial protected-base activation", "",

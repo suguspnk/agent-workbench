@@ -325,55 +325,14 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         for field in ("work_cutoff_seconds", "hard_deadline_seconds", "handoff_reserve_seconds", "max_children", "max_waits"):
             self.assertEqual(diagnosis["lifecycle"][field], VERIFY.DIRECT_DIAGNOSIS_CONTRACT[field])
 
-        self.assertEqual(
-            VERIFY.OWNERSHIP_PROBE_CONTRACT,
-            {
-                "artifact_classes": [
-                    "ecs-task-definition-manifests",
-                    "deployment-pipeline-manifests",
-                    "infrastructure-as-code",
-                ],
-                "capability_tier": "efficient",
-                "effort": "low",
-                "forbidden": [
-                    "caller-supplied-globs",
-                    "file-contents",
-                    "commands-hooks-or-config",
-                    "network-or-credentials",
-                    "mutation",
-                    "tests",
-                    "implementation-governance",
-                    "symlink-following",
-                    "replacement",
-                    "model-escalation",
-                ],
-                "handoff_reserve_seconds": 15,
-                "hard_deadline_outcome": "inconclusive-delegate",
-                "hard_deadline_seconds": 60,
-                "max_classes": 3,
-                "max_matches_per_class": 64,
-                "max_syntheses": 1,
-                "max_waits": 2,
-                "outcomes": {
-                    "inconclusive-delegate": "normal-full-flow",
-                    "known-artifact-mismatch": "stop-before-planner-name-direct-owner-or-require-exact-objective-repository-identity-or-path",
-                    "owner-artifact-present": "normal-reroute",
-                },
-                "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
-                "query_order": "canonical-registry-order",
-                "registry_descriptor": VERIFY.OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR,
-                "registry_descriptor_sha256": "fe76c7ea3b4fab5583e82ec51ccadd697ee8b76052e593094c508fbe448afb61",
-                "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
-                "role_names": ["awb_ownership_probe", "awb-ownership-probe"],
-                "work_cutoff_seconds": 45,
-            },
-        )
         probe = VERIFY.OWNERSHIP_PROBE_CONTRACT
         self.assertEqual(list(ROUTER.PROBE_ARTIFACT_REGISTRY), probe["artifact_classes"])
         self.assertEqual(ROUTER.MAX_PROBE_MATCHES, probe["max_matches_per_class"])
-        self.assertEqual(ROUTER.PROBE_ROLE, probe["role_names"][0])
+        self.assertEqual(ROUTER.PROBE_ROLE, probe["execution_owner"])
+        self.assertEqual(probe["tool"], "awb_ownership.scan_required_artifacts")
         self.assertEqual(ROUTER.ownership_probe_descriptor(), probe["registry_descriptor"])
-        for field in ("work_cutoff_seconds", "hard_deadline_seconds", "handoff_reserve_seconds", "max_waits", "max_syntheses", "hard_deadline_outcome"):
+        self.assertEqual(ROUTER.ownership_probe_descriptor_sha256(), probe["registry_descriptor_sha256"])
+        for field in ("work_cutoff_seconds", "hard_deadline_seconds", "handoff_reserve_seconds", "max_mcp_calls", "max_children", "max_waits", "hard_deadline_outcome"):
             self.assertEqual(ROUTER.PROBE_LIFECYCLE[field], probe[field])
 
     def test_ownership_probe_profiles_are_exact_read_only_and_least_tool(self) -> None:
@@ -388,16 +347,10 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         self.assertEqual(set(codex), VERIFY.CODEX_PROFILE_KEYS)
         self.assertNotIn("tools", codex)
         for body in (codex["developer_instructions"], claude_body):
-            self.assertIn("never accept caller-supplied patterns", body)
-            self.assertIn("exact protected version 2 registry descriptor", body)
-            self.assertIn("canonical SHA-256 binding", body)
-            self.assertIn("parent-context binding", body)
-            self.assertIn("Return exactly one structured handoff with only", body)
-            self.assertIn("`parent_context_sha256`", body)
-            self.assertIn("complete bounded `query_results`", body)
-            self.assertIn("exact `ambiguity_flags`", body)
-            self.assertIn("safe-superset", body)
-            self.assertIn("Do not read file contents", body)
+            self.assertIn("deprecated for runtime use", body)
+            self.assertIn("Do not spawn it", body)
+            self.assertIn("`awb_ownership.scan_required_artifacts`", body)
+            self.assertIn("return `inconclusive-delegate` immediately", body)
             self.assertIn(VERIFY.NON_OPERATOR_AUTHORIZATION, body)
 
     def test_runtime_probe_surfaces_reject_router_shell_or_repository_command_classification(self) -> None:
@@ -407,18 +360,18 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         VERIFY.validate_runtime_ownership_probe_surfaces(skill, portable, model_selection)
         mutations = (
             (skill.replace(
-                "The lead evaluates that handoff directly",
-                "The lead executes `route_subagent.py --probe-ownership` and then evaluates that handoff directly",
+                "The lead derives the outcome only from the retained context",
+                "The lead executes `route_subagent.py --probe-ownership` and derives the outcome only from the retained context",
                 1,
             ), portable, model_selection),
             (skill, portable.replace(
-                "The lead compares the handoff directly",
-                "The lead runs a shell or repository command and compares the handoff directly",
+                "The lead derives the outcome only from that retained context",
+                "The lead runs a shell or repository command and derives the outcome only from that retained context",
                 1,
             ), model_selection),
             (skill, portable, model_selection.replace(
-                "The lead compares it directly",
-                "The lead invokes `route_subagent.py --describe-ownership-probe` and compares it directly",
+                "The lead derives the outcome from retained context",
+                "The lead invokes `route_subagent.py --describe-ownership-probe` and derives the outcome from retained context",
                 1,
             )),
         )
@@ -454,12 +407,13 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             portable.replace('"max_classes": 3', '"max_classes": 4', 1),
             portable.replace('"max_matches_per_class": 64', '"max_matches_per_class": 65', 1),
             portable.replace('"hard_deadline_seconds": 60', '"hard_deadline_seconds": 61', 1),
-            portable.replace('"caller-supplied-globs",', '', 1),
+            portable.replace('"caller-supplied-input",', '', 1),
             portable.replace('"implementation-governance",', '', 1),
-            portable.replace('"query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}"', '"query_pattern": "**/*"', 1),
-            portable.replace('"version": 2\n    },\n    "registry_descriptor_sha256"', '"version": 3\n    },\n    "registry_descriptor_sha256"', 1),
+            portable.replace('"max_children": 0', '"max_children": 1', 1),
+            portable.replace('"tool": "awb_ownership.scan_required_artifacts"', '"tool": "untrusted.scan"', 1),
         )
         for mutation in mutations:
+            self.assertNotEqual(mutation, portable)
             with self.subTest(), self.assertRaisesRegex(SystemExit, "1"):
                 VERIFY.validate_planner_lifecycle_contract(skill, mutation, codex, claude)
 

@@ -47,7 +47,7 @@ OWNERSHIP_PROBE_AUTHORIZATION = (
 )
 OWNERSHIP_PROBE_PROFILES = {
     "codex_profiles": {
-        "description": "Bounded path-metadata ownership probe for three closed deployment artifact classes.",
+        "description": "Deprecated compatibility profile; runtime ownership probing is lead-owned protected MCP only.",
         "effort": "low",
         "model": "gpt-5.6-luna",
         "path": "adapters/codex/.codex/agents/awb-ownership-probe.toml",
@@ -55,7 +55,7 @@ OWNERSHIP_PROBE_PROFILES = {
         "tools": [],
     },
     "claude_profiles": {
-        "description": "Bounded path-metadata ownership probe for three closed deployment artifact classes.",
+        "description": "Deprecated compatibility profile; runtime ownership probing is lead-owned protected MCP only.",
         "effort": "low",
         "model": "haiku",
         "path": "agents/awb-ownership-probe.md",
@@ -65,11 +65,13 @@ OWNERSHIP_PROBE_PROFILES = {
 }
 PINNED_PATHS = {
     "scripts/verify_repository.py",
+    "servers/ownership_probe_mcp.py",
     "skills/orchestrate-task/scripts/route_subagent.py",
     "skills/orchestrate-task/tests/routing-cases.json",
     "tests/test_ci_sandbox.py",
     "tests/test_code_review_scope.py",
     "tests/test_verify_repository.py",
+    "tests/test_ownership_probe_mcp.py",
 }
 PROTECTED_ROOTS = (
     ".agents",
@@ -79,9 +81,11 @@ PROTECTED_ROOTS = (
     "adapters/codex/.codex",
     "agents",
     "scripts",
+    "servers",
     "skills",
     "tests",
 )
+PROTECTED_FILES = (".mcp.json",)
 CODEX_DIRECTORY = "adapters/codex/.codex/agents"
 CLAUDE_DIRECTORY = "agents"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -415,6 +419,8 @@ def load_policy(content: bytes) -> dict[str, Any]:
                 fail("only sha256-bound files may contain a hash")
             seen.add(path)
             canonical.update("\0".join((path, kind, binding, entry.get("sha256", ""), "true" if executable else "false")).encode())
+        if any(path not in seen for path in PROTECTED_FILES):
+            fail("protected_surface_inventory is missing an immutable protected root file")
         if canonical.hexdigest() != digest:
             fail("protected_set_digest does not match the canonical inventory")
         input_hash = policy.get("policy_input_sha256")
@@ -627,6 +633,26 @@ def validate_protected_surfaces(reader: CandidateReader, policy: dict[str, Any])
             os.close(root_descriptor)
         actual.append((root, "directory", root_mode))
         _surface_walk(reader, root, nodes=actual)
+    for relative_path in PROTECTED_FILES:
+        components = literal_components(relative_path)
+        directory = reader.open_directory(components[:-1])
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
+        try:
+            try:
+                descriptor = os.open(components[-1], flags, dir_fd=directory)
+            except OSError:
+                fail(f"protected surface entry cannot be opened safely: {diagnostic(relative_path)}")
+        finally:
+            os.close(directory)
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                fail(f"protected surface contains a special file: {diagnostic(relative_path)}")
+            if metadata.st_size > reader.max_file_bytes:
+                fail(f"protected surface file is oversized: {diagnostic(relative_path)}")
+            actual.append((relative_path, "file", bool(metadata.st_mode & 0o111)))
+        finally:
+            os.close(descriptor)
     actual_map = {path: (kind, executable) for path, kind, executable in actual}
     expected_map = {path: kind for path, (kind, _, _, _) in expected.items()}
     actual_kinds = {path: kind for path, (kind, _) in actual_map.items()}

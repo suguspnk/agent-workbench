@@ -24,6 +24,7 @@
     "portable"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Agent Workbench",
     "shortDescription": "Orchestrate work, review code, govern quality, discover loops, and draft stack evidence",
