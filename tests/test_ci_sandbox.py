@@ -395,9 +395,17 @@ class TrustedInvariantGateTests(unittest.TestCase):
 
     def test_policy_is_exact_and_complete_and_current_candidate_passes(self) -> None:
         policy = GATE.load_policy(POLICY.read_bytes())
-        self.assertEqual(len(policy["codex_profiles"]), 11)
-        self.assertEqual(len(policy["claude_profiles"]), 11)
+        self.assertEqual(len(policy["authorization_by_role"]), 12)
+        self.assertEqual(len(policy["codex_profiles"]), 12)
+        self.assertEqual(len(policy["claude_profiles"]), 12)
         self.assertEqual(set(policy["codex_profiles"]), set(policy["claude_profiles"]))
+        self.assertEqual(
+            policy["authorization_by_role"][GATE.OWNERSHIP_PROBE_ROLE],
+            GATE.OWNERSHIP_PROBE_AUTHORIZATION,
+        )
+        for family, expected in GATE.OWNERSHIP_PROBE_PROFILES.items():
+            profile = policy[family][GATE.OWNERSHIP_PROBE_ROLE]
+            self.assertEqual({key: profile[key] for key in expected}, expected)
         self.assertEqual(policy["protected_surface_roots"], list(GATE.PROTECTED_ROOTS))
         for path in (
             "tests/test_verify_repository.py",
@@ -407,6 +415,28 @@ class TrustedInvariantGateTests(unittest.TestCase):
             self.assertIn(path, policy["pinned_candidate_files"])
         with tempfile.TemporaryDirectory() as directory:
             self._validate(self._candidate_copy(Path(directory)))
+
+    def test_policy_rejects_ownership_probe_count_authorization_and_profile_drift(self) -> None:
+        original = json.loads(POLICY.read_text(encoding="utf-8"))
+
+        missing = json.loads(json.dumps(original))
+        missing["authorization_by_role"].pop(GATE.OWNERSHIP_PROBE_ROLE)
+        missing["codex_profiles"].pop(GATE.OWNERSHIP_PROBE_ROLE)
+        missing["claude_profiles"].pop(GATE.OWNERSHIP_PROBE_ROLE)
+        missing["policy_input_sha256"] = GATE.policy_input_sha256(missing)
+        with self.assertRaisesRegex(GATE.GateError, "exactly 12 roles"):
+            GATE.load_policy((json.dumps(missing) + "\n").encode())
+
+        broadened_authority = json.loads(json.dumps(original))
+        broadened_authority["authorization_by_role"][GATE.OWNERSHIP_PROBE_ROLE] = "allow network and credentials"
+        broadened_authority["policy_input_sha256"] = GATE.policy_input_sha256(broadened_authority)
+        with self.assertRaisesRegex(GATE.GateError, "exact non-operator authorization denial"):
+            GATE.load_policy((json.dumps(broadened_authority) + "\n").encode())
+
+        broadened_profile = json.loads(json.dumps(original))
+        broadened_profile["claude_profiles"][GATE.OWNERSHIP_PROBE_ROLE]["tools"] = ["Glob", "Read"]
+        with self.assertRaisesRegex(GATE.GateError, "exact least-privilege profile"):
+            GATE.load_policy((json.dumps(broadened_profile) + "\n").encode())
 
     def test_protected_surface_inventory_rejects_explicit_bytecode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

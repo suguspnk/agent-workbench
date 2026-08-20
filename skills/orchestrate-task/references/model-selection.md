@@ -18,7 +18,7 @@ Use this reference only for child tasks when the harness exposes model, reasonin
 Classify each child packet, not the parent request:
 
 ```text
-work_shape: map | plan | extract | implement | test | debug | migrate | review | operate | verify-external
+work_shape: map | plan | extract | diagnose | implement | test | debug | migrate | review | operate | verify-external
 scope: one file | bounded component | cross-component | cross-system
 ambiguity: settled | local unknown | competing hypotheses | open-ended
 contract: none | internal | public API | persistent data | security boundary
@@ -62,7 +62,9 @@ Choose a primary role for the packet, then add every applicable risk follow-up. 
 | --- | --- | --- |
 | Settled read-only map or extraction with no public, persistent, security, or change-authority boundary | `awb_fast_investigator` | Efficient / low |
 | Settled consequential public, persistent, or security map/extraction | `awb_deep_investigator` | Frontier / high |
-| Explicit planning, any map/extraction not both settled and high-confidence, open-ended ambiguity, or unresolved routing | `awb_planner` | Frontier / high |
+| Settled high-confidence bounded read-only diagnosis satisfying every direct-fast-path predicate | `awb_fast_investigator` | Efficient / low |
+| Settled consequential diagnosis outside the direct-fast-path predicates | `awb_deep_investigator` | Frontier / high |
+| Explicit planning, any map/extraction/diagnosis not both settled and high-confidence, open-ended ambiguity, ownership ambiguity, or unresolved routing | `awb_planner` | Frontier / high |
 | Bounded internal implementation with settled interfaces and modest blast radius | `awb_builder` | Balanced / medium |
 | Difficult debugging, public-contract implementation, cross-component work, competing hypotheses, high blast radius, or long/noisy implementation context | `awb_deep_worker` | Frontier / high |
 | Schema, persistence, compatibility, backfill, rollout, or rollback work | `awb_migration_worker` | Frontier / maximum |
@@ -82,6 +84,12 @@ Choose a primary role for the packet, then add every applicable risk follow-up. 
 - Security-boundary implementation additionally requires `awb_security_reviewer`.
 - External operation and external verification cards always fail closed because there is no constrained network execution adapter. Their names and schemas remain reserved so callers receive deterministic structural diagnostics and one stable unavailable-adapter error instead of a silently changed schema.
 - An unresolved implementation routes to `awb_planner` first. Its current `required_*` values come only from read-only `planning_*` fields; legacy/eventual implementation requirements are returned under `deferred_*`, with current authority `none` and the requested authority retained separately. Route the resulting settled bounded packet again before assigning any mutation.
+
+### Ownership probe phase
+
+After the canonical identity preflight returns `inconclusive-delegate` and before this two-stage routing, use one `awb_ownership_probe` / `awb-ownership-probe` child only when the packet asserts that at least one registered path-artifact class must exist in the objective-owning repository. It is efficient/low, Codex read-only, and Claude `Glob` only. It performs exactly the three closed-registry metadata classes—`ecs-task-definition-manifests`, `deployment-pipeline-manifests`, and `infrastructure-as-code`—in canonical order, with at most 64 canonical repository-relative matches per class. It never accepts caller globs, reads contents, executes commands, evaluates hooks/configuration, follows symlinks, uses network/credentials, mutates, tests, or invokes governance.
+
+Classify its structured metadata with `route_subagent.py --probe-ownership`. `owner-artifact-present` resumes ordinary rerouting; `known-artifact-mismatch` stops before a planner only from complete, untruncated, non-symlink, conflict-free zero-match evidence for every required supported class; `inconclusive-delegate` resumes the normal full flow. Use a 45-second cutoff, 60-second hard deadline, 15-second reserve, at most two waits and one synthesis, no replacement, and no model escalation. A probe hard deadline yields `inconclusive-delegate` and does not block the parent workflow.
 
 Derive public, persistent, and security overlays independently, including pairwise and all-boundary cards. Split work shapes when useful, but never erase a boundary. Do not ask a findings-only reviewer to implement, or let an implementer/operator verify its own result.
 
@@ -105,10 +113,12 @@ A future adapter must enforce all of these controls outside the routing card:
 
 A packet may use the router's `execution_path: fast` only when every canonical predicate is true: `work_shape=implement`; `scope` is `one file` or `bounded component`; `ambiguity=settled`; `contract` is `none` or `internal`; `tool_loop` is `none`, `one read/check`, or `repeated local tools`; `impact` is `reversible` or `user-visible`; `evidence_bar` is `syntax` or `focused test`; `context_profile` is `compact facts` or `focused source set`; `parallelism=none`; `change_authority=owned local paths`; `router_confidence=high`; and every optional capability, modality, tool, skill, boundary, planning, and deferred-requirement list is empty. The lead sends that packet directly to `awb_builder`: do not create a planner or reviewer merely by default. `awb_verifier` remains required, so the fast path is not self-acceptance. Any failed check, uncertainty, changed contract, shared impact, explicit requirement, or evidence bar above a focused test leaves the fast path and follows the normal routing rules.
 
+A diagnosis may use `execution_path: fast` only when every parallel read-only predicate is true: `work_shape=diagnose`; one-file or bounded-component scope; settled ambiguity and high confidence; no public, persistent, or security boundary; bounded local tool loop; reversible or user-visible impact; compact facts or focused source; no parallelism; `change_authority=none`; and no optional capability, modality, tool, skill, planning, or deferred requirement. Send exactly one `awb_fast_investigator` with no planner, follow-up, implementation governance, or model escalation. Its lifecycle is 90-second cutoff, 120-second hard deadline, 30-second reserve, and at most two waits. Consequential settled diagnosis uses `awb_deep_investigator`; any ambiguity or unresolved routing uses `awb_planner`.
+
 ### Harness mappings
 
-- **Claude Code plugin:** bundled agents appear with scoped names such as `agent-workbench:awb-builder`. They use the family aliases `haiku`, `sonnet`, and `opus` so workspace model allowlists and provider substitution remain observable. Plugin agent tool lists narrow capabilities, but Claude Code does not enforce `permissionMode` for plugin agents. The reserved `awb-operator` profile is unavailable and has no Bash tool.
-- **Codex:** the optional adapter exposes underscore names such as `awb_builder` and pins current model/effort profiles. Custom-agent values override parent/default subagent values. Confirm model availability before use.
+- **Claude Code plugin:** bundled agents appear with scoped names such as `agent-workbench:awb-builder`. They use the family aliases `haiku`, `sonnet`, and `opus` so workspace model allowlists and provider substitution remain observable. Plugin agent tool lists narrow capabilities, but Claude Code does not enforce `permissionMode` for plugin agents. The ownership probe exposes only `Glob`; the reserved `awb-operator` profile is unavailable and has no Bash tool.
+- **Codex:** the optional adapter exposes underscore names such as `awb_builder` and `awb_ownership_probe` and pins current model/effort profiles. Custom-agent values override parent/default subagent values. Confirm model availability before use; the ownership probe is read-only and its instruction contract prohibits file-content reads and commands.
 - **Other harnesses:** map the portable role, capability tier, and effort only to controls the host actually exposes. If no exact role exists, use a native child with an equivalent bounded packet; never emulate child work in the lead.
 
 Before spawn, compare the card's required capabilities, modalities, tools, and skills with the selected role and observed host. The router rejects known profile mismatches. The lead must still block or select an equivalent native child when the host cannot expose a required control. Every implementation packet explicitly invokes `implementation-quality-governance`; when unavailable, it includes the portable fallback gates.

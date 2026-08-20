@@ -27,12 +27,29 @@ class RouteSubagentTests(unittest.TestCase):
         cls.cases = ROUTER.load_json(REPLAY_PATH)
         cls.success_cases = [case for case in cls.cases if "expected" in case]
         cls.error_cases = [case for case in cls.cases if "expected_error" in case]
+        cls.probe_packet = {
+            "phase": "probe-ownership",
+            "required_artifact_classes": ["ecs-task-definition-manifests"],
+            "direct_user_objective_repository_identity": None,
+            "declaration_conflict": False,
+            "query_results": [
+                {
+                    "artifact_class": artifact_class,
+                    "complete": True,
+                    "truncated": False,
+                    "symlink_encountered": False,
+                    "symlinks_followed": False,
+                    "matches": [],
+                }
+                for artifact_class in ROUTER.PROBE_ARTIFACT_REGISTRY
+            ],
+        }
 
     def test_replay_expectations_are_complete_and_exact(self) -> None:
         for case in self.cases:
             with self.subTest(case=case["id"]):
                 if "expected" in case:
-                    self.assertEqual(set(case["expected"]), ROUTER.OUTPUT_KEYS)
+                    self.assertEqual(set(case["expected"]), ROUTER.expected_output_keys(case["card"]))
                     self.assertEqual(ROUTER.route(case["card"]), case["expected"])
                 else:
                     with self.assertRaisesRegex(ROUTER.RoutingError, f"^{case['expected_error']}$"):
@@ -102,6 +119,40 @@ class RouteSubagentTests(unittest.TestCase):
                 self.assertEqual(result["primary_role"], "awb_planner")
                 self.assertTrue(result["reroute_after_planning"])
 
+    def test_simple_read_only_diagnosis_uses_one_bounded_child(self) -> None:
+        case = next(case for case in self.success_cases if case["id"] == "simple-read-only-diagnosis")
+        result = ROUTER.route(case["card"])
+        self.assertEqual(result["primary_role"], "awb_fast_investigator")
+        self.assertEqual(result["execution_path"], "fast")
+        self.assertEqual(result["required_followups"], [])
+        self.assertEqual(result["required_skills"], [])
+        self.assertFalse(result["reroute_after_planning"])
+        self.assertEqual(
+            result["lifecycle"],
+            {
+                "work_cutoff_seconds": 90,
+                "hard_deadline_seconds": 120,
+                "handoff_reserve_seconds": 30,
+                "max_children": 1,
+                "max_waits": 2,
+                "max_followups": 0,
+                "cutoff_action": "synthesize-only-already-gathered-evidence",
+                "hard_deadline_outcome": "blocked",
+                "model_escalation": "prohibited",
+                "implementation_governance": "prohibited",
+            },
+        )
+
+    def test_consequential_or_unsettled_diagnosis_does_not_use_fast_path(self) -> None:
+        base = next(case["card"] for case in self.success_cases if case["id"] == "simple-read-only-diagnosis")
+        consequential = ROUTER.route(dict(base, impact="shared system"))
+        self.assertEqual(consequential["primary_role"], "awb_deep_investigator")
+        self.assertEqual(consequential["execution_path"], "standard")
+        self.assertNotIn("lifecycle", consequential)
+        unsettled = ROUTER.route(dict(base, ambiguity="local unknown", router_confidence="uncertain"))
+        self.assertEqual(unsettled["primary_role"], "awb_planner")
+        self.assertTrue(unsettled["reroute_after_planning"])
+
     def test_unresolved_implementation_defers_mutation_requirements_to_planner(self) -> None:
         case = next(case for case in self.cases if case["id"] == "unresolved-implementation-needs-plan")
         result = ROUTER.route(case["card"])
@@ -166,7 +217,7 @@ class RouteSubagentTests(unittest.TestCase):
             for authority in ("none", "owned-path deletion", "external/destructive"):
                 with self.subTest(shape=shape, authority=authority), self.assertRaises(ROUTER.RoutingError):
                     ROUTER.route(dict(base, work_shape=shape, change_authority=authority))
-        for shape in ("map", "extract", "plan", "test", "review", "verify-external"):
+        for shape in ("map", "extract", "diagnose", "plan", "test", "review", "verify-external"):
             for authority in ("owned local paths", "owned-path deletion", "shared contract", "external/destructive"):
                 with self.subTest(shape=shape, authority=authority), self.assertRaises(ROUTER.RoutingError):
                     ROUTER.route(dict(base, work_shape=shape, change_authority=authority))
@@ -225,7 +276,7 @@ class RouteSubagentTests(unittest.TestCase):
 
     def test_privileged_capabilities_and_network_cannot_self_grant(self) -> None:
         base = dict(self.cases[0]["card"])
-        ordinary_shapes = ("map", "extract", "plan", "test", "review", "implement", "debug", "migrate")
+        ordinary_shapes = ("map", "extract", "diagnose", "plan", "test", "review", "implement", "debug", "migrate")
         for shape in ordinary_shapes:
             authority = "owned local paths" if shape in {"implement", "debug", "migrate"} else "none"
             card = dict(base, work_shape=shape, change_authority=authority)
@@ -276,6 +327,122 @@ class RouteSubagentTests(unittest.TestCase):
         card = dict(self.cases[0]["card"], required_tools=["browser"])
         with self.assertRaisesRegex(ROUTER.RoutingError, "lacks required_tools: browser"):
             ROUTER.route(card)
+
+    def test_complete_zero_match_ownership_probe_is_terminal_mismatch(self) -> None:
+        result = ROUTER.probe_ownership(self.probe_packet)
+        self.assertEqual(set(result), ROUTER.PROBE_OUTPUT_KEYS)
+        self.assertEqual(result["primary_role"], "awb_ownership_probe")
+        self.assertEqual(result["outcome"], "known-artifact-mismatch")
+        self.assertEqual(result["routing_action"], "stop-before-planner")
+        self.assertEqual(result["required_input"], "exact-objective-owning-repository-identity-or-path")
+        self.assertEqual(len(result["artifact_queries"]), 3)
+        self.assertTrue(all(item["max_matches"] == 64 for item in result["artifact_queries"]))
+        self.assertEqual(
+            result["lifecycle"],
+            {
+                "work_cutoff_seconds": 45,
+                "hard_deadline_seconds": 60,
+                "handoff_reserve_seconds": 15,
+                "max_waits": 2,
+                "max_syntheses": 1,
+                "replacement": "prohibited",
+                "model_escalation": "prohibited",
+                "hard_deadline_outcome": "inconclusive-delegate",
+            },
+        )
+
+    def test_ownership_probe_names_direct_expected_owner_on_mismatch(self) -> None:
+        result = ROUTER.probe_ownership(
+            dict(self.probe_packet, direct_user_objective_repository_identity="healthpal-infrastructure")
+        )
+        self.assertEqual(result["outcome"], "known-artifact-mismatch")
+        self.assertEqual(result["expected_owner_identity"], "healthpal-infrastructure")
+        self.assertIsNone(result["required_input"])
+
+    def test_ownership_probe_top_level_and_nested_matches_reroute_normally(self) -> None:
+        valid_matches = {
+            "ecs-task-definition-manifests": (
+                "ecs-task-definition.json",
+                "deploy/ecs-task-definition.json",
+            ),
+            "deployment-pipeline-manifests": (
+                "buildspec.yml",
+                "ci/release/buildspec.yml",
+            ),
+            "infrastructure-as-code": (
+                "main.tf",
+                "infra/stacks/prod/main.tf",
+            ),
+        }
+        class_order = list(ROUTER.PROBE_ARTIFACT_REGISTRY)
+        for artifact_class, paths in valid_matches.items():
+            for path in paths:
+                packet = json.loads(json.dumps(self.probe_packet))
+                packet["required_artifact_classes"] = [artifact_class]
+                packet["query_results"][class_order.index(artifact_class)]["matches"] = [path]
+                result = ROUTER.probe_ownership(packet)
+                with self.subTest(artifact_class=artifact_class, path=path):
+                    self.assertEqual(result["outcome"], "owner-artifact-present")
+                    self.assertEqual(result["routing_action"], "normal-reroute")
+                    self.assertEqual(result["matched_required_classes"], [artifact_class])
+                    self.assertIsNone(result["expected_owner_identity"])
+                    self.assertIsNone(result["required_input"])
+
+    def test_ownership_probe_ambiguity_always_delegates(self) -> None:
+        mutations = (
+            {"declaration_conflict": True},
+            {"required_artifact_classes": ["database-runtime-owner"]},
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                result = ROUTER.probe_ownership(dict(self.probe_packet, **mutation))
+                self.assertEqual(result["outcome"], "inconclusive-delegate")
+                self.assertEqual(result["routing_action"], "normal-full-flow")
+        for field, value in (
+            ("complete", False),
+            ("truncated", True),
+            ("symlink_encountered", True),
+        ):
+            packet = json.loads(json.dumps(self.probe_packet))
+            packet["query_results"][1][field] = value
+            with self.subTest(field=field):
+                self.assertEqual(ROUTER.probe_ownership(packet)["outcome"], "inconclusive-delegate")
+
+    def test_ownership_probe_rejects_noncanonical_or_untrusted_metadata(self) -> None:
+        unsafe_matches = (
+            "/deploy/ecs-task-definition.json",
+            "../deploy/ecs-task-definition.json",
+            "deploy//ecs-task-definition.json",
+            "deploy\\ecs-task-definition.json",
+            "deploy/ordinary.json",
+        )
+        for unsafe in unsafe_matches:
+            packet = json.loads(json.dumps(self.probe_packet))
+            packet["query_results"][0]["matches"] = [unsafe]
+            with self.subTest(match=unsafe), self.assertRaises(ROUTER.RoutingError):
+                ROUTER.probe_ownership(packet)
+        followed = json.loads(json.dumps(self.probe_packet))
+        followed["query_results"][0]["symlinks_followed"] = True
+        with self.assertRaisesRegex(ROUTER.RoutingError, "must not follow symlinks"):
+            ROUTER.probe_ownership(followed)
+        caller_glob = json.loads(json.dumps(self.probe_packet))
+        caller_glob["query_results"][0]["artifact_class"] = "**/*.json"
+        with self.assertRaisesRegex(ROUTER.RoutingError, "closed registry"):
+            ROUTER.probe_ownership(caller_glob)
+        overflow = json.loads(json.dumps(self.probe_packet))
+        overflow["query_results"][0]["matches"] = [f"task-definition-{index:02d}.json" for index in range(65)]
+        with self.assertRaisesRegex(ROUTER.RoutingError, "exceeds 64"):
+            ROUTER.probe_ownership(overflow)
+
+    def test_ownership_probe_requires_every_fixed_query_once_in_order(self) -> None:
+        missing = json.loads(json.dumps(self.probe_packet))
+        missing["query_results"].pop()
+        with self.assertRaisesRegex(ROUTER.RoutingError, "exactly three"):
+            ROUTER.probe_ownership(missing)
+        reordered = json.loads(json.dumps(self.probe_packet))
+        reordered["query_results"].reverse()
+        with self.assertRaisesRegex(ROUTER.RoutingError, "canonical order"):
+            ROUTER.probe_ownership(reordered)
 
     def test_load_rejects_oversize_symlink_special_and_deep_nesting(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -458,6 +625,17 @@ class RouteSubagentTests(unittest.TestCase):
             bad = subprocess.run([sys.executable, str(ROUTER_PATH), "--card", str(bad_path)], cwd=ROOT, capture_output=True, text=True, check=False)
             self.assertEqual(bad.returncode, 2)
             self.assertTrue(bad.stderr.startswith("ERROR:"))
+            probe_path = Path(directory) / "probe.json"
+            probe_path.write_text(json.dumps(self.probe_packet), encoding="utf-8")
+            probe = subprocess.run(
+                [sys.executable, str(ROUTER_PATH), "--probe-ownership", str(probe_path)],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(probe.returncode, 0, probe.stderr)
+            self.assertEqual(json.loads(probe.stdout)["outcome"], "known-artifact-mismatch")
 
 
 if __name__ == "__main__":

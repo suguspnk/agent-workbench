@@ -85,6 +85,25 @@ handoff: use the format below
   "default_budget_minutes": 12,
   "default_hard_deadline_minutes": 12,
   "default_work_cutoff_minutes": 10,
+  "direct_diagnosis": {
+    "capability_tier": "efficient",
+    "effort": "low",
+    "execution_path": "fast",
+    "forbidden": [
+      "planner",
+      "followups",
+      "implementation-governance",
+      "parallelism",
+      "model-escalation"
+    ],
+    "handoff_reserve_seconds": 30,
+    "hard_deadline_seconds": 120,
+    "max_children": 1,
+    "max_waits": 2,
+    "role": "awb_fast_investigator",
+    "work_cutoff_seconds": 90,
+    "work_shape": "diagnose"
+  },
   "handoff_reserve_minutes": 2,
   "hard_deadline_outcome": "blocked-no-further-polling-replacement-recovery-or-lead-investigation",
   "lead_ownership_preflight": {
@@ -143,11 +162,52 @@ handoff: use the format below
     "missing_direct_user_identity_outcome": "inconclusive-delegate",
     "outcomes": {
       "current-owner-confirmed": "resume-existing-routing-and-delegation",
-      "inconclusive-delegate": "delegate-to-existing-bounded-planner-ownership-establishment-flow-never-terminate-never-ask-redundant-user-input-and-never-proceed-without-delegation",
+      "inconclusive-delegate": "enter-bounded-probe-ownership-phase-then-delegate-normal-full-flow-if-inconclusive-never-terminate-never-ask-redundant-user-input",
       "known-owner-mismatch": "exit-immediately-blocked-or-needs-input-only-after-canonical-host-comparison-proves-unambiguous-definitive-nonmatch-name-direct-user-supplied-identity-no-planning"
     },
     "phase": "before-portable-or-model-selection-routing-and-implementation-governance",
     "single_preflight": true
+  },
+  "ownership_probe": {
+    "artifact_classes": [
+      "ecs-task-definition-manifests",
+      "deployment-pipeline-manifests",
+      "infrastructure-as-code"
+    ],
+    "capability_tier": "efficient",
+    "effort": "low",
+    "forbidden": [
+      "caller-supplied-globs",
+      "file-contents",
+      "commands-hooks-or-config",
+      "network-or-credentials",
+      "mutation",
+      "tests",
+      "implementation-governance",
+      "symlink-following",
+      "replacement",
+      "model-escalation"
+    ],
+    "handoff_reserve_seconds": 15,
+    "hard_deadline_outcome": "inconclusive-delegate",
+    "hard_deadline_seconds": 60,
+    "max_classes": 3,
+    "max_matches_per_class": 64,
+    "max_syntheses": 1,
+    "max_waits": 2,
+    "outcomes": {
+      "inconclusive-delegate": "normal-full-flow",
+      "known-artifact-mismatch": "stop-before-planner-name-direct-owner-or-require-exact-objective-repository-identity-or-path",
+      "owner-artifact-present": "normal-reroute"
+    },
+    "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
+    "query_order": "canonical-registry-order",
+    "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
+    "role_names": [
+      "awb_ownership_probe",
+      "awb-ownership-probe"
+    ],
+    "work_cutoff_seconds": 45
   },
   "ownership_mismatch_outcomes": {
     "known_owner": "blocked-or-needs-input-name-missing-objective-owning-repository",
@@ -157,9 +217,15 @@ handoff: use the format below
 ```
 <!-- AWB_PLANNER_LIFECYCLE_V1_END -->
 
-Before portable/model-selection routing setup or any implementation-governance load, when both an exact direct-user repository/path identity and a host-provided canonical current-workspace identity are available, the lead must perform one lead-owned ownership-only classification preflight and must not skip directly to the planner. The bounded comparison uses at most three non-executing, source-free host-native filesystem/workspace metadata reads. This is the only exception to the lead investigation prohibition. It may read only host-provided canonical workspace/repository identity fields or filesystem metadata for a user-named exact path. Shell or repository commands; repository, source, file, or path-inventory content reads; repository configuration, hook, or helper evaluation; remotes or credentials; repository-declared ownership; source investigation; interface or design work; tests; mutation; verification; review; and acceptance are prohibited. If either required identity is absent or ambiguous, or a read or conclusion would exceed those limits, use `inconclusive-delegate` and delegate through the existing flow.
+Before portable/model-selection routing setup or any implementation-governance load, when both an exact direct-user repository/path identity and a host-provided canonical current-workspace identity are available, the lead must perform one lead-owned ownership-only classification preflight and must not skip directly to the planner. The bounded comparison uses at most three non-executing, source-free host-native filesystem/workspace metadata reads. This is the only exception to the lead investigation prohibition. It may read only host-provided canonical workspace/repository identity fields or filesystem metadata for a user-named exact path. Shell or repository commands; repository, source, file, or path-inventory content reads; repository configuration, hook, or helper evaluation; remotes or credentials; repository-declared ownership; source investigation; interface or design work; tests; mutation; verification; review; and acceptance are prohibited. If either required identity is absent or ambiguous, or a read or conclusion would exceed those limits, use `inconclusive-delegate` and enter the bounded ownership probe before ordinary routing.
 
-The exhaustive outcomes are `current-owner-confirmed` (only when the direct user-supplied objective exactly matches this workspace/repository through a host-provided canonical identity field; resume existing routing and delegation), `known-owner-mismatch` (only when the direct user supplies an exact repository/path, the host supplies the canonical current-workspace identity, and comparing those two identities proves an unambiguous definitive nonmatch; exit immediately with compact `blocked` or `needs-input` evidence naming the user-supplied identity; no planning), and `inconclusive-delegate` (when direct user-provided evidence supplies no exact repository/path or permitted host metadata cannot decide unambiguously; delegate to the existing bounded planner ownership-establishment flow; never terminate, ask redundant user input during the preflight, or proceed without delegation). Missing direct-user repository/path identity is `inconclusive-delegate`; an ordinary workspace-scoped prompt is not a terminal preflight mismatch or needs-input result. Do not ask redundant user input during the preflight. Direct-user evidence alone cannot authorize `known-owner-mismatch`. Any ambiguity is `inconclusive-delegate`. Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`; none may be mapped to `known-owner-mismatch`. Never infer ownership from repository content or unspecified provenance. The lead must not load or invoke `implementation-quality-governance`; require it only in an implementation child after ownership is settled. The preflight does not relax eventual test, verifier, reviewer, or security-review overlays.
+The exhaustive outcomes are `current-owner-confirmed` (only when the direct user-supplied objective exactly matches this workspace/repository through a host-provided canonical identity field; resume existing routing and delegation), `known-owner-mismatch` (only when the direct user supplies an exact repository/path, the host supplies the canonical current-workspace identity, and comparing those two identities proves an unambiguous definitive nonmatch; exit immediately with compact `blocked` or `needs-input` evidence naming the user-supplied identity; no planning), and `inconclusive-delegate` (when direct user-provided evidence supplies no exact repository/path or permitted host metadata cannot decide unambiguously; enter the bounded ownership probe, then delegate to the normal full flow if the probe is unsupported or inconclusive; never terminate or ask redundant user input during the identity preflight). Missing direct-user repository/path identity is `inconclusive-delegate`; an ordinary workspace-scoped prompt is not a terminal preflight mismatch or needs-input result. Do not ask redundant user input during the preflight. Direct-user evidence alone cannot authorize `known-owner-mismatch`. Any ambiguity is `inconclusive-delegate`. Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`; none may be mapped to `known-owner-mismatch`. Never infer ownership from repository content or unspecified provenance. The lead must not load or invoke `implementation-quality-governance`; require it only in an implementation child after ownership is settled. The preflight and probe do not relax eventual implementation test, verifier, reviewer, or security-review overlays.
+
+After `inconclusive-delegate`, use exactly one `awb_ownership_probe` / `awb-ownership-probe` child before ordinary routing when the packet asserts that at least one registered artifact class must exist in the objective-owning repository. It is efficient/low, Codex read-only, and Claude `Glob` only. Its closed registry is exactly `ecs-task-definition-manifests`, `deployment-pipeline-manifests`, and `infrastructure-as-code`; caller globs are prohibited. Query every registered class in canonical order, at most once, and report no more than 64 unique sorted canonical repository-relative path names per class. Never read contents, run commands, inspect hooks or configuration, use network or credentials, mutate, test, load implementation governance, or follow symlinks.
+
+`owner-artifact-present` resumes ordinary rerouting. `known-artifact-mismatch` is terminal only when all three queries are complete and untruncated, no symlink was encountered or followed, there is no declaration conflict, every required class is supported, and every required class has zero matches; stop before a planner and name the exact direct owner when supplied, otherwise return `required_input: exact-objective-owning-repository-identity-or-path`. Every unsupported, incomplete, truncated, symlink-affected, conflicting, or hard-deadline result is `inconclusive-delegate` and resumes the normal full flow. Use a 45-second cutoff, 60-second hard deadline, 15-second reserve, at most two waits and one synthesis, with no replacement or model escalation.
+
+For a settled high-confidence `work_shape: diagnose`, use the direct fast path only for one-file or bounded-component read-only work with no public, persistent, or security boundary; compact or focused context; a bounded local tool loop; reversible or user-visible impact; no parallelism; no change authority; and no optional requirements. Send exactly one `awb_fast_investigator`, no planner, follow-ups, implementation governance, or model escalation, with a 90-second cutoff, 120-second hard deadline, 30-second reserve, and at most two waits. Consequential settled diagnosis uses `awb_deep_investigator`; ambiguity or unresolved routing uses `awb_planner`.
 
 The work cutoff must precede the hard deadline by the recorded positive handoff reserve. At cutoff, the single recovery action may synthesize only evidence already gathered; it must not begin discovery, replacement, another attempt, polling, or lead investigation. At the hard deadline, set the outcome to `blocked` and stop all polling, replacement, recovery, and lead investigation. Reaching either boundary alone does not justify a model, effort, or routing change.
 

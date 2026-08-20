@@ -1616,5 +1616,59 @@
       "authorization_binding": null,
       "authorization_reference": null
     }
+  },
+  {
+    "id": "simple-read-only-diagnosis",
+    "card": {
+      "work_shape": "diagnose",
+      "scope": "bounded component",
+      "ambiguity": "settled",
+      "contract": "internal",
+      "tool_loop": "one read/check",
+      "impact": "reversible",
+      "evidence_bar": "focused test",
+      "context_profile": "focused source set",
+      "parallelism": "none",
+      "change_authority": "none",
+      "router_confidence": "high"
+    },
+    "expected": {
+      "primary_role": "awb_fast_investigator",
+      "execution_path": "fast",
+      "task_class": "routine",
+      "capability_tier": "efficient",
+      "effort": "low",
+      "required_followups": [],
+      "reroute_after_planning": false,
+      "must_not_downgrade": false,
+      "required_capabilities": [],
+      "required_modalities": [],
+      "required_tools": [],
+      "required_skills": [],
+      "skill_fallback_required": false,
+      "reasons": [
+        "settled bounded diagnosis fits one direct efficient investigator"
+      ],
+      "deferred_capabilities": [],
+      "deferred_modalities": [],
+      "deferred_tools": [],
+      "deferred_skills": [],
+      "current_change_authority": "none",
+      "deferred_change_authority": null,
+      "authorization_binding": null,
+      "authorization_reference": null,
+      "lifecycle": {
+        "work_cutoff_seconds": 90,
+        "hard_deadline_seconds": 120,
+        "handoff_reserve_seconds": 30,
+        "max_children": 1,
+        "max_waits": 2,
+        "max_followups": 0,
+        "cutoff_action": "synthesize-only-already-gathered-evidence",
+        "hard_deadline_outcome": "blocked",
+        "model_escalation": "prohibited",
+        "implementation_governance": "prohibited"
+      }
+    }
   }
 ]

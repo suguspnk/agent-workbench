@@ -328,7 +328,7 @@ def document_contracts(
         )),
         ("CONTRIBUTING.md", "protected-set"): "\n".join((
             "### Complete protected validation set", "",
-            f"The authoritative policy is version `{policy_version}` and its `protected_set_digest` is `{set_digest}`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, `skills`, and `tests`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 22 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.",
+            f"The authoritative policy is version `{policy_version}` and its `protected_set_digest` is `{set_digest}`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, `skills`, and `tests`. The trusted inventory binds every file and directory below those roots, including manifests, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 24 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.",
         )),
         ("CONTRIBUTING.md", "initial-bootstrap"): "\n".join((
             "### Initial protected-base activation", "",

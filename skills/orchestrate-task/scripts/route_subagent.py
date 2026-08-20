@@ -16,7 +16,7 @@ from typing import Any
 
 
 FIELDS: dict[str, tuple[str, ...]] = {
-    "work_shape": ("map", "plan", "extract", "implement", "test", "debug", "migrate", "review", "operate", "verify-external"),
+    "work_shape": ("map", "plan", "extract", "diagnose", "implement", "test", "debug", "migrate", "review", "operate", "verify-external"),
     "scope": ("one file", "bounded component", "cross-component", "cross-system"),
     "ambiguity": ("settled", "local unknown", "competing hypotheses", "open-ended"),
     "contract": ("none", "internal", "public API", "persistent data", "security boundary"),
@@ -88,6 +88,85 @@ OUTPUT_KEYS = {
     "deferred_capabilities", "deferred_modalities", "deferred_tools", "deferred_skills",
     "current_change_authority", "deferred_change_authority", "authorization_binding", "authorization_reference",
 }
+DIRECT_DIAGNOSIS_OUTPUT_KEYS = OUTPUT_KEYS | {"lifecycle"}
+DIRECT_DIAGNOSIS_LIFECYCLE = {
+    "work_cutoff_seconds": 90,
+    "hard_deadline_seconds": 120,
+    "handoff_reserve_seconds": 30,
+    "max_children": 1,
+    "max_waits": 2,
+    "max_followups": 0,
+    "cutoff_action": "synthesize-only-already-gathered-evidence",
+    "hard_deadline_outcome": "blocked",
+    "model_escalation": "prohibited",
+    "implementation_governance": "prohibited",
+}
+PROBE_ROLE = "awb_ownership_probe"
+PROBE_LIFECYCLE = {
+    "work_cutoff_seconds": 45,
+    "hard_deadline_seconds": 60,
+    "handoff_reserve_seconds": 15,
+    "max_waits": 2,
+    "max_syntheses": 1,
+    "replacement": "prohibited",
+    "model_escalation": "prohibited",
+    "hard_deadline_outcome": "inconclusive-delegate",
+}
+MAX_PROBE_MATCHES = 64
+PROBE_ARTIFACT_REGISTRY: dict[str, dict[str, Any]] = {
+    "ecs-task-definition-manifests": {
+        "query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}",
+        "path_pattern": re.compile(
+            r"(?:[A-Za-z0-9._@+-]+/)*(?:ecs[-_])?task[-_]?definitions?(?:[-_.][A-Za-z0-9._-]+)?\.(?:json|ya?ml)\Z"
+        ),
+    },
+    "deployment-pipeline-manifests": {
+        "query_pattern": "{.github/workflows/*,**/{bitbucket-pipelines*,cloudbuild*,buildspec*,pipeline*,Jenkinsfile}}",
+        "path_pattern": re.compile(
+            r"(?:[A-Za-z0-9._@+-]+/)*(?:\.github/workflows/[A-Za-z0-9._-]+\.(?:ya?ml)|"
+            r"(?:bitbucket-pipelines|cloudbuild|buildspec|pipeline|Jenkinsfile)"
+            r"(?:[-_.][A-Za-z0-9._-]+)?(?:\.(?:json|ya?ml|groovy))?)\Z"
+        ),
+    },
+    "infrastructure-as-code": {
+        "query_pattern": "**/{*.tf,*.tf.json,cdk.json,Pulumi*.yaml,Pulumi*.yml,serverless*.yaml,serverless*.yml,sam*.yaml,sam*.yml,cloudformation*.yaml,cloudformation*.yml,template*.yaml,template*.yml}",
+        "path_pattern": re.compile(
+            r"(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9._-]+\.tf(?:\.json)?|cdk\.json|Pulumi[A-Za-z0-9._-]*\.ya?ml|"
+            r"(?:serverless|sam|cloudformation|template)[A-Za-z0-9._-]*\.ya?ml)\Z"
+        ),
+    },
+}
+PROBE_INPUT_KEYS = {
+    "phase",
+    "required_artifact_classes",
+    "direct_user_objective_repository_identity",
+    "declaration_conflict",
+    "query_results",
+}
+PROBE_QUERY_KEYS = {
+    "artifact_class",
+    "complete",
+    "truncated",
+    "symlink_encountered",
+    "symlinks_followed",
+    "matches",
+}
+PROBE_OUTPUT_KEYS = {
+    "phase",
+    "primary_role",
+    "execution_path",
+    "capability_tier",
+    "effort",
+    "required_followups",
+    "artifact_queries",
+    "required_artifact_classes",
+    "matched_required_classes",
+    "outcome",
+    "routing_action",
+    "expected_owner_identity",
+    "required_input",
+    "lifecycle",
+}
 MAX_INPUT_BYTES = 1_048_576
 MAX_TEXT_FIELD = 512
 MAX_JSON_DEPTH = 128
@@ -113,6 +192,17 @@ def _is_clean_text(value: Any) -> bool:
         and value == unicodedata.normalize("NFC", value)
         and len(value) <= MAX_TEXT_FIELD
         and not any(unicodedata.category(char) in {"Cc", "Cf", "Cs"} for char in value)
+    )
+
+
+def _is_canonical_repository_path(value: Any) -> bool:
+    if not _is_clean_text(value) or "\\" in value or value.startswith("/"):
+        return False
+    components = value.split("/")
+    return all(
+        component not in {"", ".", ".."}
+        and re.fullmatch(r"[A-Za-z0-9._@+-]+", component) is not None
+        for component in components
     )
 
 
@@ -370,7 +460,7 @@ def validate_card(value: Any) -> dict[str, Any]:
     mutating_shapes = {"implement", "debug", "migrate"}
     if shape in mutating_shapes and authority not in {"owned local paths", "shared contract"}:
         raise RoutingError(f"work_shape={shape} requires owned local paths or shared contract authority")
-    if shape in {"map", "extract", "plan", "test", "review", "verify-external"} and authority != "none":
+    if shape in {"map", "extract", "diagnose", "plan", "test", "review", "verify-external"} and authority != "none":
         raise RoutingError(f"work_shape={shape} requires change_authority=none")
     if authority == "owned-path deletion":
         raise RoutingError("owned-path deletion is unsupported by current read-only operator policy")
@@ -460,6 +550,30 @@ def _is_fast_path(card: dict[str, str]) -> bool:
     )
 
 
+def _is_fast_diagnosis(card: dict[str, Any]) -> bool:
+    """Return whether a settled diagnosis can use one bounded investigator directly."""
+    return (
+        card["work_shape"] == "diagnose"
+        and card["scope"] in {"one file", "bounded component"}
+        and card["ambiguity"] == "settled"
+        and card["contract"] in {"none", "internal"}
+        and card["tool_loop"] in {"none", "one read/check", "repeated local tools"}
+        and card["impact"] in {"reversible", "user-visible"}
+        and card["evidence_bar"] in {"syntax", "focused test"}
+        and card["context_profile"] in {"compact facts", "focused source set"}
+        and card["parallelism"] == "none"
+        and card["change_authority"] == "none"
+        and card["router_confidence"] == "high"
+        and not any(card[field] for field in OPTIONAL_LIST_FIELDS)
+    )
+
+
+def expected_output_keys(card_value: Any) -> set[str]:
+    """Return the exact replay schema without changing legacy route outputs."""
+    card = validate_card(card_value)
+    return DIRECT_DIAGNOSIS_OUTPUT_KEYS if _is_fast_diagnosis(card) else OUTPUT_KEYS
+
+
 def route(card_value: Any) -> dict[str, Any]:
     card = validate_card(card_value)
     shape = card["work_shape"]
@@ -468,7 +582,7 @@ def route(card_value: Any) -> dict[str, Any]:
     persistent_boundary = "persistent data" in boundaries
     public_boundary = "public API" in boundaries
     migration_change = shape == "migrate" or (shape == "implement" and persistent_boundary)
-    unsettled_read = shape in {"map", "extract"} and (
+    unsettled_read = shape in {"map", "extract", "diagnose"} and (
         card["ambiguity"] != "settled" or card["router_confidence"] != "high"
     )
     needs_planning = shape == "plan" or unsettled_read or card["router_confidence"] == "unresolved" or card["ambiguity"] == "open-ended"
@@ -489,10 +603,23 @@ def route(card_value: Any) -> dict[str, Any]:
     elif migration_change:
         role = "awb_migration_worker"
         reasons.append("persistent-data or migration work requires rollout, observability, and recovery analysis")
-    elif shape in {"map", "extract"}:
-        narrow_read = card["ambiguity"] == "settled" and not boundaries and card["change_authority"] == "none" and card["router_confidence"] == "high"
+    elif shape in {"map", "extract", "diagnose"}:
+        narrow_read = (
+            card["ambiguity"] == "settled"
+            and not boundaries
+            and card["change_authority"] == "none"
+            and card["router_confidence"] == "high"
+            and (shape != "diagnose" or _is_fast_diagnosis(card))
+        )
         role = "awb_fast_investigator" if narrow_read else "awb_deep_investigator"
-        reasons.append("settled narrow evidence fits the efficient investigator" if narrow_read else "settled consequential read-only work needs a terminal frontier investigator")
+        if shape == "diagnose":
+            reasons.append(
+                "settled bounded diagnosis fits one direct efficient investigator"
+                if narrow_read
+                else "settled consequential diagnosis needs a terminal frontier investigator"
+            )
+        else:
+            reasons.append("settled narrow evidence fits the efficient investigator" if narrow_read else "settled consequential read-only work needs a terminal frontier investigator")
     elif shape == "test":
         focused = card["evidence_bar"] in {"syntax", "focused test"} and card["impact"] in {"reversible", "user-visible"} and not security_boundary
         role = "awb_verifier" if focused else "awb_test_engineer"
@@ -594,8 +721,9 @@ def route(card_value: Any) -> dict[str, Any]:
         authorization_reference = None
         authorization_binding = None
     tier, effort = ROLE_PROFILE[role]
-    fast_path = _is_fast_path(card)
-    return {
+    fast_diagnosis = _is_fast_diagnosis(card)
+    fast_path = _is_fast_path(card) or fast_diagnosis
+    result = {
         "primary_role": role,
         "execution_path": "fast" if fast_path else "standard",
         "task_class": task_class,
@@ -616,6 +744,130 @@ def route(card_value: Any) -> dict[str, Any]:
         "authorization_binding": authorization_binding,
         "authorization_reference": authorization_reference,
     }
+    if fast_diagnosis:
+        result["lifecycle"] = dict(DIRECT_DIAGNOSIS_LIFECYCLE)
+    return result
+
+
+def _validate_probe_query(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise RoutingError("ownership probe query result must be an object")
+    missing, extra = sorted(PROBE_QUERY_KEYS - set(value)), sorted(set(value) - PROBE_QUERY_KEYS)
+    if missing:
+        raise RoutingError(f"missing ownership probe query fields: {', '.join(missing)}")
+    if extra:
+        raise RoutingError(f"unknown ownership probe query fields: {', '.join(_display(item) for item in extra)}")
+    artifact_class = value["artifact_class"]
+    if artifact_class not in PROBE_ARTIFACT_REGISTRY:
+        raise RoutingError(f"query artifact_class is outside the closed registry: {_display(artifact_class)}")
+    for field in ("complete", "truncated", "symlink_encountered", "symlinks_followed"):
+        if type(value[field]) is not bool:
+            raise RoutingError(f"ownership probe query {field} must be a boolean")
+    if value["symlinks_followed"]:
+        raise RoutingError("ownership probe query must not follow symlinks")
+    matches = value["matches"]
+    if not isinstance(matches, list):
+        raise RoutingError("ownership probe query matches must be an array")
+    if len(matches) > MAX_PROBE_MATCHES:
+        raise RoutingError(f"ownership probe query exceeds {MAX_PROBE_MATCHES} matches")
+    if matches != sorted(set(matches)):
+        raise RoutingError("ownership probe query matches must be unique and sorted")
+    path_pattern = PROBE_ARTIFACT_REGISTRY[artifact_class]["path_pattern"]
+    for match in matches:
+        if not _is_canonical_repository_path(match):
+            raise RoutingError(f"ownership probe match must be a canonical repository-relative path: {_display(match)}")
+        if path_pattern.fullmatch(match) is None:
+            raise RoutingError(f"ownership probe match is outside artifact class {artifact_class}: {_display(match)}")
+    return {
+        "artifact_class": artifact_class,
+        "complete": value["complete"],
+        "truncated": value["truncated"],
+        "symlink_encountered": value["symlink_encountered"],
+        "symlinks_followed": False,
+        "matches": list(matches),
+    }
+
+
+def probe_ownership(value: Any) -> dict[str, Any]:
+    """Classify bounded path-metadata supplied by the ownership-probe child."""
+    if not isinstance(value, dict):
+        raise RoutingError("ownership probe packet must be a JSON object")
+    missing, extra = sorted(PROBE_INPUT_KEYS - set(value)), sorted(set(value) - PROBE_INPUT_KEYS)
+    if missing:
+        raise RoutingError(f"missing ownership probe fields: {', '.join(missing)}")
+    if extra:
+        raise RoutingError(f"unknown ownership probe fields: {', '.join(_display(item) for item in extra)}")
+    if value["phase"] != "probe-ownership":
+        raise RoutingError("ownership probe phase must be probe-ownership")
+    if type(value["declaration_conflict"]) is not bool:
+        raise RoutingError("ownership probe declaration_conflict must be a boolean")
+    direct_identity = value["direct_user_objective_repository_identity"]
+    if direct_identity is not None and not _is_clean_text(direct_identity):
+        raise RoutingError("direct user objective repository identity must be null or exact trimmed non-control text")
+    required = value["required_artifact_classes"]
+    if not isinstance(required, list) or not 1 <= len(required) <= len(PROBE_ARTIFACT_REGISTRY):
+        raise RoutingError("required_artifact_classes must contain one to three class names")
+    if required != list(dict.fromkeys(required)):
+        raise RoutingError("required_artifact_classes must not contain duplicates")
+    for artifact_class in required:
+        if not _is_clean_text(artifact_class):
+            raise RoutingError("required_artifact_classes must contain exact trimmed non-control names")
+    raw_queries = value["query_results"]
+    if not isinstance(raw_queries, list) or len(raw_queries) != len(PROBE_ARTIFACT_REGISTRY):
+        raise RoutingError("ownership probe requires exactly three fixed artifact-class query results")
+    queries = [_validate_probe_query(query) for query in raw_queries]
+    query_classes = [query["artifact_class"] for query in queries]
+    expected_classes = list(PROBE_ARTIFACT_REGISTRY)
+    if query_classes != expected_classes:
+        raise RoutingError("ownership probe query results must use every fixed artifact class in canonical order")
+
+    supported_required = [item for item in required if item in PROBE_ARTIFACT_REGISTRY]
+    unsupported_required = [item for item in required if item not in PROBE_ARTIFACT_REGISTRY]
+    matches_by_class = {query["artifact_class"]: query["matches"] for query in queries}
+    matched_required = [item for item in supported_required if matches_by_class[item]]
+    query_ambiguous = any(
+        not query["complete"] or query["truncated"] or query["symlink_encountered"]
+        for query in queries
+    )
+    if value["declaration_conflict"] or unsupported_required or query_ambiguous:
+        outcome = "inconclusive-delegate"
+        routing_action = "normal-full-flow"
+        required_input = None
+    elif matched_required:
+        outcome = "owner-artifact-present"
+        routing_action = "normal-reroute"
+        required_input = None
+    else:
+        outcome = "known-artifact-mismatch"
+        routing_action = "stop-before-planner"
+        required_input = None if direct_identity is not None else "exact-objective-owning-repository-identity-or-path"
+    artifact_queries = [
+        {
+            "artifact_class": name,
+            "query_pattern": details["query_pattern"],
+            "max_matches": MAX_PROBE_MATCHES,
+        }
+        for name, details in PROBE_ARTIFACT_REGISTRY.items()
+    ]
+    result = {
+        "phase": "probe-ownership",
+        "primary_role": PROBE_ROLE,
+        "execution_path": "probe",
+        "capability_tier": "efficient",
+        "effort": "low",
+        "required_followups": [],
+        "artifact_queries": artifact_queries,
+        "required_artifact_classes": list(required),
+        "matched_required_classes": matched_required,
+        "outcome": outcome,
+        "routing_action": routing_action,
+        "expected_owner_identity": direct_identity if outcome == "known-artifact-mismatch" else None,
+        "required_input": required_input,
+        "lifecycle": dict(PROBE_LIFECYCLE),
+    }
+    if set(result) != PROBE_OUTPUT_KEYS:
+        raise AssertionError("ownership probe output schema drifted")
+    return result
 
 
 def check_replay(path: Path) -> int:
@@ -650,7 +902,8 @@ def check_replay(path: Path) -> int:
             if not isinstance(expected, dict):
                 failures.append(f"{case_id}: expected must be an object")
                 continue
-            missing_expected, unknown_expected = sorted(OUTPUT_KEYS - set(expected)), sorted(set(expected) - OUTPUT_KEYS)
+            exact_output_keys = expected_output_keys(case["card"])
+            missing_expected, unknown_expected = sorted(exact_output_keys - set(expected)), sorted(set(expected) - exact_output_keys)
             if missing_expected or unknown_expected:
                 failures.append(f"{_display(case_id)}: invalid expected keys (missing={_display(missing_expected)}, unknown={_display(unknown_expected)})")
                 continue
@@ -680,10 +933,18 @@ def main() -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--card", type=Path, help="JSON routing card to classify")
     source.add_argument("--replay", type=Path, help="JSON replay set to validate")
+    source.add_argument(
+        "--probe-ownership",
+        type=Path,
+        help="bounded ownership-probe metadata packet to classify without repository reads",
+    )
     args = parser.parse_args()
     try:
         if args.replay:
             return check_replay(args.replay)
+        if args.probe_ownership:
+            print(json.dumps(probe_ownership(load_json(args.probe_ownership)), indent=2, sort_keys=True))
+            return 0
         print(json.dumps(route(load_json(args.card)), indent=2, sort_keys=True))
         return 0
     except (OSError, UnicodeError, json.JSONDecodeError, RoutingError) as error:

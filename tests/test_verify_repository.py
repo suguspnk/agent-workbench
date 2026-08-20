@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import importlib.util
+import json
 import os
 import shutil
 import stat
@@ -27,6 +28,13 @@ if SPEC is None or SPEC.loader is None:
 VERIFY = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = VERIFY
 SPEC.loader.exec_module(VERIFY)
+ROUTER_PATH = ROOT / "skills/orchestrate-task/scripts/route_subagent.py"
+ROUTER_SPEC = importlib.util.spec_from_file_location("verify_repository_router", ROUTER_PATH)
+if ROUTER_SPEC is None or ROUTER_SPEC.loader is None:
+    raise RuntimeError("could not load route_subagent.py")
+ROUTER = importlib.util.module_from_spec(ROUTER_SPEC)
+sys.modules[ROUTER_SPEC.name] = ROUTER
+ROUTER_SPEC.loader.exec_module(ROUTER)
 
 
 def no_follow_export_ignore(directory: str, names: list[str]) -> set[str]:
@@ -280,6 +288,162 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             contract["handoff_reserve_minutes"],
         )
         self.assertGreater(contract["handoff_reserve_minutes"], 0)
+
+    def test_direct_diagnosis_and_ownership_probe_contracts_match_the_router_exactly(self) -> None:
+        replay = json.loads(
+            (ROOT / "skills/orchestrate-task/tests/routing-cases.json").read_text(encoding="utf-8")
+        )
+        diagnosis_card = next(case["card"] for case in replay if case["id"] == "simple-read-only-diagnosis")
+        diagnosis = ROUTER.route(diagnosis_card)
+        self.assertEqual(
+            VERIFY.DIRECT_DIAGNOSIS_CONTRACT,
+            {
+                "capability_tier": "efficient",
+                "effort": "low",
+                "execution_path": "fast",
+                "forbidden": [
+                    "planner",
+                    "followups",
+                    "implementation-governance",
+                    "parallelism",
+                    "model-escalation",
+                ],
+                "handoff_reserve_seconds": 30,
+                "hard_deadline_seconds": 120,
+                "max_children": 1,
+                "max_waits": 2,
+                "role": "awb_fast_investigator",
+                "work_cutoff_seconds": 90,
+                "work_shape": "diagnose",
+            },
+        )
+        self.assertEqual(diagnosis["primary_role"], VERIFY.DIRECT_DIAGNOSIS_CONTRACT["role"])
+        self.assertEqual(diagnosis["capability_tier"], VERIFY.DIRECT_DIAGNOSIS_CONTRACT["capability_tier"])
+        self.assertEqual(diagnosis["effort"], VERIFY.DIRECT_DIAGNOSIS_CONTRACT["effort"])
+        self.assertEqual(diagnosis["execution_path"], VERIFY.DIRECT_DIAGNOSIS_CONTRACT["execution_path"])
+        self.assertEqual(diagnosis["lifecycle"], ROUTER.DIRECT_DIAGNOSIS_LIFECYCLE)
+        for field in ("work_cutoff_seconds", "hard_deadline_seconds", "handoff_reserve_seconds", "max_children", "max_waits"):
+            self.assertEqual(diagnosis["lifecycle"][field], VERIFY.DIRECT_DIAGNOSIS_CONTRACT[field])
+
+        self.assertEqual(
+            VERIFY.OWNERSHIP_PROBE_CONTRACT,
+            {
+                "artifact_classes": [
+                    "ecs-task-definition-manifests",
+                    "deployment-pipeline-manifests",
+                    "infrastructure-as-code",
+                ],
+                "capability_tier": "efficient",
+                "effort": "low",
+                "forbidden": [
+                    "caller-supplied-globs",
+                    "file-contents",
+                    "commands-hooks-or-config",
+                    "network-or-credentials",
+                    "mutation",
+                    "tests",
+                    "implementation-governance",
+                    "symlink-following",
+                    "replacement",
+                    "model-escalation",
+                ],
+                "handoff_reserve_seconds": 15,
+                "hard_deadline_outcome": "inconclusive-delegate",
+                "hard_deadline_seconds": 60,
+                "max_classes": 3,
+                "max_matches_per_class": 64,
+                "max_syntheses": 1,
+                "max_waits": 2,
+                "outcomes": {
+                    "inconclusive-delegate": "normal-full-flow",
+                    "known-artifact-mismatch": "stop-before-planner-name-direct-owner-or-require-exact-objective-repository-identity-or-path",
+                    "owner-artifact-present": "normal-reroute",
+                },
+                "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
+                "query_order": "canonical-registry-order",
+                "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
+                "role_names": ["awb_ownership_probe", "awb-ownership-probe"],
+                "work_cutoff_seconds": 45,
+            },
+        )
+        probe = VERIFY.OWNERSHIP_PROBE_CONTRACT
+        self.assertEqual(list(ROUTER.PROBE_ARTIFACT_REGISTRY), probe["artifact_classes"])
+        self.assertEqual(ROUTER.MAX_PROBE_MATCHES, probe["max_matches_per_class"])
+        self.assertEqual(ROUTER.PROBE_ROLE, probe["role_names"][0])
+        for field in ("work_cutoff_seconds", "hard_deadline_seconds", "handoff_reserve_seconds", "max_waits", "max_syntheses", "hard_deadline_outcome"):
+            self.assertEqual(ROUTER.PROBE_LIFECYCLE[field], probe[field])
+
+    def test_ownership_probe_profiles_are_exact_read_only_and_least_tool(self) -> None:
+        codex_path = ROOT / "adapters/codex/.codex/agents/awb-ownership-probe.toml"
+        codex = VERIFY.parse_codex_profile(codex_path)
+        claude_path = ROOT / "agents/awb-ownership-probe.md"
+        claude_frontmatter, claude_body = VERIFY.parse_claude_profile(claude_path)
+        VERIFY.validate_codex_profile_tuple(codex_path, codex)
+        VERIFY.validate_claude_profile_tuple(claude_path, claude_frontmatter, claude_body)
+        self.assertEqual((codex["model"], codex["model_reasoning_effort"], codex["sandbox_mode"]), ("gpt-5.6-luna", "low", "read-only"))
+        self.assertEqual((claude_frontmatter["model"], claude_frontmatter["effort"], claude_frontmatter["tools"]), ("haiku", "low", "Glob"))
+        for body in (codex["developer_instructions"], claude_body):
+            self.assertIn("never caller-supplied globs", body)
+            self.assertIn("Do not read file contents", body)
+            self.assertIn(VERIFY.NON_OPERATOR_AUTHORIZATION, body)
+
+    def test_fast_contract_rejects_broadened_registry_limits_authority_and_lifecycle(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(ROOT / "adapters/codex/.codex/agents/awb-planner.toml")["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        mutations = (
+            portable.replace('"infrastructure-as-code"\n    ],', '"infrastructure-as-code",\n      "kubernetes-manifests"\n    ],', 1),
+            portable.replace('"max_classes": 3', '"max_classes": 4', 1),
+            portable.replace('"max_matches_per_class": 64', '"max_matches_per_class": 65', 1),
+            portable.replace('"hard_deadline_seconds": 60', '"hard_deadline_seconds": 61', 1),
+            portable.replace('"caller-supplied-globs",', '', 1),
+            portable.replace('"implementation-governance",', '', 1),
+        )
+        for mutation in mutations:
+            with self.subTest(), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_planner_lifecycle_contract(skill, mutation, codex, claude)
+
+        codex_path = ROOT / "adapters/codex/.codex/agents/awb-ownership-probe.toml"
+        codex_profile = VERIFY.parse_codex_profile(codex_path)
+        broadened_codex = dict(
+            codex_profile,
+            developer_instructions=codex_profile["developer_instructions"].replace(
+                VERIFY.NON_OPERATOR_AUTHORIZATION,
+                "allow network and credentials",
+            ),
+        )
+        with self.assertRaisesRegex(SystemExit, "1"):
+            VERIFY.validate_codex_profile_tuple(codex_path, broadened_codex)
+
+        claude_path = ROOT / "agents/awb-ownership-probe.md"
+        claude_frontmatter, claude_body = VERIFY.parse_claude_profile(claude_path)
+        broadened_frontmatter = dict(claude_frontmatter, tools="Glob, Read")
+        with self.assertRaisesRegex(SystemExit, "1"):
+            VERIFY.validate_claude_profile_tuple(claude_path, broadened_frontmatter, claude_body)
+
+    def test_planner_lifecycle_rejects_stale_direct_planner_wording(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        codex = VERIFY.parse_codex_profile(ROOT / "adapters/codex/.codex/agents/awb-planner.toml")["developer_instructions"]
+        claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
+        stale = "delegate directly to the existing bounded planner ownership-establishment flow"
+        for surface_index in (0, 1):
+            surfaces = [skill, portable]
+            surfaces[surface_index] = surfaces[surface_index].replace("enter the bounded ownership probe", stale)
+            with self.subTest(surface=surface_index), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_planner_lifecycle_contract(surfaces[0], surfaces[1], codex, claude)
+
+    def test_profile_inventory_count_and_name_parity_is_exact(self) -> None:
+        codex_names = set(VERIFY.CODEX_PROFILES)
+        claude_names = {name.replace("-", "_") for name in VERIFY.CLAUDE_PROFILE_TUPLES}
+        expected_names = set(VERIFY.EXPECTED_ROLES)
+        self.assertEqual(expected_names, codex_names)
+        self.assertEqual(expected_names, claude_names)
+        self.assertEqual(len(expected_names), 12)
+        self.assertEqual(len(list((ROOT / "adapters/codex/.codex/agents").glob("*.toml"))), 12)
+        self.assertEqual(len(list((ROOT / "agents").glob("*.md"))), 12)
+        self.assertEqual(len(expected_names) * 2, 24)
 
     def test_planner_lifecycle_rejects_nonpositive_reserve_and_profile_drift(self) -> None:
         skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]

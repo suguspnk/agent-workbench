@@ -40,6 +40,29 @@ CLAUDE_KEYS = CLAUDE_REQUIRED_KEYS | {"skills"}
 PROFILE_KEYS = {
     "path", "description", "model", "effort", "sandbox", "tools", "body_sha256", "policy_sha256",
 }
+EXPECTED_ROLE_COUNT = 12
+OWNERSHIP_PROBE_ROLE = "awb_ownership_probe"
+OWNERSHIP_PROBE_AUTHORIZATION = (
+    "deny network, credentials, messages, push, deploy, global configuration, destructive actions, and external actions"
+)
+OWNERSHIP_PROBE_PROFILES = {
+    "codex_profiles": {
+        "description": "Bounded path-metadata ownership probe for three closed deployment artifact classes.",
+        "effort": "low",
+        "model": "gpt-5.6-luna",
+        "path": "adapters/codex/.codex/agents/awb-ownership-probe.toml",
+        "sandbox": "read-only",
+        "tools": [],
+    },
+    "claude_profiles": {
+        "description": "Bounded path-metadata ownership probe for three closed deployment artifact classes.",
+        "effort": "low",
+        "model": "haiku",
+        "path": "agents/awb-ownership-probe.md",
+        "sandbox": "",
+        "tools": ["Glob"],
+    },
+}
 PINNED_PATHS = {
     "scripts/verify_repository.py",
     "skills/orchestrate-task/scripts/route_subagent.py",
@@ -411,12 +434,14 @@ def load_policy(content: bytes) -> dict[str, Any]:
         {"trust", "command", "isolation", "secrets", "evidence", "identity", "independent_identity"},
     )
     authorizations = string_map("authorization_by_role", policy["authorization_by_role"])
-    if len(authorizations) != 11:
-        fail("authorization_by_role must contain exactly 11 roles")
+    if len(authorizations) != EXPECTED_ROLE_COUNT:
+        fail(f"authorization_by_role must contain exactly {EXPECTED_ROLE_COUNT} roles")
+    if authorizations.get(OWNERSHIP_PROBE_ROLE) != OWNERSHIP_PROBE_AUTHORIZATION:
+        fail("ownership probe must retain the exact non-operator authorization denial")
     for family in ("codex_profiles", "claude_profiles"):
         profiles = policy[family]
-        if not isinstance(profiles, dict) or len(profiles) != 11:
-            fail(f"{family} must contain exactly 11 profiles")
+        if not isinstance(profiles, dict) or len(profiles) != EXPECTED_ROLE_COUNT:
+            fail(f"{family} must contain exactly {EXPECTED_ROLE_COUNT} profiles")
         if set(profiles) != set(authorizations):
             fail(f"{family} role names must exactly match authorization_by_role")
         for role, expectation in profiles.items():
@@ -432,6 +457,12 @@ def load_policy(content: bytes) -> dict[str, Any]:
                 if not SHA256.fullmatch(expectation[key]):
                     fail(f"{family}.{role}.{key} must be lowercase SHA256")
             literal_components(expectation["path"])
+        ownership_probe = profiles.get(OWNERSHIP_PROBE_ROLE)
+        expected_probe = OWNERSHIP_PROBE_PROFILES[family]
+        if not isinstance(ownership_probe, dict) or {
+            key: ownership_probe.get(key) for key in expected_probe
+        } != expected_probe:
+            fail(f"{family} ownership probe must retain the exact least-privilege profile")
     pins = string_map("pinned_candidate_files", policy["pinned_candidate_files"], PINNED_PATHS)
     if any(not SHA256.fullmatch(value) for value in pins.values()):
         fail("pinned_candidate_files values must be lowercase SHA256")
