@@ -362,7 +362,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
                 "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
                 "query_order": "canonical-registry-order",
                 "registry_descriptor": VERIFY.OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR,
-                "registry_descriptor_sha256": "6346f88a02a2bc26917a229938a6520fa9daf0d143e6daf1900a80c374448b7a",
+                "registry_descriptor_sha256": "fe76c7ea3b4fab5583e82ec51ccadd697ee8b76052e593094c508fbe448afb61",
                 "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
                 "role_names": ["awb_ownership_probe", "awb-ownership-probe"],
                 "work_cutoff_seconds": 45,
@@ -385,11 +385,15 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         VERIFY.validate_claude_profile_tuple(claude_path, claude_frontmatter, claude_body)
         self.assertEqual((codex["model"], codex["model_reasoning_effort"], codex["sandbox_mode"]), ("gpt-5.6-luna", "low", "read-only"))
         self.assertEqual((claude_frontmatter["model"], claude_frontmatter["effort"], claude_frontmatter["tools"]), ("haiku", "low", "Glob"))
+        self.assertEqual(set(codex), VERIFY.CODEX_PROFILE_KEYS)
+        self.assertNotIn("tools", codex)
         for body in (codex["developer_instructions"], claude_body):
             self.assertIn("never accept caller-supplied patterns", body)
-            self.assertIn("exact protected versioned registry descriptor", body)
+            self.assertIn("exact protected version 2 registry descriptor", body)
             self.assertIn("canonical SHA-256 binding", body)
+            self.assertIn("parent-context binding", body)
             self.assertIn("Return exactly one structured handoff with only", body)
+            self.assertIn("`parent_context_sha256`", body)
             self.assertIn("complete bounded `query_results`", body)
             self.assertIn("exact `ambiguity_flags`", body)
             self.assertIn("safe-superset", body)
@@ -425,7 +429,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
     def test_router_descriptor_validator_rejects_pattern_or_version_drift(self) -> None:
         VERIFY.validate_ownership_probe_descriptor(ROUTER.ownership_probe_descriptor())
         for mutation in (
-            {**ROUTER.ownership_probe_descriptor(), "version": 2},
+            {**ROUTER.ownership_probe_descriptor(), "version": 1},
             {
                 **ROUTER.ownership_probe_descriptor(),
                 "class_queries": [
@@ -453,7 +457,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             portable.replace('"caller-supplied-globs",', '', 1),
             portable.replace('"implementation-governance",', '', 1),
             portable.replace('"query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}"', '"query_pattern": "**/*"', 1),
-            portable.replace('"version": 1', '"version": 2', 1),
+            portable.replace('"version": 2\n    },\n    "registry_descriptor_sha256"', '"version": 3\n    },\n    "registry_descriptor_sha256"', 1),
         )
         for mutation in mutations:
             with self.subTest(), self.assertRaisesRegex(SystemExit, "1"):

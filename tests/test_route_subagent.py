@@ -21,6 +21,17 @@ ROUTER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ROUTER)
 
 
+def bind_probe_packet(packet: dict[str, object]) -> dict[str, object]:
+    bound = json.loads(json.dumps(packet))
+    context = ROUTER.ownership_probe_parent_context(
+        bound["registry_descriptor"],
+        bound["required_artifact_classes"],
+        bound["declaration_conflict"],
+    )
+    bound["parent_context_sha256"] = ROUTER.ownership_probe_parent_context_sha256(context)
+    return bound
+
+
 class RouteSubagentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -46,6 +57,14 @@ class RouteSubagentTests(unittest.TestCase):
                 for artifact_class in ROUTER.PROBE_ARTIFACT_REGISTRY
             ],
         }
+        parent_context = ROUTER.ownership_probe_parent_context(
+            cls.probe_packet["registry_descriptor"],
+            cls.probe_packet["required_artifact_classes"],
+            cls.probe_packet["declaration_conflict"],
+        )
+        cls.probe_packet["parent_context_sha256"] = (
+            ROUTER.ownership_probe_parent_context_sha256(parent_context)
+        )
 
     def test_replay_expectations_are_complete_and_exact(self) -> None:
         for case in self.cases:
@@ -58,6 +77,14 @@ class RouteSubagentTests(unittest.TestCase):
                             "registry_descriptor_sha256": ROUTER.ownership_probe_descriptor_sha256(),
                             **case["probe"],
                         }
+                        parent_context = ROUTER.ownership_probe_parent_context(
+                            packet["registry_descriptor"],
+                            packet["required_artifact_classes"],
+                            packet["declaration_conflict"],
+                        )
+                        packet["parent_context_sha256"] = (
+                            ROUTER.ownership_probe_parent_context_sha256(parent_context)
+                        )
                         self.assertEqual(set(case["expected"]), ROUTER.PROBE_OUTPUT_KEYS)
                         self.assertEqual(ROUTER.probe_ownership(packet), case["expected"])
                     else:
@@ -398,6 +425,7 @@ class RouteSubagentTests(unittest.TestCase):
             for path in paths:
                 packet = json.loads(json.dumps(self.probe_packet))
                 packet["required_artifact_classes"] = [artifact_class]
+                packet = bind_probe_packet(packet)
                 packet["query_results"][class_order.index(artifact_class)]["matches"] = [path]
                 result = ROUTER.probe_ownership(packet)
                 with self.subTest(artifact_class=artifact_class, path=path):
@@ -414,7 +442,7 @@ class RouteSubagentTests(unittest.TestCase):
         )
         for mutation in mutations:
             with self.subTest(mutation=mutation):
-                result = ROUTER.probe_ownership(dict(self.probe_packet, **mutation))
+                result = ROUTER.probe_ownership(bind_probe_packet(dict(self.probe_packet, **mutation)))
                 self.assertEqual(result["outcome"], "inconclusive-delegate")
                 self.assertEqual(result["routing_action"], "normal-full-flow")
         for field, value in (
@@ -462,6 +490,7 @@ class RouteSubagentTests(unittest.TestCase):
         for artifact_class, path in safe_irrelevant.items():
             packet = json.loads(json.dumps(self.probe_packet))
             packet["required_artifact_classes"] = [artifact_class]
+            packet = bind_probe_packet(packet)
             packet["query_results"][class_order.index(artifact_class)]["matches"] = [path]
             result = ROUTER.probe_ownership(packet)
             with self.subTest(artifact_class=artifact_class):
@@ -489,6 +518,14 @@ class RouteSubagentTests(unittest.TestCase):
                 for query in descriptor["class_queries"]
             ],
         }
+        parent_context = ROUTER.ownership_probe_parent_context(
+            descriptor,
+            packet["required_artifact_classes"],
+            packet["declaration_conflict"],
+        )
+        packet["parent_context_sha256"] = ROUTER.ownership_probe_parent_context_sha256(
+            parent_context
+        )
         result = ROUTER.probe_ownership(packet)
         self.assertEqual(result["primary_role"], "awb_ownership_probe")
         self.assertNotEqual(result["primary_role"], "awb_planner")
@@ -508,16 +545,34 @@ class RouteSubagentTests(unittest.TestCase):
         self.assertNotIn("route_subagent.py", json.dumps(packet))
         with mock.patch.object(subprocess, "run", side_effect=AssertionError("runtime command forbidden")) as run:
             handoff = ROUTER.build_ownership_probe_handoff(packet)
-            outcome = ROUTER.evaluate_ownership_probe_handoff(descriptor, handoff)
+            parent_context = ROUTER.ownership_probe_parent_context(
+                descriptor,
+                packet["required_artifact_classes"],
+                packet["declaration_conflict"],
+            )
+            parent_context_sha256 = ROUTER.ownership_probe_parent_context_sha256(parent_context)
+            outcome = ROUTER.evaluate_ownership_probe_handoff(
+                descriptor,
+                parent_context,
+                parent_context_sha256,
+                handoff,
+            )
         run.assert_not_called()
         self.assertEqual(set(handoff), ROUTER.PROBE_HANDOFF_KEYS)
         self.assertEqual(set(handoff["ambiguity_flags"]), ROUTER.PROBE_AMBIGUITY_KEYS)
         self.assertEqual(handoff["descriptor_version"], descriptor["version"])
         self.assertEqual(handoff["descriptor_sha256"], ROUTER.ownership_probe_descriptor_sha256())
+        self.assertEqual(handoff["parent_context_sha256"], parent_context_sha256)
         self.assertEqual(outcome, "known-artifact-mismatch")
 
     def test_lead_handoff_evaluation_fails_closed_on_shape_binding_or_derived_drift(self) -> None:
         descriptor = ROUTER.ownership_probe_descriptor()
+        parent_context = ROUTER.ownership_probe_parent_context(
+            descriptor,
+            self.probe_packet["required_artifact_classes"],
+            self.probe_packet["declaration_conflict"],
+        )
+        parent_context_sha256 = ROUTER.ownership_probe_parent_context_sha256(parent_context)
         handoff = ROUTER.build_ownership_probe_handoff(self.probe_packet)
         mutations = []
         missing = json.loads(json.dumps(handoff))
@@ -538,9 +593,129 @@ class RouteSubagentTests(unittest.TestCase):
         for mutation in mutations:
             with self.subTest(mutation=mutation):
                 self.assertEqual(
-                    ROUTER.evaluate_ownership_probe_handoff(descriptor, mutation),
+                    ROUTER.evaluate_ownership_probe_handoff(
+                        descriptor,
+                        parent_context,
+                        parent_context_sha256,
+                        mutation,
+                    ),
                     "inconclusive-delegate",
                 )
+
+    def test_parent_context_binding_rejects_child_redefinition_and_replay(self) -> None:
+        descriptor = ROUTER.ownership_probe_descriptor()
+        retained_context = ROUTER.ownership_probe_parent_context(
+            descriptor,
+            self.probe_packet["required_artifact_classes"],
+            self.probe_packet["declaration_conflict"],
+        )
+        retained_digest = ROUTER.ownership_probe_parent_context_sha256(retained_context)
+
+        changed_classes_packet = json.loads(json.dumps(self.probe_packet))
+        changed_classes_packet["required_artifact_classes"] = ["deployment-pipeline-manifests"]
+        changed_context = ROUTER.ownership_probe_parent_context(
+            descriptor,
+            changed_classes_packet["required_artifact_classes"],
+            changed_classes_packet["declaration_conflict"],
+        )
+        changed_classes_packet["parent_context_sha256"] = (
+            ROUTER.ownership_probe_parent_context_sha256(changed_context)
+        )
+        changed_handoff = ROUTER.build_ownership_probe_handoff(changed_classes_packet)
+
+        conflict_packet = json.loads(json.dumps(self.probe_packet))
+        conflict_packet["declaration_conflict"] = True
+        conflict_context = ROUTER.ownership_probe_parent_context(
+            descriptor,
+            conflict_packet["required_artifact_classes"],
+            True,
+        )
+        conflict_digest = ROUTER.ownership_probe_parent_context_sha256(conflict_context)
+        conflict_packet["parent_context_sha256"] = conflict_digest
+        cleared_packet = json.loads(json.dumps(conflict_packet))
+        cleared_packet["declaration_conflict"] = False
+        cleared_context = ROUTER.ownership_probe_parent_context(
+            descriptor,
+            cleared_packet["required_artifact_classes"],
+            False,
+        )
+        cleared_packet["parent_context_sha256"] = (
+            ROUTER.ownership_probe_parent_context_sha256(cleared_context)
+        )
+        cleared_handoff = ROUTER.build_ownership_probe_handoff(cleared_packet)
+
+        for expected_context, expected_digest, child_handoff in (
+            (retained_context, retained_digest, changed_handoff),
+            (conflict_context, conflict_digest, cleared_handoff),
+        ):
+            with self.subTest(expected_context=expected_context):
+                self.assertEqual(
+                    ROUTER.evaluate_ownership_probe_handoff(
+                        descriptor,
+                        expected_context,
+                        expected_digest,
+                        child_handoff,
+                    ),
+                    "inconclusive-delegate",
+                )
+
+        valid_handoff = ROUTER.build_ownership_probe_handoff(self.probe_packet)
+        replay_context = ROUTER.ownership_probe_parent_context(
+            descriptor,
+            ["infrastructure-as-code"],
+            False,
+        )
+        replay_digest = ROUTER.ownership_probe_parent_context_sha256(replay_context)
+        malformed_contexts = (
+            ({**retained_context, "context_version": 2}, retained_digest),
+            ({key: value for key, value in retained_context.items() if key != "context_version"}, retained_digest),
+            (retained_context, "0" * 64),
+            (replay_context, replay_digest),
+        )
+        for context, digest in malformed_contexts:
+            with self.subTest(context=context, digest=digest):
+                self.assertEqual(
+                    ROUTER.evaluate_ownership_probe_handoff(
+                        descriptor,
+                        context,
+                        digest,
+                        valid_handoff,
+                    ),
+                    "inconclusive-delegate",
+                )
+
+        stale_handoff = json.loads(json.dumps(valid_handoff))
+        stale_handoff.pop("parent_context_sha256")
+        self.assertEqual(
+            ROUTER.evaluate_ownership_probe_handoff(
+                descriptor,
+                retained_context,
+                retained_digest,
+                stale_handoff,
+            ),
+            "inconclusive-delegate",
+        )
+
+    def test_capability_gate_spawns_only_for_observed_claude_glob(self) -> None:
+        supported = ROUTER.ownership_probe_capability_gate("claude", True, ["Glob"])
+        self.assertTrue(supported["probe_supported"])
+        self.assertTrue(supported["spawn_probe_child"])
+        self.assertEqual(supported["max_waits"], 2)
+        self.assertEqual(supported["routing_action"], "probe-ownership")
+
+        unsupported = (
+            ROUTER.ownership_probe_capability_gate("codex", True, []),
+            ROUTER.ownership_probe_capability_gate("codex", True, ["Glob"]),
+            ROUTER.ownership_probe_capability_gate("claude", False, ["Glob"]),
+            ROUTER.ownership_probe_capability_gate("claude", True, []),
+        )
+        for decision in unsupported:
+            with self.subTest(decision=decision):
+                self.assertFalse(decision["probe_supported"])
+                self.assertFalse(decision["spawn_probe_child"])
+                self.assertEqual(decision["max_waits"], 0)
+                self.assertEqual(decision["max_syntheses"], 0)
+                self.assertEqual(decision["routing_action"], "normal-full-flow")
 
     def test_ownership_probe_requires_every_fixed_query_once_in_order(self) -> None:
         missing = json.loads(json.dumps(self.probe_packet))
