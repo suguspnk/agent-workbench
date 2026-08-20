@@ -1670,5 +1670,84 @@
         "implementation_governance": "prohibited"
       }
     }
+  },
+  {
+    "id": "ownership-probe-descriptor-first",
+    "probe": {
+      "required_artifact_classes": [
+        "ecs-task-definition-manifests"
+      ],
+      "direct_user_objective_repository_identity": null,
+      "declaration_conflict": false,
+      "query_results": [
+        {
+          "artifact_class": "ecs-task-definition-manifests",
+          "complete": true,
+          "truncated": false,
+          "symlink_encountered": false,
+          "symlinks_followed": false,
+          "matches": []
+        },
+        {
+          "artifact_class": "deployment-pipeline-manifests",
+          "complete": true,
+          "truncated": false,
+          "symlink_encountered": false,
+          "symlinks_followed": false,
+          "matches": []
+        },
+        {
+          "artifact_class": "infrastructure-as-code",
+          "complete": true,
+          "truncated": false,
+          "symlink_encountered": false,
+          "symlinks_followed": false,
+          "matches": []
+        }
+      ]
+    },
+    "expected": {
+      "phase": "probe-ownership",
+      "primary_role": "awb_ownership_probe",
+      "execution_path": "probe",
+      "capability_tier": "efficient",
+      "effort": "low",
+      "required_followups": [],
+      "artifact_queries": [
+        {
+          "artifact_class": "ecs-task-definition-manifests",
+          "query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}",
+          "max_matches": 64
+        },
+        {
+          "artifact_class": "deployment-pipeline-manifests",
+          "query_pattern": "{.github/workflows/*,**/{*bitbucket-pipelines*,*cloudbuild*,*buildspec*,*pipeline*,*Jenkinsfile*}}",
+          "max_matches": 64
+        },
+        {
+          "artifact_class": "infrastructure-as-code",
+          "query_pattern": "**/{*.tf,*.tf.json,cdk.json,Pulumi*.yaml,Pulumi*.yml,serverless*.yaml,serverless*.yml,sam*.yaml,sam*.yml,cloudformation*.yaml,cloudformation*.yml,template*.yaml,template*.yml}",
+          "max_matches": 64
+        }
+      ],
+      "required_artifact_classes": [
+        "ecs-task-definition-manifests"
+      ],
+      "matched_required_classes": [],
+      "outcome": "known-artifact-mismatch",
+      "routing_action": "stop-before-planner",
+      "expected_owner_identity": null,
+      "required_input": "exact-objective-owning-repository-identity-or-path",
+      "lifecycle": {
+        "work_cutoff_seconds": 45,
+        "hard_deadline_seconds": 60,
+        "handoff_reserve_seconds": 15,
+        "max_waits": 2,
+        "max_syntheses": 1,
+        "replacement": "prohibited",
+        "model_escalation": "prohibited",
+        "hard_deadline_outcome": "inconclusive-delegate"
+      }
+    }
   }
 ]

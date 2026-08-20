@@ -25,10 +25,11 @@ class RouteSubagentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.cases = ROUTER.load_json(REPLAY_PATH)
-        cls.success_cases = [case for case in cls.cases if "expected" in case]
-        cls.error_cases = [case for case in cls.cases if "expected_error" in case]
+        cls.success_cases = [case for case in cls.cases if "card" in case and "expected" in case]
+        cls.error_cases = [case for case in cls.cases if "card" in case and "expected_error" in case]
         cls.probe_packet = {
             "phase": "probe-ownership",
+            "registry_descriptor": ROUTER.ownership_probe_descriptor(),
             "required_artifact_classes": ["ecs-task-definition-manifests"],
             "direct_user_objective_repository_identity": None,
             "declaration_conflict": False,
@@ -49,8 +50,17 @@ class RouteSubagentTests(unittest.TestCase):
         for case in self.cases:
             with self.subTest(case=case["id"]):
                 if "expected" in case:
-                    self.assertEqual(set(case["expected"]), ROUTER.expected_output_keys(case["card"]))
-                    self.assertEqual(ROUTER.route(case["card"]), case["expected"])
+                    if "probe" in case:
+                        packet = {
+                            "phase": ROUTER.ownership_probe_descriptor()["phase"],
+                            "registry_descriptor": ROUTER.ownership_probe_descriptor(),
+                            **case["probe"],
+                        }
+                        self.assertEqual(set(case["expected"]), ROUTER.PROBE_OUTPUT_KEYS)
+                        self.assertEqual(ROUTER.probe_ownership(packet), case["expected"])
+                    else:
+                        self.assertEqual(set(case["expected"]), ROUTER.expected_output_keys(case["card"]))
+                        self.assertEqual(ROUTER.route(case["card"]), case["expected"])
                 else:
                     with self.assertRaisesRegex(ROUTER.RoutingError, f"^{case['expected_error']}$"):
                         ROUTER.route(case["card"])
@@ -364,10 +374,17 @@ class RouteSubagentTests(unittest.TestCase):
             "ecs-task-definition-manifests": (
                 "ecs-task-definition.json",
                 "deploy/ecs-task-definition.json",
+                "services/api-task-definition.json",
+                "deploy/stg-task-definition.yml",
+                "deploy/task-definition-api.yaml",
             ),
             "deployment-pipeline-manifests": (
                 "buildspec.yml",
                 "ci/release/buildspec.yml",
+                "ci/api-buildspec.yml",
+                "ci/stg-cloudbuild.yaml",
+                "ci/api-pipeline.groovy",
+                "ci/prod-Jenkinsfile.groovy",
             ),
             "infrastructure-as-code": (
                 "main.tf",
@@ -414,7 +431,6 @@ class RouteSubagentTests(unittest.TestCase):
             "../deploy/ecs-task-definition.json",
             "deploy//ecs-task-definition.json",
             "deploy\\ecs-task-definition.json",
-            "deploy/ordinary.json",
         )
         for unsafe in unsafe_matches:
             packet = json.loads(json.dumps(self.probe_packet))
@@ -433,6 +449,54 @@ class RouteSubagentTests(unittest.TestCase):
         overflow["query_results"][0]["matches"] = [f"task-definition-{index:02d}.json" for index in range(65)]
         with self.assertRaisesRegex(ROUTER.RoutingError, "exceeds 64"):
             ROUTER.probe_ownership(overflow)
+
+    def test_ownership_probe_filters_safe_query_superset_matches(self) -> None:
+        safe_irrelevant = {
+            "ecs-task-definition-manifests": "deploy/task-definition-notes.txt",
+            "deployment-pipeline-manifests": "ci/api-pipeline-notes.txt",
+            "infrastructure-as-code": "infra/template-notes.txt",
+        }
+        class_order = list(ROUTER.PROBE_ARTIFACT_REGISTRY)
+        for artifact_class, path in safe_irrelevant.items():
+            packet = json.loads(json.dumps(self.probe_packet))
+            packet["required_artifact_classes"] = [artifact_class]
+            packet["query_results"][class_order.index(artifact_class)]["matches"] = [path]
+            result = ROUTER.probe_ownership(packet)
+            with self.subTest(artifact_class=artifact_class):
+                self.assertEqual(result["outcome"], "known-artifact-mismatch")
+                self.assertEqual(result["matched_required_classes"], [])
+
+    def test_descriptor_precedes_probe_packet_and_governance_or_planning(self) -> None:
+        descriptor = ROUTER.ownership_probe_descriptor()
+        packet = {
+            "phase": descriptor["phase"],
+            "registry_descriptor": descriptor,
+            "required_artifact_classes": [descriptor["class_queries"][0]["artifact_class"]],
+            "direct_user_objective_repository_identity": None,
+            "declaration_conflict": False,
+            "query_results": [
+                {
+                    "artifact_class": query["artifact_class"],
+                    "complete": True,
+                    "truncated": False,
+                    "symlink_encountered": False,
+                    "symlinks_followed": False,
+                    "matches": [],
+                }
+                for query in descriptor["class_queries"]
+            ],
+        }
+        result = ROUTER.probe_ownership(packet)
+        self.assertEqual(result["primary_role"], "awb_ownership_probe")
+        self.assertNotEqual(result["primary_role"], "awb_planner")
+        self.assertEqual(result["required_followups"], [])
+        self.assertIn("implementation-governance", descriptor["tool_constraints"]["forbidden"])
+        self.assertEqual(result["lifecycle"], descriptor["lifecycle"])
+
+        drifted = json.loads(json.dumps(packet))
+        drifted["registry_descriptor"]["class_queries"][0]["query_pattern"] = "**/*"
+        with self.assertRaisesRegex(ROUTER.RoutingError, "registry descriptor differs"):
+            ROUTER.probe_ownership(drifted)
 
     def test_ownership_probe_requires_every_fixed_query_once_in_order(self) -> None:
         missing = json.loads(json.dumps(self.probe_packet))
@@ -636,6 +700,15 @@ class RouteSubagentTests(unittest.TestCase):
             )
             self.assertEqual(probe.returncode, 0, probe.stderr)
             self.assertEqual(json.loads(probe.stdout)["outcome"], "known-artifact-mismatch")
+            descriptor = subprocess.run(
+                [sys.executable, str(ROUTER_PATH), "--describe-ownership-probe"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(descriptor.returncode, 0, descriptor.stderr)
+            self.assertEqual(json.loads(descriptor.stdout), ROUTER.ownership_probe_descriptor())
 
 
 if __name__ == "__main__":

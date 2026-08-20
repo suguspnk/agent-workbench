@@ -137,7 +137,7 @@ CODEX_PROFILES: dict[str, tuple[Any, ...]] = {
     "awb_fast_investigator": ("awb_fast_investigator", "Fast read-only investigator for narrow, repeatable Agent Workbench evidence gathering.", "gpt-5.6-luna", "low", "read-only", "d30e6dbcd5ff921eaf21e6caee923a0c3a92d9ebecdf2082c259525fa3b1d83d"),
     "awb_migration_worker": ("awb_migration_worker", "Extra-high-reasoning worker for bounded schema, persistence, and compatibility migrations.", "gpt-5.6-sol", "xhigh", "workspace-write", "27a633e67f03671b7b6e73b8ef1a9bc00c69c9fc55f74f2ed35beeaeb60ba196"),
     "awb_operator": ("awb_operator", "Reserved unavailable operator profile; external and destructive execution is blocked without a constrained adapter.", "gpt-5.6-sol", "xhigh", "read-only", "80af1575db93d350251f307488ff26a4155e02c768701c2af2398799b1c96fa1"),
-    "awb_ownership_probe": ("awb_ownership_probe", "Bounded path-metadata ownership probe for three closed deployment artifact classes.", "gpt-5.6-luna", "low", "read-only", "d2f2f0867e9240a7fc1272b9ddf5ef6e9d83af1bfeed7be4409f4a76f7f1d7a8"),
+    "awb_ownership_probe": ("awb_ownership_probe", "Bounded path-metadata ownership probe for three closed deployment artifact classes.", "gpt-5.6-luna", "low", "read-only", "81c6d4c10bfda397fd604e187a29fdf9e0bc852983cb6eb9a909bd8efe0d57b8"),
     "awb_planner": ("awb_planner", "Read-only planner for Agent Workbench child-task discovery and implementation plans.", "gpt-5.6-sol", "high", "read-only", "f29f8a167c3b849e76486ad4a11453c9526c71a9e14b8670539763910e5a3b7e"),
     "awb_reviewer": ("awb_reviewer", "Independent fresh defect finder using the Agent Workbench code-review contract.", "gpt-5.6-sol", "high", "read-only", "4a83db46c86f8307cf3f457ebc1a3f8ba51c11f873e81eab6731fabe315ce43c"),
     "awb_security_reviewer": ("awb_security_reviewer", "Extra-high-reasoning read-only reviewer for security-sensitive Agent Workbench changes.", "gpt-5.6-sol", "xhigh", "read-only", "1cdfb5e4bc070b22ed336ced00062504d13dc54311d42f60decbc59a8bbd3f4a"),
@@ -151,7 +151,7 @@ CLAUDE_PROFILE_TUPLES: dict[str, tuple[Any, ...]] = {
     "awb-fast-investigator": ("awb-fast-investigator", "Fast read-only investigator for settled maps, fixed-schema extraction, classification, and narrow evidence gathering.", "haiku", "low", frozenset({"Read", "Grep", "Glob", "Bash"}), "e8a9890ce8b48a9e6f111ebf13c05e47e36b9c617a28b9261b785f70888fc518"),
     "awb-migration-worker": ("awb-migration-worker", "Maximum-effort worker for bounded schema, persistence, compatibility, backfill, rollout, and rollback changes.", "opus", "xhigh", frozenset({"Read", "Edit", "Write", "Grep", "Glob", "Bash"}), "41816cc7928f1f4a3ffa5782424bf47585ad685a669d3bba6e2dd284037c8573"),
     "awb-operator": ("awb-operator", "Reserved unavailable operator profile; external and destructive execution is blocked without a constrained adapter.", "opus", "xhigh", frozenset({"Read", "Grep", "Glob"}), "d7513ccab0f5e497ce56835e99fcc8b97d716d24791cabeee6ab84557bd12d11"),
-    "awb-ownership-probe": ("awb-ownership-probe", "Bounded path-metadata ownership probe for three closed deployment artifact classes.", "haiku", "low", frozenset({"Glob"}), "573648c5c51a78ea149d2212d1038c5c7412b4c82acc1272cbe02401c339f755"),
+    "awb-ownership-probe": ("awb-ownership-probe", "Bounded path-metadata ownership probe for three closed deployment artifact classes.", "haiku", "low", frozenset({"Glob"}), "702e0f6149d433641257ea428f8c6a2fc54a3b32623dc776c72e8152692ec58a"),
     "awb-planner": ("awb-planner", "Read-only planner for unsettled architecture, ownership, dependency order, acceptance criteria, or child-task boundaries.", "opus", "high", frozenset({"Read", "Grep", "Glob", "Bash"}), "694618b323745d57d6716bfc808e85fd8d1af22fc106df43ab8a8e9c7ee8dbce"),
     "awb-reviewer": ("awb-reviewer", "Independent fresh defect finder using the code-review core contract and applicable technology overlays.", "opus", "high", frozenset({"Read", "Grep", "Glob", "Bash", "Skill"}), "bdbcb9613b30722e3cb6ebd30969550b243bcd3e9ff1a9d381d1c87420839209"),
     "awb-security-reviewer": ("awb-security-reviewer", "Maximum-effort findings-only reviewer for authorization, secrets, untrusted input, isolation, and privilege boundaries.", "opus", "xhigh", frozenset({"Read", "Grep", "Glob", "Bash"}), "11c62ce41918094856bf71e8a29884ef2c06ca177ccedf0c4ee6fa3496529cd3"),
@@ -282,6 +282,64 @@ DIRECT_DIAGNOSIS_CONTRACT = {
     "work_cutoff_seconds": 90,
     "work_shape": "diagnose",
 }
+OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {
+    "version": 1,
+    "phase": "probe-ownership",
+    "class_queries": [
+        {
+            "artifact_class": "ecs-task-definition-manifests",
+            "query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}",
+            "accepted_path_pattern": r"(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\.(?:json|yaml|yml)\Z",
+        },
+        {
+            "artifact_class": "deployment-pipeline-manifests",
+            "query_pattern": "{.github/workflows/*,**/{*bitbucket-pipelines*,*cloudbuild*,*buildspec*,*pipeline*,*Jenkinsfile*}}",
+            "accepted_path_pattern": r"(?:[A-Za-z0-9._@+-]+/)*(?:\.github/workflows/[A-Za-z0-9._-]+\.(?:ya?ml)|(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?bitbucket-pipelines(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\.(?:yaml|yml)|(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?(?:cloudbuild|buildspec)(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\.(?:json|yaml|yml)|(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?pipeline(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\.(?:json|yaml|yml|groovy)|(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?Jenkinsfile(?:[-_][A-Za-z0-9][A-Za-z0-9._-]*)?(?:\.groovy)?)\Z",
+        },
+        {
+            "artifact_class": "infrastructure-as-code",
+            "query_pattern": "**/{*.tf,*.tf.json,cdk.json,Pulumi*.yaml,Pulumi*.yml,serverless*.yaml,serverless*.yml,sam*.yaml,sam*.yml,cloudformation*.yaml,cloudformation*.yml,template*.yaml,template*.yml}",
+            "accepted_path_pattern": r"(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9._-]+\.tf(?:\.json)?|cdk\.json|Pulumi[A-Za-z0-9._-]*\.ya?ml|(?:serverless|sam|cloudformation|template)[A-Za-z0-9._-]*\.ya?ml)\Z",
+        },
+    ],
+    "limits": {"max_classes": 3, "max_matches_per_class": 64},
+    "query_result_schema": {
+        "required_fields": [
+            "artifact_class",
+            "complete",
+            "matches",
+            "symlink_encountered",
+            "symlinks_followed",
+            "truncated",
+        ],
+        "matches": "unique-sorted-canonical-repository-relative-paths",
+        "classification": "validate-all-paths-then-filter-by-accepted-path-pattern",
+    },
+    "tool_constraints": {
+        "codex_sandbox_mode": "read-only",
+        "claude_tools": ["Glob"],
+        "forbidden": [
+            "caller-supplied-patterns",
+            "file-content-reads",
+            "shell-or-repository-commands",
+            "hooks-helpers-or-configuration-evaluation",
+            "network-or-credentials",
+            "mutation-or-tests",
+            "implementation-governance",
+            "symlink-following",
+        ],
+    },
+    "lifecycle": {
+        "work_cutoff_seconds": 45,
+        "hard_deadline_seconds": 60,
+        "handoff_reserve_seconds": 15,
+        "max_waits": 2,
+        "max_syntheses": 1,
+        "replacement": "prohibited",
+        "model_escalation": "prohibited",
+        "hard_deadline_outcome": "inconclusive-delegate",
+    },
+}
 OWNERSHIP_PROBE_CONTRACT = {
     "artifact_classes": [
         "ecs-task-definition-manifests",
@@ -316,10 +374,18 @@ OWNERSHIP_PROBE_CONTRACT = {
     },
     "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
     "query_order": "canonical-registry-order",
+    "registry_descriptor": OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR,
     "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
     "role_names": ["awb_ownership_probe", "awb-ownership-probe"],
     "work_cutoff_seconds": 45,
 }
+
+
+def validate_ownership_probe_descriptor(value: object) -> None:
+    if type(value) is not dict or value != OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR:
+        fail("router ownership probe descriptor differs from the protected portable registry")
+
+
 PLANNER_LIFECYCLE_CONTRACT = {
     "cutoff_action": "synthesize-only-already-gathered-evidence",
     "default_budget_minutes": 12,
@@ -336,8 +402,8 @@ PLANNER_LIFECYCLE_CONTRACT = {
     },
 }
 PLANNER_LIFECYCLE_ACTIVE_DIGESTS = {
-    "orchestrate-task skill": "387c427803b0f5ea1366b5e1028d89d32c0bc6595c71b7768465ee6164b29953",
-    "portable contract": "5f009489aea46e7d3116184d6db03423cf4e9cc787a5156eff965ae4b542b3d0",
+    "orchestrate-task skill": "7967b1b6d7c4ad7e86945da2a052189149b6f6f1d21b73e9ebdabd343a59ec36",
+    "portable contract": "9f31e38ee12c25bd417733151414de8c542b5b0d342d650bfbce1ccdd01ca361",
 }
 PLANNER_OWNERSHIP_OUTCOME_CONTRACT = (
     "Ownership mismatch outcomes are explicit: `known_owner` returns compact `blocked` or `needs-input` evidence naming the exact supplied missing objective-owning repository; "
@@ -368,7 +434,10 @@ PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
     "Neither the identity preflight nor the probe relaxes eventual implementation test, verifier, reviewer, or security-review overlays",
     "## Ownership artifact probe",
     "`awb_ownership_probe` / `awb-ownership-probe`",
-    "Caller-supplied globs are prohibited",
+    "protected versioned `ownership_probe.registry_descriptor`",
+    "Do not read router source, invent or accept caller patterns, or execute a repository command before ownership is settled",
+    "safe supersets",
+    "validate all paths first, then deterministically filter",
     "no more than 64 canonical repository-relative path names per class",
     "45-second work cutoff, 60-second hard deadline, 15-second handoff reserve",
     "90-second work cutoff, 120-second hard deadline, 30-second handoff reserve",
@@ -4489,6 +4558,16 @@ def check_replays_and_unit_tests() -> None:
     if result.returncode:
         fail(f"routing replay failed:\n{result.stdout}{result.stderr}")
     print(result.stdout.strip())
+    canonical_descriptor = json.dumps(
+        OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    expected_descriptor_digest = hashlib.sha256(canonical_descriptor).hexdigest()
+    descriptor_receipt = f"ownership probe descriptor sha256 {expected_descriptor_digest}"
+    if result.stdout.startswith("Routing replay passed") and result.stdout.count(descriptor_receipt) != 1:
+        fail("routing replay ownership probe descriptor differs from the protected portable registry")
 
     loop_result = subprocess.run(
         [

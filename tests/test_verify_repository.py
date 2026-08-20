@@ -361,6 +361,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
                 },
                 "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
                 "query_order": "canonical-registry-order",
+                "registry_descriptor": VERIFY.OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR,
                 "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
                 "role_names": ["awb_ownership_probe", "awb-ownership-probe"],
                 "work_cutoff_seconds": 45,
@@ -370,6 +371,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         self.assertEqual(list(ROUTER.PROBE_ARTIFACT_REGISTRY), probe["artifact_classes"])
         self.assertEqual(ROUTER.MAX_PROBE_MATCHES, probe["max_matches_per_class"])
         self.assertEqual(ROUTER.PROBE_ROLE, probe["role_names"][0])
+        self.assertEqual(ROUTER.ownership_probe_descriptor(), probe["registry_descriptor"])
         for field in ("work_cutoff_seconds", "hard_deadline_seconds", "handoff_reserve_seconds", "max_waits", "max_syntheses", "hard_deadline_outcome"):
             self.assertEqual(ROUTER.PROBE_LIFECYCLE[field], probe[field])
 
@@ -383,9 +385,29 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         self.assertEqual((codex["model"], codex["model_reasoning_effort"], codex["sandbox_mode"]), ("gpt-5.6-luna", "low", "read-only"))
         self.assertEqual((claude_frontmatter["model"], claude_frontmatter["effort"], claude_frontmatter["tools"]), ("haiku", "low", "Glob"))
         for body in (codex["developer_instructions"], claude_body):
-            self.assertIn("never caller-supplied globs", body)
+            self.assertIn("never accept caller-supplied patterns", body)
+            self.assertIn("exact protected versioned registry descriptor", body)
+            self.assertIn("safe-superset", body)
             self.assertIn("Do not read file contents", body)
             self.assertIn(VERIFY.NON_OPERATOR_AUTHORIZATION, body)
+
+    def test_router_descriptor_validator_rejects_pattern_or_version_drift(self) -> None:
+        VERIFY.validate_ownership_probe_descriptor(ROUTER.ownership_probe_descriptor())
+        for mutation in (
+            {**ROUTER.ownership_probe_descriptor(), "version": 2},
+            {
+                **ROUTER.ownership_probe_descriptor(),
+                "class_queries": [
+                    {
+                        **ROUTER.ownership_probe_descriptor()["class_queries"][0],
+                        "query_pattern": "**/*",
+                    },
+                    *ROUTER.ownership_probe_descriptor()["class_queries"][1:],
+                ],
+            },
+        ):
+            with self.subTest(), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_ownership_probe_descriptor(mutation)
 
     def test_fast_contract_rejects_broadened_registry_limits_authority_and_lifecycle(self) -> None:
         skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
@@ -399,6 +421,8 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             portable.replace('"hard_deadline_seconds": 60', '"hard_deadline_seconds": 61', 1),
             portable.replace('"caller-supplied-globs",', '', 1),
             portable.replace('"implementation-governance",', '', 1),
+            portable.replace('"query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}"', '"query_pattern": "**/*"', 1),
+            portable.replace('"version": 1', '"version": 2', 1),
         )
         for mutation in mutations:
             with self.subTest(), self.assertRaisesRegex(SystemExit, "1"):

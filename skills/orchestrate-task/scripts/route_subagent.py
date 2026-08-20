@@ -113,31 +113,54 @@ PROBE_LIFECYCLE = {
     "hard_deadline_outcome": "inconclusive-delegate",
 }
 MAX_PROBE_MATCHES = 64
+PROBE_DESCRIPTOR_VERSION = 1
 PROBE_ARTIFACT_REGISTRY: dict[str, dict[str, Any]] = {
     "ecs-task-definition-manifests": {
         "query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}",
-        "path_pattern": re.compile(
-            r"(?:[A-Za-z0-9._@+-]+/)*(?:ecs[-_])?task[-_]?definitions?(?:[-_.][A-Za-z0-9._-]+)?\.(?:json|ya?ml)\Z"
+        "accepted_path_pattern": (
+            r"(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?"
+            r"task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\.(?:json|yaml|yml)\Z"
         ),
     },
     "deployment-pipeline-manifests": {
-        "query_pattern": "{.github/workflows/*,**/{bitbucket-pipelines*,cloudbuild*,buildspec*,pipeline*,Jenkinsfile}}",
-        "path_pattern": re.compile(
+        "query_pattern": "{.github/workflows/*,**/{*bitbucket-pipelines*,*cloudbuild*,*buildspec*,*pipeline*,*Jenkinsfile*}}",
+        "accepted_path_pattern": (
             r"(?:[A-Za-z0-9._@+-]+/)*(?:\.github/workflows/[A-Za-z0-9._-]+\.(?:ya?ml)|"
-            r"(?:bitbucket-pipelines|cloudbuild|buildspec|pipeline|Jenkinsfile)"
-            r"(?:[-_.][A-Za-z0-9._-]+)?(?:\.(?:json|ya?ml|groovy))?)\Z"
+            r"(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?bitbucket-pipelines"
+            r"(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\.(?:yaml|yml)|"
+            r"(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?(?:cloudbuild|buildspec)"
+            r"(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\.(?:json|yaml|yml)|"
+            r"(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?pipeline"
+            r"(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\.(?:json|yaml|yml|groovy)|"
+            r"(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?Jenkinsfile"
+            r"(?:[-_][A-Za-z0-9][A-Za-z0-9._-]*)?(?:\.groovy)?)\Z"
         ),
     },
     "infrastructure-as-code": {
         "query_pattern": "**/{*.tf,*.tf.json,cdk.json,Pulumi*.yaml,Pulumi*.yml,serverless*.yaml,serverless*.yml,sam*.yaml,sam*.yml,cloudformation*.yaml,cloudformation*.yml,template*.yaml,template*.yml}",
-        "path_pattern": re.compile(
+        "accepted_path_pattern": (
             r"(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9._-]+\.tf(?:\.json)?|cdk\.json|Pulumi[A-Za-z0-9._-]*\.ya?ml|"
             r"(?:serverless|sam|cloudformation|template)[A-Za-z0-9._-]*\.ya?ml)\Z"
         ),
     },
 }
+PROBE_TOOL_CONSTRAINTS = {
+    "codex_sandbox_mode": "read-only",
+    "claude_tools": ["Glob"],
+    "forbidden": [
+        "caller-supplied-patterns",
+        "file-content-reads",
+        "shell-or-repository-commands",
+        "hooks-helpers-or-configuration-evaluation",
+        "network-or-credentials",
+        "mutation-or-tests",
+        "implementation-governance",
+        "symlink-following",
+    ],
+}
 PROBE_INPUT_KEYS = {
     "phase",
+    "registry_descriptor",
     "required_artifact_classes",
     "direct_user_objective_repository_identity",
     "declaration_conflict",
@@ -167,6 +190,46 @@ PROBE_OUTPUT_KEYS = {
     "required_input",
     "lifecycle",
 }
+
+
+def ownership_probe_descriptor() -> dict[str, Any]:
+    """Return the canonical pre-query contract without reading repository state."""
+    return {
+        "version": PROBE_DESCRIPTOR_VERSION,
+        "phase": "probe-ownership",
+        "class_queries": [
+            {
+                "artifact_class": name,
+                "query_pattern": details["query_pattern"],
+                "accepted_path_pattern": details["accepted_path_pattern"],
+            }
+            for name, details in PROBE_ARTIFACT_REGISTRY.items()
+        ],
+        "limits": {
+            "max_classes": len(PROBE_ARTIFACT_REGISTRY),
+            "max_matches_per_class": MAX_PROBE_MATCHES,
+        },
+        "query_result_schema": {
+            "required_fields": sorted(PROBE_QUERY_KEYS),
+            "matches": "unique-sorted-canonical-repository-relative-paths",
+            "classification": "validate-all-paths-then-filter-by-accepted-path-pattern",
+        },
+        "tool_constraints": {
+            "codex_sandbox_mode": PROBE_TOOL_CONSTRAINTS["codex_sandbox_mode"],
+            "claude_tools": list(PROBE_TOOL_CONSTRAINTS["claude_tools"]),
+            "forbidden": list(PROBE_TOOL_CONSTRAINTS["forbidden"]),
+        },
+        "lifecycle": dict(PROBE_LIFECYCLE),
+    }
+
+
+def ownership_probe_descriptor_sha256() -> str:
+    canonical = json.dumps(
+        ownership_probe_descriptor(), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 MAX_INPUT_BYTES = 1_048_576
 MAX_TEXT_FIELD = 512
 MAX_JSON_DEPTH = 128
@@ -772,19 +835,20 @@ def _validate_probe_query(value: Any) -> dict[str, Any]:
         raise RoutingError(f"ownership probe query exceeds {MAX_PROBE_MATCHES} matches")
     if matches != sorted(set(matches)):
         raise RoutingError("ownership probe query matches must be unique and sorted")
-    path_pattern = PROBE_ARTIFACT_REGISTRY[artifact_class]["path_pattern"]
+    path_pattern = re.compile(PROBE_ARTIFACT_REGISTRY[artifact_class]["accepted_path_pattern"])
+    accepted_matches: list[str] = []
     for match in matches:
         if not _is_canonical_repository_path(match):
             raise RoutingError(f"ownership probe match must be a canonical repository-relative path: {_display(match)}")
-        if path_pattern.fullmatch(match) is None:
-            raise RoutingError(f"ownership probe match is outside artifact class {artifact_class}: {_display(match)}")
+        if path_pattern.fullmatch(match) is not None:
+            accepted_matches.append(match)
     return {
         "artifact_class": artifact_class,
         "complete": value["complete"],
         "truncated": value["truncated"],
         "symlink_encountered": value["symlink_encountered"],
         "symlinks_followed": False,
-        "matches": list(matches),
+        "matches": accepted_matches,
     }
 
 
@@ -799,6 +863,8 @@ def probe_ownership(value: Any) -> dict[str, Any]:
         raise RoutingError(f"unknown ownership probe fields: {', '.join(_display(item) for item in extra)}")
     if value["phase"] != "probe-ownership":
         raise RoutingError("ownership probe phase must be probe-ownership")
+    if value["registry_descriptor"] != ownership_probe_descriptor():
+        raise RoutingError("ownership probe registry descriptor differs from the canonical pre-query contract")
     if type(value["declaration_conflict"]) is not bool:
         raise RoutingError("ownership probe declaration_conflict must be a boolean")
     direct_identity = value["direct_user_objective_repository_identity"]
@@ -881,7 +947,8 @@ def check_replay(path: Path) -> int:
         if not isinstance(case, dict):
             failures.append(f"{label}: must be an object")
             continue
-        required = {"id", "card"}
+        is_probe = "probe" in case
+        required = {"id", "probe"} if is_probe else {"id", "card"}
         allowed = required | {"expected", "expected_error"}
         missing, extra = sorted(required - set(case)), sorted(set(case) - allowed)
         expectation_count = sum(name in case for name in ("expected", "expected_error"))
@@ -902,7 +969,7 @@ def check_replay(path: Path) -> int:
             if not isinstance(expected, dict):
                 failures.append(f"{case_id}: expected must be an object")
                 continue
-            exact_output_keys = expected_output_keys(case["card"])
+            exact_output_keys = PROBE_OUTPUT_KEYS if is_probe else expected_output_keys(case["card"])
             missing_expected, unknown_expected = sorted(exact_output_keys - set(expected)), sorted(set(expected) - exact_output_keys)
             if missing_expected or unknown_expected:
                 failures.append(f"{_display(case_id)}: invalid expected keys (missing={_display(missing_expected)}, unknown={_display(unknown_expected)})")
@@ -911,7 +978,26 @@ def check_replay(path: Path) -> int:
             failures.append(f"{case_id}: expected_error must be an exact trimmed non-control string")
             continue
         try:
-            actual = route(case["card"])
+            if is_probe:
+                if not isinstance(case["probe"], dict):
+                    raise RoutingError("probe replay input must be an object")
+                replay_probe_keys = PROBE_INPUT_KEYS - {"phase", "registry_descriptor"}
+                missing_probe = sorted(replay_probe_keys - set(case["probe"]))
+                extra_probe = sorted(set(case["probe"]) - replay_probe_keys)
+                if missing_probe or extra_probe:
+                    raise RoutingError(
+                        "probe replay fields differ from the descriptor-first packet schema "
+                        f"(missing={_display(missing_probe)}, unknown={_display(extra_probe)})"
+                    )
+                descriptor = ownership_probe_descriptor()
+                packet = {
+                    "phase": descriptor["phase"],
+                    "registry_descriptor": descriptor,
+                    **case["probe"],
+                }
+                actual = probe_ownership(packet)
+            else:
+                actual = route(case["card"])
         except (RoutingError, KeyError) as error:
             if expected_error is None or str(error) != expected_error:
                 failures.append(f"{_display(case_id)}: routing failed: {error}")
@@ -924,7 +1010,10 @@ def check_replay(path: Path) -> int:
         for failure in failures:
             print(f"ERROR: {failure}", file=sys.stderr)
         return 1
-    print(f"Routing replay passed ({len(data)} cases).")
+    print(
+        f"Routing replay passed ({len(data)} cases; ownership probe descriptor sha256 "
+        f"{ownership_probe_descriptor_sha256()})."
+    )
     return 0
 
 
@@ -938,12 +1027,20 @@ def main() -> int:
         type=Path,
         help="bounded ownership-probe metadata packet to classify without repository reads",
     )
+    source.add_argument(
+        "--describe-ownership-probe",
+        action="store_true",
+        help="print the canonical ownership-probe registry without a card or query results",
+    )
     args = parser.parse_args()
     try:
         if args.replay:
             return check_replay(args.replay)
         if args.probe_ownership:
             print(json.dumps(probe_ownership(load_json(args.probe_ownership)), indent=2, sort_keys=True))
+            return 0
+        if args.describe_ownership_probe:
+            print(json.dumps(ownership_probe_descriptor(), indent=2, sort_keys=True))
             return 0
         print(json.dumps(route(load_json(args.card)), indent=2, sort_keys=True))
         return 0

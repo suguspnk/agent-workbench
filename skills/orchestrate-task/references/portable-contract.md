@@ -202,6 +202,69 @@ handoff: use the format below
     },
     "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
     "query_order": "canonical-registry-order",
+    "registry_descriptor": {
+      "class_queries": [
+        {
+          "accepted_path_pattern": "(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:json|yaml|yml)\\Z",
+          "artifact_class": "ecs-task-definition-manifests",
+          "query_pattern": "**/{*task-definition*,*task_definition*}.{json,yaml,yml}"
+        },
+        {
+          "accepted_path_pattern": "(?:[A-Za-z0-9._@+-]+/)*(?:\\.github/workflows/[A-Za-z0-9._-]+\\.(?:ya?ml)|(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?bitbucket-pipelines(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:yaml|yml)|(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?(?:cloudbuild|buildspec)(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:json|yaml|yml)|(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?pipeline(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:json|yaml|yml|groovy)|(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?Jenkinsfile(?:[-_][A-Za-z0-9][A-Za-z0-9._-]*)?(?:\\.groovy)?)\\Z",
+          "artifact_class": "deployment-pipeline-manifests",
+          "query_pattern": "{.github/workflows/*,**/{*bitbucket-pipelines*,*cloudbuild*,*buildspec*,*pipeline*,*Jenkinsfile*}}"
+        },
+        {
+          "accepted_path_pattern": "(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9._-]+\\.tf(?:\\.json)?|cdk\\.json|Pulumi[A-Za-z0-9._-]*\\.ya?ml|(?:serverless|sam|cloudformation|template)[A-Za-z0-9._-]*\\.ya?ml)\\Z",
+          "artifact_class": "infrastructure-as-code",
+          "query_pattern": "**/{*.tf,*.tf.json,cdk.json,Pulumi*.yaml,Pulumi*.yml,serverless*.yaml,serverless*.yml,sam*.yaml,sam*.yml,cloudformation*.yaml,cloudformation*.yml,template*.yaml,template*.yml}"
+        }
+      ],
+      "lifecycle": {
+        "handoff_reserve_seconds": 15,
+        "hard_deadline_outcome": "inconclusive-delegate",
+        "hard_deadline_seconds": 60,
+        "max_syntheses": 1,
+        "max_waits": 2,
+        "model_escalation": "prohibited",
+        "replacement": "prohibited",
+        "work_cutoff_seconds": 45
+      },
+      "limits": {
+        "max_classes": 3,
+        "max_matches_per_class": 64
+      },
+      "phase": "probe-ownership",
+      "query_result_schema": {
+        "classification": "validate-all-paths-then-filter-by-accepted-path-pattern",
+        "matches": "unique-sorted-canonical-repository-relative-paths",
+        "required_fields": [
+          "artifact_class",
+          "complete",
+          "matches",
+          "symlink_encountered",
+          "symlinks_followed",
+          "truncated"
+        ]
+      },
+      "tool_constraints": {
+        "claude_tools": [
+          "Glob"
+        ],
+        "codex_sandbox_mode": "read-only",
+        "forbidden": [
+          "caller-supplied-patterns",
+          "file-content-reads",
+          "shell-or-repository-commands",
+          "hooks-helpers-or-configuration-evaluation",
+          "network-or-credentials",
+          "mutation-or-tests",
+          "implementation-governance",
+          "symlink-following"
+        ]
+      },
+      "version": 1
+    },
     "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
     "role_names": [
       "awb_ownership_probe",
@@ -221,9 +284,9 @@ Before portable/model-selection routing setup or any implementation-governance l
 
 The exhaustive outcomes are `current-owner-confirmed` (only when the direct user-supplied objective exactly matches this workspace/repository through a host-provided canonical identity field; resume existing routing and delegation), `known-owner-mismatch` (only when the direct user supplies an exact repository/path, the host supplies the canonical current-workspace identity, and comparing those two identities proves an unambiguous definitive nonmatch; exit immediately with compact `blocked` or `needs-input` evidence naming the user-supplied identity; no planning), and `inconclusive-delegate` (when direct user-provided evidence supplies no exact repository/path or permitted host metadata cannot decide unambiguously; enter the bounded ownership probe, then delegate to the normal full flow if the probe is unsupported or inconclusive; never terminate or ask redundant user input during the identity preflight). Missing direct-user repository/path identity is `inconclusive-delegate`; an ordinary workspace-scoped prompt is not a terminal preflight mismatch or needs-input result. Do not ask redundant user input during the preflight. Direct-user evidence alone cannot authorize `known-owner-mismatch`. Any ambiguity is `inconclusive-delegate`. Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`; none may be mapped to `known-owner-mismatch`. Never infer ownership from repository content or unspecified provenance. The lead must not load or invoke `implementation-quality-governance`; require it only in an implementation child after ownership is settled. The preflight and probe do not relax eventual implementation test, verifier, reviewer, or security-review overlays.
 
-After `inconclusive-delegate`, use exactly one `awb_ownership_probe` / `awb-ownership-probe` child before ordinary routing when the packet asserts that at least one registered artifact class must exist in the objective-owning repository. It is efficient/low, Codex read-only, and Claude `Glob` only. Its closed registry is exactly `ecs-task-definition-manifests`, `deployment-pipeline-manifests`, and `infrastructure-as-code`; caller globs are prohibited. Query every registered class in canonical order, at most once, and report no more than 64 unique sorted canonical repository-relative path names per class. Never read contents, run commands, inspect hooks or configuration, use network or credentials, mutate, test, load implementation governance, or follow symlinks.
+After `inconclusive-delegate`, the lead must read the protected `ownership_probe.registry_descriptor` above through this already-required portable-contract reference before it creates query results or spawns any child. It must not read router source, invent or accept caller patterns, or execute a repository command before ownership is settled. Use exactly one `awb_ownership_probe` / `awb-ownership-probe` child before ordinary routing when the packet asserts that at least one registered artifact class must exist in the objective-owning repository. The packet carries the exact versioned descriptor unchanged; profiles consume only its exact class queries, patterns, result schema, tool constraints, limits, and lifecycle. It is efficient/low, Codex read-only, and Claude `Glob` only. Its closed registry is exactly `ecs-task-definition-manifests`, `deployment-pipeline-manifests`, and `infrastructure-as-code`. Query every registered class in canonical order, at most once, and report no more than 64 unique sorted canonical repository-relative path names per class. Never read contents, run commands, inspect hooks or configuration, use network or credentials, mutate, test, load implementation governance, or follow symlinks.
 
-`owner-artifact-present` resumes ordinary rerouting. `known-artifact-mismatch` is terminal only when all three queries are complete and untruncated, no symlink was encountered or followed, there is no declaration conflict, every required class is supported, and every required class has zero matches; stop before a planner and name the exact direct owner when supplied, otherwise return `required_input: exact-objective-owning-repository-identity-or-path`. Every unsupported, incomplete, truncated, symlink-affected, conflicting, or hard-deadline result is `inconclusive-delegate` and resumes the normal full flow. Use a 45-second cutoff, 60-second hard deadline, 15-second reserve, at most two waits and one synthesis, with no replacement or model escalation.
+Each fixed query is a documented safe superset. Validate every reported path for canonical repository-relative form, controls, count, completeness, truncation, and symlink safety before filtering it through that class's `accepted_path_pattern`. Safe irrelevant results are ignored: they do not error, count as present, or by themselves prevent terminal absence. `owner-artifact-present` resumes ordinary rerouting when any required class has an accepted match. `known-artifact-mismatch` is terminal only when all exact descriptor queries are complete and untruncated, no symlink was encountered or followed, there is no declaration conflict, every required class is supported, and filtering leaves zero accepted matches for every required class; stop before a planner and name the exact direct owner when supplied, otherwise return `required_input: exact-objective-owning-repository-identity-or-path`. Noncanonical, control-bearing, absolute, parent-traversing, oversized, incomplete, truncated, symlink-affected, unsupported, conflicting, or hard-deadline evidence never proves absence. Use a 45-second cutoff, 60-second hard deadline, 15-second reserve, at most two waits and one synthesis, with no replacement or model escalation.
 
 For a settled high-confidence `work_shape: diagnose`, use the direct fast path only for one-file or bounded-component read-only work with no public, persistent, or security boundary; compact or focused context; a bounded local tool loop; reversible or user-visible impact; no parallelism; no change authority; and no optional requirements. Send exactly one `awb_fast_investigator`, no planner, follow-ups, implementation governance, or model escalation, with a 90-second cutoff, 120-second hard deadline, 30-second reserve, and at most two waits. Consequential settled diagnosis uses `awb_deep_investigator`; ambiguity or unresolved routing uses `awb_planner`.
 
