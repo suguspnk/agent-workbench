@@ -362,6 +362,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
                 "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
                 "query_order": "canonical-registry-order",
                 "registry_descriptor": VERIFY.OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR,
+                "registry_descriptor_sha256": "6346f88a02a2bc26917a229938a6520fa9daf0d143e6daf1900a80c374448b7a",
                 "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
                 "role_names": ["awb_ownership_probe", "awb-ownership-probe"],
                 "work_cutoff_seconds": 45,
@@ -387,9 +388,39 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         for body in (codex["developer_instructions"], claude_body):
             self.assertIn("never accept caller-supplied patterns", body)
             self.assertIn("exact protected versioned registry descriptor", body)
+            self.assertIn("canonical SHA-256 binding", body)
+            self.assertIn("Return exactly one structured handoff with only", body)
+            self.assertIn("complete bounded `query_results`", body)
+            self.assertIn("exact `ambiguity_flags`", body)
             self.assertIn("safe-superset", body)
             self.assertIn("Do not read file contents", body)
             self.assertIn(VERIFY.NON_OPERATOR_AUTHORIZATION, body)
+
+    def test_runtime_probe_surfaces_reject_router_shell_or_repository_command_classification(self) -> None:
+        skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
+        portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
+        model_selection = (ROOT / "skills/orchestrate-task/references/model-selection.md").read_text(encoding="utf-8")
+        VERIFY.validate_runtime_ownership_probe_surfaces(skill, portable, model_selection)
+        mutations = (
+            (skill.replace(
+                "The lead evaluates that handoff directly",
+                "The lead executes `route_subagent.py --probe-ownership` and then evaluates that handoff directly",
+                1,
+            ), portable, model_selection),
+            (skill, portable.replace(
+                "The lead compares the handoff directly",
+                "The lead runs a shell or repository command and compares the handoff directly",
+                1,
+            ), model_selection),
+            (skill, portable, model_selection.replace(
+                "The lead compares it directly",
+                "The lead invokes `route_subagent.py --describe-ownership-probe` and compares it directly",
+                1,
+            )),
+        )
+        for surfaces in mutations:
+            with self.subTest(), self.assertRaisesRegex(SystemExit, "1"):
+                VERIFY.validate_runtime_ownership_probe_surfaces(*surfaces)
 
     def test_router_descriptor_validator_rejects_pattern_or_version_drift(self) -> None:
         VERIFY.validate_ownership_probe_descriptor(ROUTER.ownership_probe_descriptor())

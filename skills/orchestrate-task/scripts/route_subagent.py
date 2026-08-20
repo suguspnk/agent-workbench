@@ -161,10 +161,30 @@ PROBE_TOOL_CONSTRAINTS = {
 PROBE_INPUT_KEYS = {
     "phase",
     "registry_descriptor",
+    "registry_descriptor_sha256",
     "required_artifact_classes",
     "direct_user_objective_repository_identity",
     "declaration_conflict",
     "query_results",
+}
+PROBE_HANDOFF_KEYS = {
+    "phase",
+    "descriptor_version",
+    "descriptor_sha256",
+    "required_artifact_classes",
+    "declaration_conflict",
+    "query_results",
+    "filtered_accepted_matches",
+    "ambiguity_flags",
+    "outcome",
+}
+PROBE_AMBIGUITY_KEYS = {
+    "declaration_conflict",
+    "unsupported_required_classes",
+    "incomplete_query_classes",
+    "truncated_query_classes",
+    "symlink_encountered_query_classes",
+    "symlinks_followed_query_classes",
 }
 PROBE_QUERY_KEYS = {
     "artifact_class",
@@ -213,6 +233,17 @@ def ownership_probe_descriptor() -> dict[str, Any]:
             "required_fields": sorted(PROBE_QUERY_KEYS),
             "matches": "unique-sorted-canonical-repository-relative-paths",
             "classification": "validate-all-paths-then-filter-by-accepted-path-pattern",
+        },
+        "handoff_result_schema": {
+            "required_fields": sorted(PROBE_HANDOFF_KEYS),
+            "descriptor_binding": "sha256-canonical-json-of-registry-descriptor",
+            "filtered_accepted_matches": "canonical-class-order-with-unique-sorted-accepted-paths",
+            "ambiguity_flags": sorted(PROBE_AMBIGUITY_KEYS),
+            "allowed_outcomes": [
+                "owner-artifact-present",
+                "known-artifact-mismatch",
+                "inconclusive-delegate",
+            ],
         },
         "tool_constraints": {
             "codex_sandbox_mode": PROBE_TOOL_CONSTRAINTS["codex_sandbox_mode"],
@@ -812,7 +843,7 @@ def route(card_value: Any) -> dict[str, Any]:
     return result
 
 
-def _validate_probe_query(value: Any) -> dict[str, Any]:
+def _validate_probe_query(value: Any) -> tuple[dict[str, Any], list[str]]:
     if not isinstance(value, dict):
         raise RoutingError("ownership probe query result must be an object")
     missing, extra = sorted(PROBE_QUERY_KEYS - set(value)), sorted(set(value) - PROBE_QUERY_KEYS)
@@ -842,18 +873,19 @@ def _validate_probe_query(value: Any) -> dict[str, Any]:
             raise RoutingError(f"ownership probe match must be a canonical repository-relative path: {_display(match)}")
         if path_pattern.fullmatch(match) is not None:
             accepted_matches.append(match)
-    return {
+    validated = {
         "artifact_class": artifact_class,
         "complete": value["complete"],
         "truncated": value["truncated"],
         "symlink_encountered": value["symlink_encountered"],
         "symlinks_followed": False,
-        "matches": accepted_matches,
+        "matches": list(matches),
     }
+    return validated, accepted_matches
 
 
-def probe_ownership(value: Any) -> dict[str, Any]:
-    """Classify bounded path-metadata supplied by the ownership-probe child."""
+def build_ownership_probe_handoff(value: Any) -> dict[str, Any]:
+    """Build the exact host-native child handoff for offline validation and replay."""
     if not isinstance(value, dict):
         raise RoutingError("ownership probe packet must be a JSON object")
     missing, extra = sorted(PROBE_INPUT_KEYS - set(value)), sorted(set(value) - PROBE_INPUT_KEYS)
@@ -863,8 +895,12 @@ def probe_ownership(value: Any) -> dict[str, Any]:
         raise RoutingError(f"unknown ownership probe fields: {', '.join(_display(item) for item in extra)}")
     if value["phase"] != "probe-ownership":
         raise RoutingError("ownership probe phase must be probe-ownership")
-    if value["registry_descriptor"] != ownership_probe_descriptor():
+    descriptor = ownership_probe_descriptor()
+    descriptor_sha256 = ownership_probe_descriptor_sha256()
+    if value["registry_descriptor"] != descriptor:
         raise RoutingError("ownership probe registry descriptor differs from the canonical pre-query contract")
+    if value["registry_descriptor_sha256"] != descriptor_sha256:
+        raise RoutingError("ownership probe registry descriptor binding differs from the canonical pre-query contract")
     if type(value["declaration_conflict"]) is not bool:
         raise RoutingError("ownership probe declaration_conflict must be a boolean")
     direct_identity = value["direct_user_objective_repository_identity"]
@@ -881,26 +917,97 @@ def probe_ownership(value: Any) -> dict[str, Any]:
     raw_queries = value["query_results"]
     if not isinstance(raw_queries, list) or len(raw_queries) != len(PROBE_ARTIFACT_REGISTRY):
         raise RoutingError("ownership probe requires exactly three fixed artifact-class query results")
-    queries = [_validate_probe_query(query) for query in raw_queries]
+    validated_pairs = [_validate_probe_query(query) for query in raw_queries]
+    queries = [pair[0] for pair in validated_pairs]
+    accepted_by_class = [
+        {"artifact_class": pair[0]["artifact_class"], "matches": pair[1]}
+        for pair in validated_pairs
+    ]
     query_classes = [query["artifact_class"] for query in queries]
     expected_classes = list(PROBE_ARTIFACT_REGISTRY)
     if query_classes != expected_classes:
         raise RoutingError("ownership probe query results must use every fixed artifact class in canonical order")
 
-    supported_required = [item for item in required if item in PROBE_ARTIFACT_REGISTRY]
     unsupported_required = [item for item in required if item not in PROBE_ARTIFACT_REGISTRY]
-    matches_by_class = {query["artifact_class"]: query["matches"] for query in queries}
-    matched_required = [item for item in supported_required if matches_by_class[item]]
-    query_ambiguous = any(
-        not query["complete"] or query["truncated"] or query["symlink_encountered"]
-        for query in queries
-    )
-    if value["declaration_conflict"] or unsupported_required or query_ambiguous:
+    ambiguity_flags = {
+        "declaration_conflict": value["declaration_conflict"],
+        "unsupported_required_classes": unsupported_required,
+        "incomplete_query_classes": [query["artifact_class"] for query in queries if not query["complete"]],
+        "truncated_query_classes": [query["artifact_class"] for query in queries if query["truncated"]],
+        "symlink_encountered_query_classes": [
+            query["artifact_class"] for query in queries if query["symlink_encountered"]
+        ],
+        "symlinks_followed_query_classes": [
+            query["artifact_class"] for query in queries if query["symlinks_followed"]
+        ],
+    }
+    accepted_map = {item["artifact_class"]: item["matches"] for item in accepted_by_class}
+    matched_required = [item for item in required if item in accepted_map and accepted_map[item]]
+    if any(
+        value
+        for key, value in ambiguity_flags.items()
+        if key != "declaration_conflict"
+    ) or ambiguity_flags["declaration_conflict"]:
         outcome = "inconclusive-delegate"
-        routing_action = "normal-full-flow"
-        required_input = None
     elif matched_required:
         outcome = "owner-artifact-present"
+    else:
+        outcome = "known-artifact-mismatch"
+    handoff = {
+        "phase": "probe-ownership",
+        "descriptor_version": descriptor["version"],
+        "descriptor_sha256": descriptor_sha256,
+        "required_artifact_classes": list(required),
+        "declaration_conflict": value["declaration_conflict"],
+        "query_results": queries,
+        "filtered_accepted_matches": accepted_by_class,
+        "ambiguity_flags": ambiguity_flags,
+        "outcome": outcome,
+    }
+    if set(handoff) != PROBE_HANDOFF_KEYS or set(handoff["ambiguity_flags"]) != PROBE_AMBIGUITY_KEYS:
+        raise AssertionError("ownership probe handoff schema drifted")
+    return handoff
+
+
+def evaluate_ownership_probe_handoff(descriptor: Any, handoff: Any) -> str:
+    """Fail-closed lead comparison for offline parity tests; runtime uses host reasoning only."""
+    try:
+        if descriptor != ownership_probe_descriptor() or not isinstance(handoff, dict):
+            return "inconclusive-delegate"
+        if set(handoff) != PROBE_HANDOFF_KEYS:
+            return "inconclusive-delegate"
+        packet = {
+            "phase": handoff.get("phase"),
+            "registry_descriptor": descriptor,
+            "registry_descriptor_sha256": handoff.get("descriptor_sha256"),
+            "required_artifact_classes": handoff.get("required_artifact_classes"),
+            "direct_user_objective_repository_identity": None,
+            "declaration_conflict": handoff.get("declaration_conflict"),
+            "query_results": handoff.get("query_results"),
+        }
+        expected = build_ownership_probe_handoff(packet)
+    except (RoutingError, TypeError, ValueError):
+        return "inconclusive-delegate"
+    if handoff != expected:
+        return "inconclusive-delegate"
+    return expected["outcome"]
+
+
+def probe_ownership(value: Any) -> dict[str, Any]:
+    """Classify an ownership packet using offline validation/test tooling only."""
+    handoff = build_ownership_probe_handoff(value)
+    direct_identity = value["direct_user_objective_repository_identity"]
+    required = handoff["required_artifact_classes"]
+    accepted_map = {
+        item["artifact_class"]: item["matches"]
+        for item in handoff["filtered_accepted_matches"]
+    }
+    matched_required = [item for item in required if item in accepted_map and accepted_map[item]]
+    outcome = evaluate_ownership_probe_handoff(ownership_probe_descriptor(), handoff)
+    if outcome == "inconclusive-delegate":
+        routing_action = "normal-full-flow"
+        required_input = None
+    elif outcome == "owner-artifact-present":
         routing_action = "normal-reroute"
         required_input = None
     else:
@@ -981,7 +1088,11 @@ def check_replay(path: Path) -> int:
             if is_probe:
                 if not isinstance(case["probe"], dict):
                     raise RoutingError("probe replay input must be an object")
-                replay_probe_keys = PROBE_INPUT_KEYS - {"phase", "registry_descriptor"}
+                replay_probe_keys = PROBE_INPUT_KEYS - {
+                    "phase",
+                    "registry_descriptor",
+                    "registry_descriptor_sha256",
+                }
                 missing_probe = sorted(replay_probe_keys - set(case["probe"]))
                 extra_probe = sorted(set(case["probe"]) - replay_probe_keys)
                 if missing_probe or extra_probe:
@@ -993,6 +1104,7 @@ def check_replay(path: Path) -> int:
                 packet = {
                     "phase": descriptor["phase"],
                     "registry_descriptor": descriptor,
+                    "registry_descriptor_sha256": ownership_probe_descriptor_sha256(),
                     **case["probe"],
                 }
                 actual = probe_ownership(packet)
@@ -1025,12 +1137,12 @@ def main() -> int:
     source.add_argument(
         "--probe-ownership",
         type=Path,
-        help="bounded ownership-probe metadata packet to classify without repository reads",
+        help="OFFLINE validation/test only: classify a bounded ownership-probe metadata packet; forbidden in runtime pre-ownership flow",
     )
     source.add_argument(
         "--describe-ownership-probe",
         action="store_true",
-        help="print the canonical ownership-probe registry without a card or query results",
+        help="OFFLINE validation/test only: print the canonical ownership-probe registry; forbidden in runtime pre-ownership flow",
     )
     args = parser.parse_args()
     try:

@@ -30,6 +30,7 @@ class RouteSubagentTests(unittest.TestCase):
         cls.probe_packet = {
             "phase": "probe-ownership",
             "registry_descriptor": ROUTER.ownership_probe_descriptor(),
+            "registry_descriptor_sha256": ROUTER.ownership_probe_descriptor_sha256(),
             "required_artifact_classes": ["ecs-task-definition-manifests"],
             "direct_user_objective_repository_identity": None,
             "declaration_conflict": False,
@@ -54,6 +55,7 @@ class RouteSubagentTests(unittest.TestCase):
                         packet = {
                             "phase": ROUTER.ownership_probe_descriptor()["phase"],
                             "registry_descriptor": ROUTER.ownership_probe_descriptor(),
+                            "registry_descriptor_sha256": ROUTER.ownership_probe_descriptor_sha256(),
                             **case["probe"],
                         }
                         self.assertEqual(set(case["expected"]), ROUTER.PROBE_OUTPUT_KEYS)
@@ -471,6 +473,7 @@ class RouteSubagentTests(unittest.TestCase):
         packet = {
             "phase": descriptor["phase"],
             "registry_descriptor": descriptor,
+            "registry_descriptor_sha256": ROUTER.ownership_probe_descriptor_sha256(),
             "required_artifact_classes": [descriptor["class_queries"][0]["artifact_class"]],
             "direct_user_objective_repository_identity": None,
             "declaration_conflict": False,
@@ -497,6 +500,47 @@ class RouteSubagentTests(unittest.TestCase):
         drifted["registry_descriptor"]["class_queries"][0]["query_pattern"] = "**/*"
         with self.assertRaisesRegex(ROUTER.RoutingError, "registry descriptor differs"):
             ROUTER.probe_ownership(drifted)
+
+    def test_host_native_probe_handoff_and_lead_decision_are_pure_in_memory(self) -> None:
+        descriptor = ROUTER.ownership_probe_descriptor()
+        packet = json.loads(json.dumps(self.probe_packet))
+        self.assertNotIn("runtime_repository_command", packet)
+        self.assertNotIn("route_subagent.py", json.dumps(packet))
+        with mock.patch.object(subprocess, "run", side_effect=AssertionError("runtime command forbidden")) as run:
+            handoff = ROUTER.build_ownership_probe_handoff(packet)
+            outcome = ROUTER.evaluate_ownership_probe_handoff(descriptor, handoff)
+        run.assert_not_called()
+        self.assertEqual(set(handoff), ROUTER.PROBE_HANDOFF_KEYS)
+        self.assertEqual(set(handoff["ambiguity_flags"]), ROUTER.PROBE_AMBIGUITY_KEYS)
+        self.assertEqual(handoff["descriptor_version"], descriptor["version"])
+        self.assertEqual(handoff["descriptor_sha256"], ROUTER.ownership_probe_descriptor_sha256())
+        self.assertEqual(outcome, "known-artifact-mismatch")
+
+    def test_lead_handoff_evaluation_fails_closed_on_shape_binding_or_derived_drift(self) -> None:
+        descriptor = ROUTER.ownership_probe_descriptor()
+        handoff = ROUTER.build_ownership_probe_handoff(self.probe_packet)
+        mutations = []
+        missing = json.loads(json.dumps(handoff))
+        missing.pop("query_results")
+        mutations.append(missing)
+        binding = json.loads(json.dumps(handoff))
+        binding["descriptor_sha256"] = "0" * 64
+        mutations.append(binding)
+        filtered = json.loads(json.dumps(handoff))
+        filtered["filtered_accepted_matches"][0]["matches"] = ["deploy/ecs-task-definition.json"]
+        mutations.append(filtered)
+        flags = json.loads(json.dumps(handoff))
+        flags["ambiguity_flags"]["truncated_query_classes"] = ["ecs-task-definition-manifests"]
+        mutations.append(flags)
+        declared = json.loads(json.dumps(handoff))
+        declared["outcome"] = "owner-artifact-present"
+        mutations.append(declared)
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                self.assertEqual(
+                    ROUTER.evaluate_ownership_probe_handoff(descriptor, mutation),
+                    "inconclusive-delegate",
+                )
 
     def test_ownership_probe_requires_every_fixed_query_once_in_order(self) -> None:
         missing = json.loads(json.dumps(self.probe_packet))
