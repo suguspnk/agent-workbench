@@ -335,7 +335,9 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         for field in ("work_cutoff_seconds", "hard_deadline_seconds", "handoff_reserve_seconds", "max_mcp_calls", "max_children", "max_waits", "hard_deadline_outcome"):
             self.assertEqual(ROUTER.PROBE_LIFECYCLE[field], probe[field])
 
-    def test_ownership_probe_launcher_and_registration_are_isolated(self) -> None:
+    def test_ownership_probe_launcher_is_isolated_and_registration_is_disabled(self) -> None:
+        manifest = json.loads((ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+        self.assertNotIn("mcpServers", manifest)
         registration = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))
         self.assertEqual(
             registration,

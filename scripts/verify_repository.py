@@ -1357,8 +1357,8 @@ def check_manifests() -> None:
 
     if codex.get("skills") != "./skills/":
         fail("Codex manifest must point skills to ./skills/")
-    if codex.get("mcpServers") != "./.mcp.json":
-        fail("Codex manifest must point mcpServers to ./.mcp.json")
+    if "mcpServers" in codex:
+        fail("Codex manifest must keep the unsupported ownership MCP transport disabled")
     mcp = load_json(ROOT / ".mcp.json")
     if mcp != {
         "mcpServers": {
@@ -1370,7 +1370,7 @@ def check_manifests() -> None:
             }
         }
     }:
-        fail("Codex MCP registration must expose only the protected ownership scanner")
+        fail("Dormant Codex MCP descriptor must expose only the protected ownership scanner")
     server_path = ROOT / "servers/ownership_probe_mcp.py"
     server_metadata = server_path.lstat()
     if stat.S_ISLNK(server_metadata.st_mode) or not stat.S_ISREG(server_metadata.st_mode):
