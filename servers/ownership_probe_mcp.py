@@ -415,9 +415,11 @@ def _valid_tool_call(request: Any) -> bool:
     params = request.get("params")
     return (
         isinstance(params, dict)
-        and set(params) == {"name", "arguments"}
+        and {"name", "arguments"}.issubset(params)
+        and set(params).issubset({"name", "arguments", "_meta"})
         and params.get("name") == TOOL_NAME
         and params.get("arguments") == {}
+        and ("_meta" not in params or isinstance(params["_meta"], dict))
     )
 
 
@@ -455,7 +457,12 @@ def handle_request(
         return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": [TOOL_DEFINITION]}}
     if method == "tools/call":
         params = request.get("params")
-        if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
+        if (
+            not isinstance(params, dict)
+            or not {"name", "arguments"}.issubset(params)
+            or not set(params).issubset({"name", "arguments", "_meta"})
+            or ("_meta" in params and not isinstance(params["_meta"], dict))
+        ):
             return _error_response(request_id, -32602, "Invalid params")
         if params["name"] != TOOL_NAME:
             return _error_response(request_id, -32601, "Unknown tool")

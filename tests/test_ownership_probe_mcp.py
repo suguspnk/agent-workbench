@@ -451,6 +451,18 @@ class OwnershipProbeMcpProtocolTests(unittest.TestCase):
             responses, _stderr = self.run_protocol(requests, Path(directory))
         self.assertEqual([item["error"]["code"] for item in responses], [-32601, -32601, -32602])
 
+    def test_tool_call_accepts_standard_metadata_but_rejects_invalid_metadata(self) -> None:
+        base = {"name": SERVER.TOOL_NAME, "arguments": {}}
+        requests = [
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {**base, "_meta": {}}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {**base, "unknown": None}},
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {**base, "_meta": "bad"}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            responses, _stderr = self.run_protocol(requests, Path(directory))
+        self.assertIn("structuredContent", responses[0]["result"])
+        self.assertEqual([response["error"]["code"] for response in responses[1:]], [-32602, -32602])
+
     def test_missing_roots_capability_returns_incomplete_without_request(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             responses, _stderr = self.run_protocol(
