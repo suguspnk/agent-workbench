@@ -261,7 +261,15 @@ PROBE_CAPABILITY_GATE_KEYS = {
     "max_syntheses",
     "routing_action",
     "reason",
+    "outcome",
+    "required_input",
+    "planner_count",
+    "probe_child_count",
+    "wait_count",
+    "virtual_elapsed_seconds_upper_bound",
 }
+
+OWNERSHIP_REPOSITORY_REQUIRED_INPUT = "exact-objective-owning-repository-identity-or-path"
 
 
 def ownership_probe_descriptor() -> dict[str, Any]:
@@ -407,6 +415,8 @@ def ownership_probe_capability_gate(
     harness: Any,
     tool_registered: Any,
     observed_tools: Any,
+    required_artifact_classes: Any = None,
+    direct_user_objective_repository_identity: Any = None,
 ) -> dict[str, Any]:
     """Decide whether the lead may call the protected MCP tool directly."""
     if harness not in {"codex", "claude"}:
@@ -419,16 +429,33 @@ def ownership_probe_capability_gate(
         or any(not _is_clean_text(tool) for tool in observed_tools)
     ):
         raise RoutingError("ownership probe observed_tools must be unique sorted exact names")
+    required = [] if required_artifact_classes is None else required_artifact_classes
+    if (
+        not isinstance(required, list)
+        or required != list(dict.fromkeys(required))
+        or any(item not in PROBE_ARTIFACT_REGISTRY for item in required)
+    ):
+        raise RoutingError("ownership probe required artifact classes must be unique registered names")
+    if direct_user_objective_repository_identity is not None and not _is_clean_text(
+        direct_user_objective_repository_identity
+    ):
+        raise RoutingError("direct user objective repository identity must be exact clean text or null")
     supported = tool_registered and observed_tools == ["awb_ownership.scan_required_artifacts"]
     if supported:
         reason = "verified-protected-awb-ownership-mcp-tool"
         routing_action = "probe-ownership"
+        outcome = "probe-ownership"
+        required_input = None
     elif not tool_registered:
         reason = "protected-awb-ownership-mcp-server-unregistered"
-        routing_action = "normal-full-flow"
+        outcome, routing_action, required_input = _unresolved_ownership_fallback(
+            required, direct_user_objective_repository_identity
+        )
     else:
         reason = "exact-protected-awb-ownership-mcp-tool-unavailable"
-        routing_action = "normal-full-flow"
+        outcome, routing_action, required_input = _unresolved_ownership_fallback(
+            required, direct_user_objective_repository_identity
+        )
     result = {
         "harness": harness,
         "probe_supported": supported,
@@ -438,10 +465,30 @@ def ownership_probe_capability_gate(
         "max_syntheses": 0,
         "routing_action": routing_action,
         "reason": reason,
+        "outcome": outcome,
+        "required_input": required_input,
+        "planner_count": 0,
+        "probe_child_count": 0,
+        "wait_count": 0,
+        "virtual_elapsed_seconds_upper_bound": 0,
     }
     if set(result) != PROBE_CAPABILITY_GATE_KEYS:
         raise AssertionError("ownership probe capability gate schema drifted")
     return result
+
+
+def _unresolved_ownership_fallback(
+    required_artifact_classes: list[str],
+    direct_user_objective_repository_identity: str | None,
+) -> tuple[str, str, str | None]:
+    """Stop before planning only when one exact repository answer can settle the packet."""
+    if required_artifact_classes and direct_user_objective_repository_identity is None:
+        return (
+            "unknown-owner-needs-input",
+            "request-input-before-planner",
+            OWNERSHIP_REPOSITORY_REQUIRED_INPUT,
+        )
+    return "inconclusive-delegate", "normal-full-flow", None
 
 
 MAX_INPUT_BYTES = 1_048_576
@@ -1203,15 +1250,14 @@ def probe_ownership(value: Any) -> dict[str, Any]:
         parent_context_sha256,
     )
     if outcome == "inconclusive-delegate":
-        routing_action = "normal-full-flow"
-        required_input = None
+        outcome, routing_action, required_input = _unresolved_ownership_fallback(required, direct_identity)
     elif outcome == "owner-artifact-present":
         routing_action = "normal-reroute"
         required_input = None
     else:
         outcome = "known-artifact-mismatch"
         routing_action = "stop-before-planner"
-        required_input = None if direct_identity is not None else "exact-objective-owning-repository-identity-or-path"
+        required_input = None if direct_identity is not None else OWNERSHIP_REPOSITORY_REQUIRED_INPUT
     artifact_queries = [
         {
             "artifact_class": name,

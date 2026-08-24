@@ -455,7 +455,8 @@ class RouteSubagentTests(unittest.TestCase):
                     result = ROUTER.probe_ownership(packet)
                 except ROUTER.RoutingError:
                     continue
-                self.assertEqual(result["outcome"], "inconclusive-delegate")
+                self.assertEqual(result["outcome"], "unknown-owner-needs-input")
+                self.assertEqual(result["routing_action"], "request-input-before-planner")
 
     def test_adapter_rejects_untrusted_paths_and_wrong_class_patterns(self) -> None:
         for unsafe in (
@@ -484,6 +485,60 @@ class RouteSubagentTests(unittest.TestCase):
             self.assertFalse(decision["probe_supported"])
             self.assertEqual(decision["routing_action"], "normal-full-flow")
             self.assertEqual(decision["max_waits"], 0)
+
+    def test_unavailable_probe_requests_exact_repository_before_planner(self) -> None:
+        decision = ROUTER.ownership_probe_capability_gate(
+            "codex",
+            False,
+            [],
+            ["ecs-task-definition-manifests", "deployment-pipeline-manifests"],
+            None,
+        )
+        self.assertEqual(set(decision), ROUTER.PROBE_CAPABILITY_GATE_KEYS)
+        self.assertEqual(decision["outcome"], "unknown-owner-needs-input")
+        self.assertEqual(decision["routing_action"], "request-input-before-planner")
+        self.assertEqual(
+            decision["required_input"],
+            "exact-objective-owning-repository-identity-or-path",
+        )
+        self.assertEqual(decision["planner_count"], 0)
+        self.assertEqual(decision["probe_child_count"], 0)
+        self.assertEqual(decision["wait_count"], 0)
+        self.assertEqual(decision["virtual_elapsed_seconds_upper_bound"], 0)
+
+    def test_unavailable_probe_does_not_interrupt_unrelated_or_identified_work(self) -> None:
+        unrelated = ROUTER.ownership_probe_capability_gate("codex", False, [], [], None)
+        identified = ROUTER.ownership_probe_capability_gate(
+            "codex",
+            False,
+            [],
+            ["infrastructure-as-code"],
+            "healthpal-infrastructure",
+        )
+        for decision in (unrelated, identified):
+            self.assertEqual(decision["outcome"], "inconclusive-delegate")
+            self.assertEqual(decision["routing_action"], "normal-full-flow")
+            self.assertIsNone(decision["required_input"])
+
+    def test_inconclusive_probe_requests_repository_only_when_identity_is_missing(self) -> None:
+        packet = json.loads(json.dumps(self.probe_packet))
+        packet["query_results"][0]["complete"] = False
+        result = ROUTER.probe_ownership(packet)
+        self.assertEqual(result["outcome"], "unknown-owner-needs-input")
+        self.assertEqual(result["routing_action"], "request-input-before-planner")
+        self.assertEqual(
+            result["required_input"],
+            "exact-objective-owning-repository-identity-or-path",
+        )
+        self.assertEqual(result["planner_count"], 0)
+        self.assertEqual(result["probe_child_count"], 0)
+        self.assertEqual(result["wait_count"], 0)
+
+        packet["direct_user_objective_repository_identity"] = "healthpal-infrastructure"
+        identified = ROUTER.probe_ownership(packet)
+        self.assertEqual(identified["outcome"], "inconclusive-delegate")
+        self.assertEqual(identified["routing_action"], "normal-full-flow")
+        self.assertIsNone(identified["required_input"])
 
     def test_ownership_probe_requires_every_fixed_result_once_in_order(self) -> None:
         missing = json.loads(json.dumps(self.probe_packet))

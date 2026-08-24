@@ -397,6 +397,28 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             with self.subTest(), self.assertRaisesRegex(SystemExit, "1"):
                 VERIFY.validate_runtime_ownership_probe_surfaces(*surfaces)
 
+    def test_unavailable_runtime_probe_requires_repository_before_planner_only_for_registered_work(self) -> None:
+        unresolved = ROUTER.ownership_probe_capability_gate(
+            "codex",
+            False,
+            [],
+            ["deployment-pipeline-manifests"],
+            None,
+        )
+        self.assertEqual(unresolved["outcome"], "unknown-owner-needs-input")
+        self.assertEqual(unresolved["routing_action"], "request-input-before-planner")
+        self.assertEqual(
+            unresolved["required_input"],
+            "exact-objective-owning-repository-identity-or-path",
+        )
+        self.assertEqual(
+            (unresolved["planner_count"], unresolved["probe_child_count"], unresolved["wait_count"]),
+            (0, 0, 0),
+        )
+        unrelated = ROUTER.ownership_probe_capability_gate("codex", False, [], [], None)
+        self.assertEqual(unrelated["routing_action"], "normal-full-flow")
+        self.assertIsNone(unrelated["required_input"])
+
     def test_router_descriptor_validator_rejects_pattern_or_version_drift(self) -> None:
         VERIFY.validate_ownership_probe_descriptor(ROUTER.ownership_probe_descriptor())
         for mutation in (
@@ -1396,7 +1418,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "1"):
             VERIFY.validate_planner_lifecycle_contract(skill, widened, codex, claude)
 
-    def test_ordinary_workspace_prompt_without_direct_identity_delegates(self) -> None:
+    def test_identity_comparison_stays_inconclusive_before_registered_artifact_fallback(self) -> None:
         skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
         portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
         codex = VERIFY.parse_codex_profile(
@@ -1414,6 +1436,10 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
             preflight["decision_provenance"]["inconclusive-delegate"],
         )
         self.assertNotIn("unknown-owner-needs-input", preflight["outcomes"])
+        self.assertEqual(
+            VERIFY.OWNERSHIP_PROBE_CONTRACT["outcomes"]["inconclusive-delegate"],
+            "request-exact-repository-before-planner-for-registered-artifact-work-if-direct-identity-missing-otherwise-normal-full-flow",
+        )
         terminal = portable.replace(
             '    "missing_direct_user_identity_outcome": "inconclusive-delegate"',
             '    "missing_direct_user_identity_outcome": "unknown-owner-needs-input"',
@@ -1422,7 +1448,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "1"):
             VERIFY.validate_planner_lifecycle_contract(skill, terminal, codex, claude)
 
-    def test_lead_ownership_preflight_rejects_inconclusive_without_delegation(self) -> None:
+    def test_lead_ownership_preflight_rejects_unbounded_inconclusive_routing(self) -> None:
         skill = VERIFY.parse_frontmatter(ROOT / "skills/orchestrate-task/SKILL.md")[1]
         portable = (ROOT / "skills/orchestrate-task/references/portable-contract.md").read_text(encoding="utf-8")
         codex = VERIFY.parse_codex_profile(
@@ -1430,7 +1456,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
         )["developer_instructions"]
         claude = VERIFY.parse_claude_profile(ROOT / "agents/awb-planner.md")[1]
         canonical = VERIFY.LEAD_OWNERSHIP_PREFLIGHT_CONTRACT["outcomes"]["inconclusive-delegate"]
-        for invalid in ("terminate-needs-input", "resume-existing-routing-without-delegation"):
+        for invalid in ("always-terminate-needs-input", "always-resume-existing-routing"):
             widened = portable.replace(canonical, invalid)
             self.assertNotEqual(widened, portable)
             with self.subTest(outcome=invalid), self.assertRaisesRegex(SystemExit, "1"):

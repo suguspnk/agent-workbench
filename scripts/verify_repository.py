@@ -257,7 +257,7 @@ LEAD_OWNERSHIP_PREFLIGHT_CONTRACT = {
     "missing_direct_user_identity_outcome": "inconclusive-delegate",
     "outcomes": {
         "current-owner-confirmed": "resume-existing-routing-and-delegation",
-        "inconclusive-delegate": "enter-bounded-probe-ownership-phase-then-delegate-normal-full-flow-if-inconclusive-never-terminate-never-ask-redundant-user-input",
+        "inconclusive-delegate": "enter-bounded-probe-ownership-phase-then-request-exact-repository-before-planner-for-registered-artifact-work-if-identity-still-missing-otherwise-normal-full-flow",
         "known-owner-mismatch": "exit-immediately-blocked-or-needs-input-only-after-canonical-host-comparison-proves-unambiguous-definitive-nonmatch-name-direct-user-supplied-identity-no-planning",
     },
     "phase": "before-portable-or-model-selection-routing-and-implementation-governance",
@@ -386,7 +386,7 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
  'max_matches_per_class': 64,
  'max_mcp_calls': 1,
  'max_waits': 0,
- 'outcomes': {'inconclusive-delegate': 'normal-full-flow',
+ 'outcomes': {'inconclusive-delegate': 'request-exact-repository-before-planner-for-registered-artifact-work-if-direct-identity-missing-otherwise-normal-full-flow',
               'known-artifact-mismatch': 'stop-before-planner-name-direct-owner-or-require-exact-objective-repository-identity-or-path',
               'owner-artifact-present': 'normal-reroute'},
  'phase': 'after-inconclusive-identity-preflight-before-ordinary-routing',
@@ -508,8 +508,8 @@ PLANNER_LIFECYCLE_CONTRACT = {
     },
 }
 PLANNER_LIFECYCLE_ACTIVE_DIGESTS = {
-    "orchestrate-task skill": "af9cdf25434b98c58376ff4de68bfcb6a4079fa4ad5267f8d5e5178cdd8a5c38",
-    "portable contract": "933dcebed56868cf0e9093d04f2143ccb725a09a4128ba531c8d0a93c10ca80c",
+    "orchestrate-task skill": "b1dd2b009638baaf70ef776efc4785507d13ff9b8183fca0399f9239a3facced",
+    "portable contract": "4a53c31c81d598619590bf8a097435889fdbfff367403de3001d66e95157e2dd",
 }
 PLANNER_OWNERSHIP_OUTCOME_CONTRACT = (
     "Ownership mismatch outcomes are explicit: `known_owner` returns compact `blocked` or `needs-input` evidence naming the exact supplied missing objective-owning repository; "
@@ -532,7 +532,7 @@ PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
     "an unambiguous definitive nonmatch",
     "Missing direct-user repository/path identity is `inconclusive-delegate`",
     "bounded `probe-ownership` phase before ordinary routing",
-    "Do not ask redundant user input during the preflight",
+    "Do not ask redundant user input: the later registered-artifact fallback asks once only when the exact identity is still absent",
     "Alias, symlink/path indirection, normalization ambiguity, or a missing, conflicting, or noncanonical host identity is `inconclusive-delegate`",
     "Any ambiguity is `inconclusive-delegate`",
     "Never infer ownership from repository content or unspecified provenance",
@@ -543,6 +543,7 @@ PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
     "canonical SHA-256 binding",
     "`awb_ownership.scan_required_artifacts`",
     "one direct, lead-owned, zero-argument call",
+    "`unknown-owner-needs-input` fallback before planning",
     "protected descriptor is version 6",
     "immutable context version 2",
     "direct user objective repository identity string or null",
@@ -2227,7 +2228,7 @@ def validate_planner_lifecycle_contract(
             "missing direct-user repository/path identity is `inconclusive-delegate`",
             "enter the bounded ownership probe",
             "normal full flow",
-            "do not ask redundant user input during the preflight",
+            "do not ask redundant user input",
             "when both an exact direct-user repository/path identity and a host-provided canonical current-workspace identity are available",
             "must perform",
             "must not skip directly to the planner",
@@ -2338,6 +2339,9 @@ def validate_runtime_ownership_probe_surfaces(
             "zero children",
             "zero waits",
             "inconclusive-delegate",
+            "unknown-owner-needs-input",
+            "required_input: exact-objective-owning-repository-identity-or-path",
+            "before planner",
         ):
             if phrase not in section:
                 fail(f"{label} runtime ownership probe is missing: {phrase}")
