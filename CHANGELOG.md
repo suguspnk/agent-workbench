@@ -4,6 +4,13 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 
 ## Unreleased
 
+## 0.10.0 - 2026-08-24
+
+- Added a bounded ownership preflight that resolves canonical repository matches and mismatches before expensive planner setup while preserving fail-closed provenance rules.
+- Made simple read-only diagnosis use one fast investigator and made unresolved deployment-artifact work request the exact owning repository before planning, with zero probe children or waits.
+- Added and hardened a metadata-only ownership scanner with deterministic replay and security coverage, while keeping its unsupported Codex MCP transport disabled until the host can bind a trustworthy workspace root.
+- Expanded protected-policy, routing, race-safety, tamper, and regression coverage for the new orchestration boundary.
+
 ## 0.9.0 - 2026-08-19
 
 - Hardened orchestration routing, role contracts, secure repository readers, bounded diagnostics, and replay coverage across Codex and Claude adapters.
