@@ -338,7 +338,10 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
     def test_ownership_probe_launcher_is_isolated_and_registration_is_disabled(self) -> None:
         manifest = json.loads((ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
         self.assertNotIn("mcpServers", manifest)
-        registration = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))
+        self.assertFalse((ROOT / ".mcp.json").exists())
+        registration = json.loads(
+            (ROOT / "tests/fixtures/dormant-ownership-probe.mcp.json").read_text(encoding="utf-8")
+        )
         self.assertEqual(
             registration,
             {

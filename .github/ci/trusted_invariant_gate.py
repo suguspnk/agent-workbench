@@ -85,7 +85,7 @@ PROTECTED_ROOTS = (
     "skills",
     "tests",
 )
-PROTECTED_FILES = (".mcp.json",)
+PROTECTED_FILES: tuple[str, ...] = ()
 CODEX_DIRECTORY = "adapters/codex/.codex/agents"
 CLAUDE_DIRECTORY = "agents"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")

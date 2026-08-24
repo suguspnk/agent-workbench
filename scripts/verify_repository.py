@@ -29,7 +29,7 @@ from typing import Any, Iterable, Mapping, NamedTuple
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.10.0"
+VERSION = "0.10.1"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 RULE_ID = re.compile(r"^[A-Z]+-\d{3}$")
 MAPPED_CONCERN = re.compile(r"^- \[([A-Z]+-\d{3})\] \S.*")
@@ -51,7 +51,7 @@ GOVERNANCE_ARTIFACT_DIGESTS = {
     "references/state-and-contract-integrity.md": "480c7b7b3886c10633f2814f9a9d6fedbe6c1c459a220a38e1d2c3bc30e22d49",
     "references/trust-and-domain-safety.md": "2b09f47191cd22908f0e20ecd4839173bc35beabe7f8a58aa9b7a3ee184a7eb1",
 }
-VERSION = "0.10.0"
+VERSION = "0.10.1"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 CANONICAL_GOVERNANCE_PATH = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?(?:/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)*$"
@@ -1359,7 +1359,9 @@ def check_manifests() -> None:
         fail("Codex manifest must point skills to ./skills/")
     if "mcpServers" in codex:
         fail("Codex manifest must keep the unsupported ownership MCP transport disabled")
-    mcp = load_json(ROOT / ".mcp.json")
+    if (ROOT / ".mcp.json").exists():
+        fail("Codex plugin root must not contain an auto-discovered .mcp.json registration")
+    mcp = load_json(ROOT / "tests/fixtures/dormant-ownership-probe.mcp.json")
     if mcp != {
         "mcpServers": {
             "awb_ownership": {
@@ -1370,7 +1372,7 @@ def check_manifests() -> None:
             }
         }
     }:
-        fail("Dormant Codex MCP descriptor must expose only the protected ownership scanner")
+        fail("Dormant ownership MCP fixture must expose only the protected ownership scanner")
     server_path = ROOT / "servers/ownership_probe_mcp.py"
     server_metadata = server_path.lstat()
     if stat.S_ISLNK(server_metadata.st_mode) or not stat.S_ISREG(server_metadata.st_mode):
@@ -4869,8 +4871,8 @@ def check_release_and_ci() -> None:
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {VERSION} -" not in changelog:
         fail(f"CHANGELOG.md must document {VERSION}")
-    if VERSION == "0.10.0" and "## 0.10.0 - 2026-08-24" not in changelog:
-        fail("CHANGELOG.md must document the 0.10.0 orchestration latency release")
+    if VERSION == "0.10.1" and "## 0.10.1 - 2026-08-25" not in changelog:
+        fail("CHANGELOG.md must document the 0.10.1 Codex connector hotfix")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for phrase in (
         "codex plugin marketplace add suguspnk/agent-workbench",

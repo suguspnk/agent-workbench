@@ -4,6 +4,10 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 
 ## Unreleased
 
+## 0.10.1 - 2026-08-25
+
+- Removed the root `.mcp.json` from the distributable Codex plugin so the unsupported ownership transport remains truly unregistered; retained its descriptor only as a protected offline test fixture.
+
 ## 0.10.0 - 2026-08-24
 
 - Added a bounded ownership preflight that resolves canonical repository matches and mismatches before expensive planner setup while preserving fail-closed provenance rules.

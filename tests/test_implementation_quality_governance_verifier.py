@@ -55,7 +55,7 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
     def create_valid_manifest_fixture(self) -> None:
         for relative_path in (
             ".codex-plugin/plugin.json",
-            ".mcp.json",
+            "tests/fixtures/dormant-ownership-probe.mcp.json",
             "servers/ownership_probe_mcp.py",
             ".claude-plugin/plugin.json",
             ".claude-plugin/marketplace.json",

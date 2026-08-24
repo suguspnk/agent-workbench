@@ -11,7 +11,7 @@
     {
       "name": "agent-workbench",
       "source": "./",
-      "version": "0.10.0",
+      "version": "0.10.1",
       "description": "Portable task orchestration, deterministic code review, safe loop discovery, quality governance, opt-in pull-request evidence preparation, and draft-only tech-stack standards.",
       "author": {
         "name": "suguspnk"

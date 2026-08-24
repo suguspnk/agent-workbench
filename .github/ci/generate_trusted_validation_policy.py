@@ -37,7 +37,7 @@ PROTECTED_ROOTS = (
     "skills",
     "tests",
 )
-PROTECTED_FILES = (".mcp.json",)
+PROTECTED_FILES: tuple[str, ...] = ()
 PINNED_CANDIDATE_PATHS = {
     "scripts/verify_repository.py",
     "servers/ownership_probe_mcp.py",
@@ -342,7 +342,7 @@ def document_contracts(
         )),
         ("CONTRIBUTING.md", "protected-set"): "\n".join((
             "### Complete protected validation set", "",
-            f"The authoritative policy is version `{policy_version}` and its `protected_set_digest` is `{set_digest}`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, `servers`, `skills`, and `tests`, plus the root `.mcp.json` file. The trusted inventory binds every file and directory below those roots, including manifests, MCP registration/server code, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 24 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.",
+            f"The authoritative policy is version `{policy_version}` and its `protected_set_digest` is `{set_digest}`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, `servers`, `skills`, and `tests`. The trusted inventory binds every file and directory below those roots, including manifests, dormant MCP compatibility fixtures and server code, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 24 profile files; file hashes and executable bits are protected, a root `.mcp.json` registration is forbidden, and unallowlisted instruction or automation surfaces fail closed.",
         )),
         ("CONTRIBUTING.md", "initial-bootstrap"): "\n".join((
             "### Initial protected-base activation", "",
