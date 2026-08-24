@@ -7,7 +7,7 @@ Contributions are welcome through issues and pull requests.
 <!-- BEGIN TRUSTED PROTECTED SET -->
 ### Complete protected validation set
 
-The authoritative policy is version `39` and its `protected_set_digest` is `7732074af6280c776d1654977ae05ed6916c762f260fe44aa708ef949b190d17`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, `servers`, `skills`, and `tests`, plus the root `.mcp.json` file. The trusted inventory binds every file and directory below those roots, including manifests, MCP registration/server code, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 24 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.
+The authoritative policy is version `40` and its `protected_set_digest` is `602d89e10fdcf7bd01038e06973e309a2e44c2123895d1a0033e0378e0486a62`. The exact protected roots are `.agents`, `.claude-plugin`, `.codex-plugin`, `.github`, `adapters/codex/.codex`, `agents`, `scripts`, `servers`, `skills`, and `tests`, plus the root `.mcp.json` file. The trusted inventory binds every file and directory below those roots, including manifests, MCP registration/server code, CI controls, generator, skills/references/scripts/tests, validator/router/replay data, and all 24 profile files; file hashes and executable bits are protected and unallowlisted instruction/automation surfaces fail closed.
 <!-- END TRUSTED PROTECTED SET -->
 
 <!-- BEGIN TRUSTED INITIAL BOOTSTRAP -->
