@@ -27,13 +27,16 @@ ROUTER_SPEC.loader.exec_module(ROUTER)
 
 
 class OwnershipProbeScannerTests(unittest.TestCase):
+    def roots_response(self, root: Path) -> dict[str, object]:
+        uri_path = SERVER._canonical_file_uri_path(str(root.resolve()))
+        return {
+            "jsonrpc": "2.0",
+            "id": SERVER.ROOT_REQUEST_ID,
+            "result": {"roots": [{"uri": "file://" + uri_path}]},
+        }
+
     def scan(self, root: Path) -> dict[str, object]:
-        old_cwd = Path.cwd()
-        try:
-            os.chdir(root)
-            return SERVER.scan_required_artifacts()
-        finally:
-            os.chdir(old_cwd)
+        return SERVER.scan_required_artifacts(self.roots_response(root))
 
     def result_map(self, result: dict[str, object]) -> dict[str, dict[str, object]]:
         return {item["artifact_class"]: item for item in result["query_results"]}
@@ -46,7 +49,7 @@ class OwnershipProbeScannerTests(unittest.TestCase):
             result = self.scan(root)
         self.assertEqual(result["workspace_identity"], str(root.resolve()))
         self.assertEqual(result["tool_name"], "scan_required_artifacts")
-        self.assertEqual(result["descriptor_version"], 5)
+        self.assertEqual(result["descriptor_version"], 6)
         for query in result["query_results"]:
             self.assertTrue(query["complete"])
             self.assertFalse(query["truncated"])
@@ -271,6 +274,8 @@ class OwnershipProbeScannerTests(unittest.TestCase):
         self.assertEqual(SERVER.STABILITY_COMPARISON, descriptor["stability"]["comparison"])
         self.assertEqual(SERVER.STABILITY_FAILURE_ACTION, descriptor["stability"]["failure_action"])
         self.assertEqual(SERVER.ROOT_PINNING, descriptor["stability"]["root_pinning"])
+        self.assertEqual(SERVER.ROOT_SOURCE, descriptor["stability"]["root_source"])
+        self.assertEqual(SERVER.SERVER_CWD, descriptor["stability"]["server_cwd"])
         self.assertEqual(
             SERVER.WORKSPACE_IDENTITY_BINDING,
             descriptor["stability"]["workspace_identity_binding"],
@@ -292,10 +297,70 @@ class OwnershipProbeScannerTests(unittest.TestCase):
                 self.assertNotIn(forbidden, source)
         self.assertIn("os.environ.clear()", source)
 
+    def test_missing_symlink_and_noncanonical_roots_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            missing = parent / "missing"
+            missing_result = SERVER.scan_required_artifacts(self.roots_response(missing))
+            real = parent / "real"
+            real.mkdir()
+            linked = parent / "linked"
+            os.symlink(real, linked)
+            linked_response = {
+                "jsonrpc": "2.0",
+                "id": SERVER.ROOT_REQUEST_ID,
+                "result": {"roots": [{"uri": "file://" + SERVER._canonical_file_uri_path(str(linked))}]},
+            }
+            linked_result = SERVER.scan_required_artifacts(linked_response)
+        self.assertTrue(all(not item["complete"] for item in missing_result["query_results"]))
+        self.assertTrue(all(not item["complete"] for item in linked_result["query_results"]))
+
+    def test_strict_root_uri_rejects_authority_query_fragment_and_ambiguous_encoding(self) -> None:
+        invalid = (
+            "https:///tmp/workspace",
+            "file://localhost/tmp/workspace",
+            "file:///tmp/workspace?query",
+            "file:///tmp/workspace#fragment",
+            "file:///tmp/%2Fworkspace",
+            "file:///tmp/%5Cworkspace",
+            "file:///tmp/%00workspace",
+            "file:///tmp/%2eworkspace",
+            "file:///tmp//workspace",
+            "file:///tmp/../workspace",
+            "file:///tmp/back\\slash",
+        )
+        for uri in invalid:
+            with self.subTest(uri=uri):
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": SERVER.ROOT_REQUEST_ID,
+                    "result": {"roots": [{"uri": uri}]},
+                }
+                result = SERVER.scan_required_artifacts(response)
+                self.assertEqual(result["workspace_identity"], "")
+                self.assertTrue(all(not item["complete"] for item in result["query_results"]))
+
 
 class OwnershipProbeMcpProtocolTests(unittest.TestCase):
-    def run_protocol(self, requests: list[dict[str, object]], cwd: Path) -> tuple[list[dict[str, object]], str]:
-        payload = "".join(json.dumps(request) + "\n" for request in requests)
+    def root_response(self, root: Path) -> dict[str, object]:
+        return {
+            "jsonrpc": "2.0",
+            "id": SERVER.ROOT_REQUEST_ID,
+            "result": {"roots": [{"uri": "file://" + SERVER._canonical_file_uri_path(str(root.resolve()))}]},
+        }
+
+    def run_protocol(
+        self,
+        requests: list[dict[str, object]],
+        cwd: Path,
+        roots_response: dict[str, object] | None = None,
+    ) -> tuple[list[dict[str, object]], str]:
+        messages: list[dict[str, object]] = []
+        for request in requests:
+            messages.append(request)
+            if request.get("method") == "tools/call" and roots_response is not None:
+                messages.append(roots_response)
+        payload = "".join(json.dumps(message) + "\n" for message in messages)
         environment = {"PATH": os.environ.get("PATH", ""), "AWB_TEST_SECRET": "must-not-appear"}
         result = subprocess.run(
             [sys.executable, str(SERVER_PATH)],
@@ -316,7 +381,12 @@ class OwnershipProbeMcpProtocolTests(unittest.TestCase):
             (root / "infra.tf").touch()
             responses, stderr = self.run_protocol(
                 [
-                    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {"capabilities": {"roots": {"listChanged": False}}},
+                    },
                     {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
                     {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
                     {
@@ -326,16 +396,20 @@ class OwnershipProbeMcpProtocolTests(unittest.TestCase):
                         "params": {"name": "scan_required_artifacts", "arguments": {}},
                     },
                 ],
-                root,
+                ROOT,
+                self.root_response(root),
             )
         self.assertEqual(stderr, "")
-        self.assertEqual([item["id"] for item in responses], [1, 2, 3])
+        self.assertEqual([item["id"] for item in responses], [1, 2, SERVER.ROOT_REQUEST_ID, 3])
         tools = responses[1]["result"]["tools"]
         self.assertEqual(len(tools), 1)
         self.assertEqual(tools[0]["name"], "scan_required_artifacts")
         self.assertEqual(tools[0]["inputSchema"]["additionalProperties"], False)
         self.assertTrue(tools[0]["annotations"]["readOnlyHint"])
-        structured = responses[2]["result"]["structuredContent"]
+        roots_request = responses[2]
+        self.assertEqual(roots_request["method"], "roots/list")
+        self.assertEqual(roots_request["params"], {})
+        structured = responses[3]["result"]["structuredContent"]
         self.assertEqual(structured["workspace_identity"], str(root.resolve()))
         self.assertNotIn("must-not-appear", json.dumps(responses))
 
@@ -358,6 +432,99 @@ class OwnershipProbeMcpProtocolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             responses, _stderr = self.run_protocol(requests, Path(directory))
         self.assertEqual([item["error"]["code"] for item in responses], [-32601, -32601, -32602])
+
+    def test_missing_roots_capability_returns_incomplete_without_request(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            responses, _stderr = self.run_protocol(
+                [
+                    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"capabilities": {}}},
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/call",
+                        "params": {"name": SERVER.TOOL_NAME, "arguments": {}},
+                    },
+                ],
+                Path(directory),
+            )
+        self.assertEqual([item["id"] for item in responses], [1, 2])
+        structured = responses[1]["result"]["structuredContent"]
+        self.assertEqual(structured["workspace_identity"], "")
+        self.assertTrue(all(not item["complete"] for item in structured["query_results"]))
+
+    def test_roots_error_malformed_and_multiple_roots_return_incomplete(self) -> None:
+        responses_to_test = (
+            {"jsonrpc": "2.0", "id": SERVER.ROOT_REQUEST_ID, "error": {"code": -32603, "message": "no roots"}},
+            {"jsonrpc": "2.0", "id": SERVER.ROOT_REQUEST_ID, "result": {"unexpected": []}},
+            {
+                "jsonrpc": "2.0",
+                "id": SERVER.ROOT_REQUEST_ID,
+                "result": {"roots": [{"uri": "file:///tmp/a"}, {"uri": "file:///tmp/b"}]},
+            },
+        )
+        for roots_response in responses_to_test:
+            with self.subTest(response=roots_response), tempfile.TemporaryDirectory() as directory:
+                responses, _stderr = self.run_protocol(
+                    [
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "initialize",
+                            "params": {"capabilities": {"roots": {}}},
+                        },
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 2,
+                            "method": "tools/call",
+                            "params": {"name": SERVER.TOOL_NAME, "arguments": {}},
+                        },
+                    ],
+                    Path(directory),
+                    roots_response,
+                )
+                structured = responses[-1]["result"]["structuredContent"]
+                self.assertEqual(structured["workspace_identity"], "")
+                self.assertTrue(all(not item["complete"] for item in structured["query_results"]))
+
+    def test_server_cwd_and_decoy_are_not_used_as_scan_root_or_executed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            server_cwd = parent / "caller"
+            workspace = parent / "workspace"
+            server_cwd.mkdir()
+            workspace.mkdir()
+            decoy = server_cwd / "servers/ownership_probe_mcp.py"
+            decoy.parent.mkdir()
+            sentinel = parent / "decoy-executed"
+            decoy.write_text("#!/bin/sh\ntouch %s\n" % sentinel, encoding="utf-8")
+            decoy.chmod(0o755)
+            (server_cwd / "caller-task-definition.json").touch()
+            (workspace / "workspace-task-definition.json").touch()
+            responses, _stderr = self.run_protocol(
+                [
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {"capabilities": {"roots": {}}},
+                    },
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/call",
+                        "params": {"name": SERVER.TOOL_NAME, "arguments": {}},
+                    },
+                ],
+                server_cwd,
+                self.root_response(workspace),
+            )
+            self.assertFalse(sentinel.exists())
+            structured = responses[-1]["result"]["structuredContent"]
+            matches = next(
+                item["matches"] for item in structured["query_results"]
+                if item["artifact_class"] == "ecs-task-definition-manifests"
+            )
+            self.assertEqual(matches, ["workspace-task-definition.json"])
 
     def test_fixed_isolated_launcher_ignores_hostile_path_pythonpath_and_sitecustomize(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

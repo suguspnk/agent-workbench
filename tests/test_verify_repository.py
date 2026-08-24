@@ -343,6 +343,7 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
                 "mcpServers": {
                     "awb_ownership": {
                         "command": "./servers/ownership_probe_mcp.py",
+                        "cwd": ".",
                         "startup_timeout_sec": 10,
                         "tool_timeout_sec": 60,
                     }

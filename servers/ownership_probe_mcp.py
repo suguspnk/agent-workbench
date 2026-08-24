@@ -13,12 +13,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 SERVER_NAME = "agent-workbench-ownership-probe"
-SERVER_VERSION = "1.2.0"
+SERVER_VERSION = "1.3.0"
 TOOL_NAME = "scan_required_artifacts"
 ADAPTER_RESULT_VERSION = 1
-DESCRIPTOR_VERSION = 5
+DESCRIPTOR_VERSION = 6
 # Updated only with the protected descriptor in route_subagent.py and portable-contract.md.
-DESCRIPTOR_SHA256 = "648d6b9faeb2a33742137c148bd677f7dbf08a0cfd536f4447344aeb0ef02a42"
+DESCRIPTOR_SHA256 = "78bbdadf0e8e15509f9262a251666529b8265a09cd656fd32888827c8f8e11c4"
 MAX_CLASSES = 3
 MAX_MATCHES_PER_CLASS = 64
 MAX_DEPTH = 32
@@ -30,9 +30,16 @@ METADATA_TOKEN_FIELDS = (
 )
 STABILITY_COMPARISON = "byte-identical-canonical-metadata-receipts-and-query-results"
 STABILITY_FAILURE_ACTION = "all-query-results-incomplete"
-ROOT_PINNING = "opened-before-workspace-identity-and-reused-across-both-passes"
+ROOT_SOURCE = "one-strict-canonical-local-file-uri-from-full-duplex-mcp-roots-list"
+SERVER_CWD = "installed-plugin-root-never-used-as-scan-target"
+ROOT_PINNING = "roots-list-path-opened-before-workspace-identity-and-reused-across-both-passes"
 WORKSPACE_IDENTITY_BINDING = (
     "canonical-path-and-pinned-root-st-dev-st-ino-revalidated-before-between-and-after-passes"
+)
+ROOT_REQUEST_ID = "awb_ownership_roots_1"
+MAX_INTERLEAVED_ROOT_NOTIFICATIONS = 16
+_UNRESERVED_URI_BYTES = frozenset(
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
 )
 
 EXCLUDED_DIRECTORY_NAMES = frozenset(
@@ -209,20 +216,86 @@ def _scan_pass(pinned_root_fd: int, deadline: float, entries_seen: int) -> Tuple
     return results, _canonical_bytes({"directories": directory_receipts, "query_results": results}), entries_seen
 
 
-def _open_workspace_root() -> int:
+def _canonical_file_uri_path(path: str) -> str:
+    encoded: List[str] = []
+    for byte in path.encode("utf-8"):
+        if byte == 0x2F or byte in _UNRESERVED_URI_BYTES:
+            encoded.append(chr(byte))
+        else:
+            encoded.append("%%%02X" % byte)
+    return "".join(encoded)
+
+
+def _strict_local_file_uri(uri: Any) -> str:
+    if not isinstance(uri, str) or not uri.startswith("file:///"):
+        raise ValueError("workspace root must be a local file URI with no authority")
+    if len(uri) > 16_384 or "?" in uri or "#" in uri or "\\" in uri or "\x00" in uri:
+        raise ValueError("workspace root URI is not canonical")
+    raw_path = uri[len("file://"):]
+    decoded = bytearray()
+    index = 0
+    while index < len(raw_path):
+        character = raw_path[index]
+        if character == "%":
+            if index + 2 >= len(raw_path):
+                raise ValueError("workspace root URI has invalid percent encoding")
+            pair = raw_path[index + 1:index + 3]
+            if not re.fullmatch(r"[0-9A-F]{2}", pair):
+                raise ValueError("workspace root URI percent encoding is not canonical")
+            byte = int(pair, 16)
+            if byte in {0, 0x2F, 0x5C}:
+                raise ValueError("workspace root URI contains an encoded separator or NUL")
+            decoded.append(byte)
+            index += 3
+            continue
+        ordinal = ord(character)
+        if ordinal > 0x7F:
+            raise ValueError("workspace root URI must percent-encode non-ASCII bytes")
+        decoded.append(ordinal)
+        index += 1
+    try:
+        path = bytes(decoded).decode("utf-8", "strict")
+    except UnicodeDecodeError as error:
+        raise ValueError("workspace root URI is not valid UTF-8") from error
+    if not os.path.isabs(path) or _canonical_file_uri_path(path) != raw_path:
+        raise ValueError("workspace root URI is not canonical")
+    if os.path.normpath(path) != path or os.path.realpath(path) != path:
+        raise ValueError("workspace root path is not canonical")
+    return path
+
+
+def _workspace_uri_from_roots_response(response: Any) -> str:
+    if not isinstance(response, dict) or set(response) != {"jsonrpc", "id", "result"}:
+        raise ValueError("roots/list response has an invalid schema")
+    if response.get("jsonrpc") != "2.0" or response.get("id") != ROOT_REQUEST_ID:
+        raise ValueError("roots/list response binding is invalid")
+    result = response.get("result")
+    if not isinstance(result, dict) or set(result) != {"roots"}:
+        raise ValueError("roots/list result has an invalid schema")
+    roots = result.get("roots")
+    if not isinstance(roots, list) or len(roots) != 1:
+        raise ValueError("roots/list must return exactly one root")
+    root = roots[0]
+    if not isinstance(root, dict) or set(root) not in ({"uri"}, {"uri", "name"}):
+        raise ValueError("roots/list root has an invalid schema")
+    if "name" in root and not isinstance(root["name"], str):
+        raise ValueError("roots/list root name must be a string")
+    return _strict_local_file_uri(root.get("uri"))
+
+
+def _open_workspace_root(workspace_identity: str) -> int:
     flags = os.O_RDONLY
     if hasattr(os, "O_DIRECTORY"):
         flags |= os.O_DIRECTORY
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
-    return os.open(".", flags)
+    return os.open(workspace_identity, flags)
 
 
 def _workspace_binding_matches(root_fd: int, workspace_identity: str, root_identity: Tuple[int, int]) -> bool:
     try:
         root_metadata = os.fstat(root_fd)
-        current_identity = os.path.realpath(os.getcwd())
-        path_metadata = os.stat(workspace_identity, follow_symlinks=False)
+        path_metadata = os.lstat(workspace_identity)
     except (OSError, ValueError):
         return False
     return (
@@ -230,31 +303,30 @@ def _workspace_binding_matches(root_fd: int, workspace_identity: str, root_ident
         and stat.S_ISDIR(path_metadata.st_mode)
         and os.path.isabs(workspace_identity)
         and os.path.realpath(workspace_identity) == workspace_identity
-        and current_identity == workspace_identity
         and _device_inode(root_metadata) == root_identity
         and _device_inode(path_metadata) == root_identity
     )
 
 
-def _bind_workspace_identity(root_fd: int) -> Tuple[str, Tuple[int, int]]:
+def _bind_workspace_identity(root_fd: int, workspace_identity: str) -> Tuple[str, Tuple[int, int]]:
     root_metadata = os.fstat(root_fd)
     if not stat.S_ISDIR(root_metadata.st_mode):
         raise OSError("startup workspace is not a directory")
-    workspace_identity = os.path.realpath(os.getcwd())
     root_identity = _device_inode(root_metadata)
     if not _workspace_binding_matches(root_fd, workspace_identity, root_identity):
         raise OSError("startup workspace identity is not bound to the pinned root")
     return workspace_identity, root_identity
 
 
-def scan_required_artifacts() -> Dict[str, Any]:
-    """Scan startup-cwd metadata twice without following links or reading contents."""
+def scan_required_artifacts(roots_response: Any) -> Dict[str, Any]:
+    """Scan one MCP workspace root twice without following links or reading contents."""
     workspace_identity = ""
     root_fd: Optional[int] = None
     try:
-        root_fd = _open_workspace_root()
+        workspace_identity = _workspace_uri_from_roots_response(roots_response)
+        root_fd = _open_workspace_root(workspace_identity)
         try:
-            workspace_identity, root_identity = _bind_workspace_identity(root_fd)
+            workspace_identity, root_identity = _bind_workspace_identity(root_fd, workspace_identity)
         except (OSError, ValueError):
             results = _query_results()
             _mark_incomplete(results)
@@ -288,7 +360,7 @@ def scan_required_artifacts() -> Dict[str, Any]:
         ):
             _mark_incomplete(final_results)
         return _adapter_result(workspace_identity, final_results)
-    except OSError:
+    except (OSError, ValueError):
         results = _query_results()
         _mark_incomplete(results)
         return _adapter_result(workspace_identity, results)
@@ -312,7 +384,48 @@ def _error_response(request_id: Any, code: int, message: str) -> Dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
 
-def handle_request(request: Any) -> Optional[Dict[str, Any]]:
+def _tool_call_response(request_id: Any, roots_response: Any) -> Dict[str, Any]:
+    result = scan_required_artifacts(roots_response)
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "result": {
+            "content": [{"type": "text", "text": _canonical_bytes(result).decode("ascii")}],
+            "structuredContent": result,
+            "isError": False,
+        },
+    }
+
+
+def _client_supports_roots(params: Any) -> bool:
+    if not isinstance(params, dict):
+        return False
+    capabilities = params.get("capabilities")
+    if not isinstance(capabilities, dict):
+        return False
+    roots = capabilities.get("roots")
+    return isinstance(roots, dict) and set(roots).issubset({"listChanged"}) and isinstance(
+        roots.get("listChanged", False), bool
+    )
+
+
+def _valid_tool_call(request: Any) -> bool:
+    if not isinstance(request, dict) or request.get("method") != "tools/call":
+        return False
+    params = request.get("params")
+    return (
+        isinstance(params, dict)
+        and set(params) == {"name", "arguments"}
+        and params.get("name") == TOOL_NAME
+        and params.get("arguments") == {}
+    )
+
+
+def handle_request(
+    request: Any,
+    client_supports_roots: bool = False,
+    roots_response: Any = None,
+) -> Optional[Dict[str, Any]]:
     if not isinstance(request, dict) or request.get("jsonrpc") != "2.0":
         request_id = request.get("id") if isinstance(request, dict) else None
         return _error_response(request_id, -32600, "Invalid Request")
@@ -338,26 +451,61 @@ def handle_request(request: Any) -> Optional[Dict[str, Any]]:
             return _error_response(request_id, -32601, "Unknown tool")
         if params["arguments"] != {}:
             return _error_response(request_id, -32602, "Tool takes no arguments")
-        result = scan_required_artifacts()
-        return {"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": _canonical_bytes(result).decode("ascii")}], "structuredContent": result, "isError": False}}
+        if not client_supports_roots:
+            return _tool_call_response(request_id, None)
+        return _tool_call_response(request_id, roots_response)
     return _error_response(request_id, -32601, "Method not found")
+
+
+def _write_message(message: Dict[str, Any]) -> None:
+    encoded = json.dumps(message, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    sys.stdout.write(encoded + "\n")
+    sys.stdout.flush()
+
+
+def _read_roots_response() -> Any:
+    for _index in range(MAX_INTERLEAVED_ROOT_NOTIFICATIONS + 1):
+        raw_line = sys.stdin.buffer.readline()
+        if not raw_line:
+            return None
+        try:
+            response = json.loads(raw_line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        if isinstance(response, dict) and response.get("id") == ROOT_REQUEST_ID:
+            return response
+        if not isinstance(response, dict) or "id" in response or not str(response.get("method", "")).startswith(
+            "notifications/"
+        ):
+            return None
+    return None
 
 
 def main() -> int:
     # Isolated mode suppresses PYTHONPATH/user-site; then drop all environment data.
     os.environ.clear()
+    roots_supported = False
     for raw_line in sys.stdin.buffer:
         try:
             request = json.loads(raw_line)
-            response = handle_request(request)
+            if isinstance(request, dict) and request.get("method") == "initialize":
+                roots_supported = _client_supports_roots(request.get("params"))
+            roots_response = None
+            if roots_supported and _valid_tool_call(request):
+                _write_message({
+                    "jsonrpc": "2.0",
+                    "id": ROOT_REQUEST_ID,
+                    "method": "roots/list",
+                    "params": {},
+                })
+                roots_response = _read_roots_response()
+            response = handle_request(request, roots_supported, roots_response)
         except (UnicodeDecodeError, json.JSONDecodeError):
             response = _error_response(None, -32700, "Parse error")
         except Exception:
             response = _error_response(None, -32603, "Internal error")
         if response is not None:
-            encoded = json.dumps(response, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-            sys.stdout.write(encoded + "\n")
-            sys.stdout.flush()
+            _write_message(response)
     return 0
 
 

@@ -282,7 +282,7 @@ DIRECT_DIAGNOSIS_CONTRACT = {
     "work_cutoff_seconds": 90,
     "work_shape": "diagnose",
 }
-OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {'version': 5,
+OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {'version': 6,
  'phase': 'probe-ownership',
  'class_queries': [{'artifact_class': 'ecs-task-definition-manifests',
                     'accepted_path_pattern': '(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:json|yaml|yml)\\Z'},
@@ -308,7 +308,9 @@ OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {'version': 5,
                                          'st_mtime_ns',
                                          'st_ctime_ns'],
                'directory_tokens': 'pre-and-post-fstat-must-match',
-               'root_pinning': 'opened-before-workspace-identity-and-reused-across-both-passes',
+               'root_source': 'one-strict-canonical-local-file-uri-from-full-duplex-mcp-roots-list',
+               'server_cwd': 'installed-plugin-root-never-used-as-scan-target',
+               'root_pinning': 'roots-list-path-opened-before-workspace-identity-and-reused-across-both-passes',
                'workspace_identity_binding': 'canonical-path-and-pinned-root-st-dev-st-ino-revalidated-before-between-and-after-passes',
                'comparison': 'byte-identical-canonical-metadata-receipts-and-query-results',
                'failure_action': 'all-query-results-incomplete'},
@@ -389,7 +391,7 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
               'owner-artifact-present': 'normal-reroute'},
  'phase': 'after-inconclusive-identity-preflight-before-ordinary-routing',
  'query_order': 'protected-server-canonical-order',
- 'registry_descriptor': {'version': 5,
+ 'registry_descriptor': {'version': 6,
                          'phase': 'probe-ownership',
                          'class_queries': [{'artifact_class': 'ecs-task-definition-manifests',
                                             'accepted_path_pattern': '(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:json|yaml|yml)\\Z'},
@@ -415,7 +417,9 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
                                                                  'st_mtime_ns',
                                                                  'st_ctime_ns'],
                                        'directory_tokens': 'pre-and-post-fstat-must-match',
-                                       'root_pinning': 'opened-before-workspace-identity-and-reused-across-both-passes',
+                                       'root_source': 'one-strict-canonical-local-file-uri-from-full-duplex-mcp-roots-list',
+                                       'server_cwd': 'installed-plugin-root-never-used-as-scan-target',
+                                       'root_pinning': 'roots-list-path-opened-before-workspace-identity-and-reused-across-both-passes',
                                        'workspace_identity_binding': 'canonical-path-and-pinned-root-st-dev-st-ino-revalidated-before-between-and-after-passes',
                                        'comparison': 'byte-identical-canonical-metadata-receipts-and-query-results',
                                        'failure_action': 'all-query-results-incomplete'},
@@ -478,7 +482,7 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
                                        'max_children': 0,
                                        'max_waits': 0,
                                        'hard_deadline_outcome': 'inconclusive-delegate'}},
- 'registry_descriptor_sha256': '648d6b9faeb2a33742137c148bd677f7dbf08a0cfd536f4447344aeb0ef02a42',
+ 'registry_descriptor_sha256': '78bbdadf0e8e15509f9262a251666529b8265a09cd656fd32888827c8f8e11c4',
  'required_assertion': 'at-least-one-named-class-must-exist-in-objective-owning-repository',
  'tool': 'awb_ownership.scan_required_artifacts',
  'work_cutoff_seconds': 45}
@@ -504,8 +508,8 @@ PLANNER_LIFECYCLE_CONTRACT = {
     },
 }
 PLANNER_LIFECYCLE_ACTIVE_DIGESTS = {
-    "orchestrate-task skill": "07ed4532cd3fa9222e49457ba2ec5b32610d34581ccc450975b85d6f7f4db56b",
-    "portable contract": "4c6748c865cfe18a5c4fc2fd5800052619d546fb7f86adc5091de76f50da5fda",
+    "orchestrate-task skill": "af9cdf25434b98c58376ff4de68bfcb6a4079fa4ad5267f8d5e5178cdd8a5c38",
+    "portable contract": "933dcebed56868cf0e9093d04f2143ccb725a09a4128ba531c8d0a93c10ca80c",
 }
 PLANNER_OWNERSHIP_OUTCOME_CONTRACT = (
     "Ownership mismatch outcomes are explicit: `known_owner` returns compact `blocked` or `needs-input` evidence naming the exact supplied missing objective-owning repository; "
@@ -539,7 +543,7 @@ PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
     "canonical SHA-256 binding",
     "`awb_ownership.scan_required_artifacts`",
     "one direct, lead-owned, zero-argument call",
-    "protected descriptor is version 5",
+    "protected descriptor is version 6",
     "immutable context version 2",
     "direct user objective repository identity string or null",
     "host canonical workspace identity",
@@ -1359,6 +1363,7 @@ def check_manifests() -> None:
         "mcpServers": {
             "awb_ownership": {
                 "command": "./servers/ownership_probe_mcp.py",
+                "cwd": ".",
                 "startup_timeout_sec": 10,
                 "tool_timeout_sec": 60,
             }
@@ -1376,6 +1381,13 @@ def check_manifests() -> None:
         fail("ownership probe MCP server must use the fixed isolated /usr/bin/python3 -I launcher")
     if "os.environ.clear()" not in server_source:
         fail("ownership probe MCP server must clear its inherited environment")
+    for phrase in (
+        'ROOT_SOURCE = "one-strict-canonical-local-file-uri-from-full-duplex-mcp-roots-list"',
+        'SERVER_CWD = "installed-plugin-root-never-used-as-scan-target"',
+        'method": "roots/list"',
+    ):
+        if phrase not in server_source:
+            fail(f"ownership probe MCP server lacks protected roots binding: {phrase}")
     interface = codex.get("interface")
     if not isinstance(interface, dict):
         fail("Codex manifest must contain an interface object")
@@ -2315,7 +2327,9 @@ def validate_runtime_ownership_probe_surfaces(
             "zero-argument",
             "zero probe children, waits, or syntheses",
             "role name, read-only",
-            "version 5",
+            "version 6",
+            "roots/list",
+            "installed plugin root",
             "version 2",
             "retained",
             "workspace",

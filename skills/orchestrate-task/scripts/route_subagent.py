@@ -112,7 +112,7 @@ PROBE_LIFECYCLE = {
     "hard_deadline_outcome": "inconclusive-delegate",
 }
 MAX_PROBE_MATCHES = 64
-PROBE_DESCRIPTOR_VERSION = 5
+PROBE_DESCRIPTOR_VERSION = 6
 PROBE_PARENT_CONTEXT_VERSION = 2
 PROBE_STABILITY_PASSES = 2
 PROBE_METADATA_TOKEN_FIELDS = [
@@ -128,7 +128,9 @@ PROBE_METADATA_TOKEN_FIELDS = [
 ]
 PROBE_STABILITY_COMPARISON = "byte-identical-canonical-metadata-receipts-and-query-results"
 PROBE_STABILITY_FAILURE_ACTION = "all-query-results-incomplete"
-PROBE_ROOT_PINNING = "opened-before-workspace-identity-and-reused-across-both-passes"
+PROBE_ROOT_SOURCE = "one-strict-canonical-local-file-uri-from-full-duplex-mcp-roots-list"
+PROBE_SERVER_CWD = "installed-plugin-root-never-used-as-scan-target"
+PROBE_ROOT_PINNING = "roots-list-path-opened-before-workspace-identity-and-reused-across-both-passes"
 PROBE_WORKSPACE_IDENTITY_BINDING = (
     "canonical-path-and-pinned-root-st-dev-st-ino-revalidated-before-between-and-after-passes"
 )
@@ -287,6 +289,8 @@ def ownership_probe_descriptor() -> dict[str, Any]:
             "deadline_scope": "cumulative-across-passes",
             "metadata_token_fields": list(PROBE_METADATA_TOKEN_FIELDS),
             "directory_tokens": "pre-and-post-fstat-must-match",
+            "root_source": PROBE_ROOT_SOURCE,
+            "server_cwd": PROBE_SERVER_CWD,
             "root_pinning": PROBE_ROOT_PINNING,
             "workspace_identity_binding": PROBE_WORKSPACE_IDENTITY_BINDING,
             "comparison": PROBE_STABILITY_COMPARISON,
@@ -1211,7 +1215,7 @@ def probe_ownership(value: Any) -> dict[str, Any]:
     artifact_queries = [
         {
             "artifact_class": name,
-            "scan": "protected-startup-cwd-metadata",
+            "scan": "protected-mcp-roots-list-metadata",
             "max_matches": MAX_PROBE_MATCHES,
         }
         for name in PROBE_ARTIFACT_REGISTRY
