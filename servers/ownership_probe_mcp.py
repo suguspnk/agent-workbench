@@ -13,12 +13,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 SERVER_NAME = "agent-workbench-ownership-probe"
-SERVER_VERSION = "1.1.0"
+SERVER_VERSION = "1.2.0"
 TOOL_NAME = "scan_required_artifacts"
 ADAPTER_RESULT_VERSION = 1
-DESCRIPTOR_VERSION = 4
+DESCRIPTOR_VERSION = 5
 # Updated only with the protected descriptor in route_subagent.py and portable-contract.md.
-DESCRIPTOR_SHA256 = "4a5993ebc44201cbc76ab0ea2e5411d2bf4e5d923b39383c94388e3f7de38e08"
+DESCRIPTOR_SHA256 = "648d6b9faeb2a33742137c148bd677f7dbf08a0cfd536f4447344aeb0ef02a42"
 MAX_CLASSES = 3
 MAX_MATCHES_PER_CLASS = 64
 MAX_DEPTH = 32
@@ -30,6 +30,10 @@ METADATA_TOKEN_FIELDS = (
 )
 STABILITY_COMPARISON = "byte-identical-canonical-metadata-receipts-and-query-results"
 STABILITY_FAILURE_ACTION = "all-query-results-incomplete"
+ROOT_PINNING = "opened-before-workspace-identity-and-reused-across-both-passes"
+WORKSPACE_IDENTITY_BINDING = (
+    "canonical-path-and-pinned-root-st-dev-st-ino-revalidated-before-between-and-after-passes"
+)
 
 EXCLUDED_DIRECTORY_NAMES = frozenset(
     {".git", ".hg", ".svn", ".tox", ".venv", "__pycache__", "node_modules", "vendor"}
@@ -100,17 +104,21 @@ def _metadata_token(metadata: os.stat_result) -> List[int]:
     return [int(getattr(metadata, field)) for field in METADATA_TOKEN_FIELDS]
 
 
+def _device_inode(metadata: os.stat_result) -> Tuple[int, int]:
+    return int(metadata.st_dev), int(metadata.st_ino)
+
+
 def _canonical_bytes(value: Any) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
 
 
-def _scan_pass(deadline: float, entries_seen: int) -> Tuple[List[Dict[str, Any]], bytes, int]:
+def _scan_pass(pinned_root_fd: int, deadline: float, entries_seen: int) -> Tuple[List[Dict[str, Any]], bytes, int]:
     results = _query_results()
     directory_receipts: List[Dict[str, Any]] = []
     root_fd: Optional[int] = None
     stack: List[Tuple[int, str, int, Optional[List[int]]]] = []
     try:
-        root_fd = os.open(".", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        root_fd = os.dup(pinned_root_fd)
         stack.append((root_fd, "", 0, None))
         root_fd = None
         while stack:
@@ -201,29 +209,92 @@ def _scan_pass(deadline: float, entries_seen: int) -> Tuple[List[Dict[str, Any]]
     return results, _canonical_bytes({"directories": directory_receipts, "query_results": results}), entries_seen
 
 
+def _open_workspace_root() -> int:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    return os.open(".", flags)
+
+
+def _workspace_binding_matches(root_fd: int, workspace_identity: str, root_identity: Tuple[int, int]) -> bool:
+    try:
+        root_metadata = os.fstat(root_fd)
+        current_identity = os.path.realpath(os.getcwd())
+        path_metadata = os.stat(workspace_identity, follow_symlinks=False)
+    except (OSError, ValueError):
+        return False
+    return (
+        stat.S_ISDIR(root_metadata.st_mode)
+        and stat.S_ISDIR(path_metadata.st_mode)
+        and os.path.isabs(workspace_identity)
+        and os.path.realpath(workspace_identity) == workspace_identity
+        and current_identity == workspace_identity
+        and _device_inode(root_metadata) == root_identity
+        and _device_inode(path_metadata) == root_identity
+    )
+
+
+def _bind_workspace_identity(root_fd: int) -> Tuple[str, Tuple[int, int]]:
+    root_metadata = os.fstat(root_fd)
+    if not stat.S_ISDIR(root_metadata.st_mode):
+        raise OSError("startup workspace is not a directory")
+    workspace_identity = os.path.realpath(os.getcwd())
+    root_identity = _device_inode(root_metadata)
+    if not _workspace_binding_matches(root_fd, workspace_identity, root_identity):
+        raise OSError("startup workspace identity is not bound to the pinned root")
+    return workspace_identity, root_identity
+
+
 def scan_required_artifacts() -> Dict[str, Any]:
     """Scan startup-cwd metadata twice without following links or reading contents."""
-    workspace_identity = os.path.realpath(os.getcwd())
-    if not _supports_secure_scan():
+    workspace_identity = ""
+    root_fd: Optional[int] = None
+    try:
+        root_fd = _open_workspace_root()
+        try:
+            workspace_identity, root_identity = _bind_workspace_identity(root_fd)
+        except (OSError, ValueError):
+            results = _query_results()
+            _mark_incomplete(results)
+            return _adapter_result(workspace_identity, results)
+        if not _supports_secure_scan():
+            results = _query_results()
+            _mark_incomplete(results)
+            return _adapter_result(workspace_identity, results)
+
+        deadline = time.monotonic() + DEADLINE_SECONDS
+        entries_seen = 0
+        binding_stable = _workspace_binding_matches(root_fd, workspace_identity, root_identity)
+        pass_results: List[List[Dict[str, Any]]] = []
+        pass_receipts: List[bytes] = []
+        for pass_number in range(STABILITY_PASSES):
+            results, receipt, entries_seen = _scan_pass(root_fd, deadline, entries_seen)
+            pass_results.append(results)
+            pass_receipts.append(receipt)
+            if pass_number + 1 < STABILITY_PASSES:
+                binding_stable = (
+                    _workspace_binding_matches(root_fd, workspace_identity, root_identity)
+                    and binding_stable
+                )
+        binding_stable = _workspace_binding_matches(root_fd, workspace_identity, root_identity) and binding_stable
+        final_results = pass_results[-1]
+        if (
+            not binding_stable
+            or any(not all(result["complete"] for result in results) for results in pass_results)
+            or len(set(pass_receipts)) != 1
+            or len({_canonical_bytes(results) for results in pass_results}) != 1
+        ):
+            _mark_incomplete(final_results)
+        return _adapter_result(workspace_identity, final_results)
+    except OSError:
         results = _query_results()
         _mark_incomplete(results)
         return _adapter_result(workspace_identity, results)
-    deadline = time.monotonic() + DEADLINE_SECONDS
-    entries_seen = 0
-    pass_results: List[List[Dict[str, Any]]] = []
-    pass_receipts: List[bytes] = []
-    for _pass_number in range(STABILITY_PASSES):
-        results, receipt, entries_seen = _scan_pass(deadline, entries_seen)
-        pass_results.append(results)
-        pass_receipts.append(receipt)
-    final_results = pass_results[-1]
-    if (
-        any(not all(result["complete"] for result in results) for results in pass_results)
-        or len(set(pass_receipts)) != 1
-        or len({_canonical_bytes(results) for results in pass_results}) != 1
-    ):
-        _mark_incomplete(final_results)
-    return _adapter_result(workspace_identity, final_results)
+    finally:
+        if root_fd is not None:
+            os.close(root_fd)
 
 
 def _adapter_result(workspace_identity: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:

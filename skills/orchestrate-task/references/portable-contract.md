@@ -203,7 +203,7 @@ handoff: use the format below
     "phase": "after-inconclusive-identity-preflight-before-ordinary-routing",
     "query_order": "protected-server-canonical-order",
     "registry_descriptor": {
-      "version": 4,
+      "version": 5,
       "phase": "probe-ownership",
       "class_queries": [
         {
@@ -242,6 +242,8 @@ handoff: use the format below
           "st_ctime_ns"
         ],
         "directory_tokens": "pre-and-post-fstat-must-match",
+        "root_pinning": "opened-before-workspace-identity-and-reused-across-both-passes",
+        "workspace_identity_binding": "canonical-path-and-pinned-root-st-dev-st-ino-revalidated-before-between-and-after-passes",
         "comparison": "byte-identical-canonical-metadata-receipts-and-query-results",
         "failure_action": "all-query-results-incomplete"
       },
@@ -325,7 +327,7 @@ handoff: use the format below
         "hard_deadline_outcome": "inconclusive-delegate"
       }
     },
-    "registry_descriptor_sha256": "4a5993ebc44201cbc76ab0ea2e5411d2bf4e5d923b39383c94388e3f7de38e08",
+    "registry_descriptor_sha256": "648d6b9faeb2a33742137c148bd677f7dbf08a0cfd536f4447344aeb0ef02a42",
     "required_assertion": "at-least-one-named-class-must-exist-in-objective-owning-repository",
     "tool": "awb_ownership.scan_required_artifacts",
     "work_cutoff_seconds": 45
@@ -346,7 +348,7 @@ After `inconclusive-delegate`, the lead reads the protected `ownership_probe.reg
 
 When at least one registered artifact class must exist in the objective-owning repository, the lead makes exactly one direct lead-owned zero-argument call. The protected server owns the complete bounded startup-workspace scan and returns only path metadata for `ecs-task-definition-manifests`, `deployment-pipeline-manifests`, and `infrastructure-as-code`, in canonical order and with at most 64 matches per class. It reads no contents or target code, imports no repository code, follows no symlinks, executes no subprocess, hook, helper, configuration, or repository command, uses no network, credentials, prompt, or mutable environment, and performs no write, test, or governance load.
 
-The protected registry descriptor is version 4. The server uses two bounded no-follow metadata passes under one cumulative 50,000-entry budget and 45-second deadline. Every directory has matching pre/post `fstat` tokens; complete evidence requires byte-identical canonical metadata receipts and query results across both passes, while any create, delete, rename, replacement, metadata drift, pass mismatch, or unsupported isolated host makes all classes incomplete. The lead retains parent context version 2 with exactly `context_version`, `phase`, `descriptor_version`, `descriptor_sha256`, `required_artifact_classes`, `declaration_conflict`, `direct_user_objective_repository_identity`, `host_canonical_workspace_identity`, and the full `adapter_result`, plus its canonical SHA-256 integrity binding. The adapter result has exactly `adapter_result_version`, `tool_name`, `descriptor_version`, `descriptor_sha256`, `workspace_identity`, and three complete bounded `query_results`. The lead derives the outcome only from that retained context and never trusts tool-returned task criteria or an outcome.
+The protected registry descriptor is version 5. Before deriving canonical workspace identity, the server pins the startup root descriptor, binds the canonical path to its device and inode, and revalidates path resolution plus the pinned device and inode before the first pass, between passes, and after the second pass immediately before response. It reuses that pinned root for two bounded no-follow metadata passes under one cumulative 50,000-entry budget and 45-second deadline. Every directory has matching pre/post `fstat` tokens; complete evidence requires byte-identical canonical metadata receipts and query results across both passes, while root rename or replacement, path-resolution mismatch, unresolvable identity, create, delete, metadata drift, pass mismatch, or an unsupported isolated host makes all classes incomplete. The lead retains parent context version 2 with exactly `context_version`, `phase`, `descriptor_version`, `descriptor_sha256`, `required_artifact_classes`, `declaration_conflict`, `direct_user_objective_repository_identity`, `host_canonical_workspace_identity`, and the full `adapter_result`, plus its canonical SHA-256 integrity binding. The adapter result has exactly `adapter_result_version`, `tool_name`, `descriptor_version`, `descriptor_sha256`, `workspace_identity`, and three complete bounded `query_results`. The lead derives the outcome only from that retained context and never trusts tool-returned task criteria or an outcome.
 
 Any missing, malformed, stale, replayed, mixed-version, descriptor- or workspace-binding-mismatched, tampered, noncanonical, oversized, incomplete, truncated, symlink-affected, unsupported, conflicting, or internally inconsistent evidence is `inconclusive-delegate`. `owner-artifact-present` resumes ordinary rerouting when any retained required class has a match. `known-artifact-mismatch` stops before a planner only when all three exact results are complete and untruncated, no symlink was encountered or followed, retained declaration conflict is false, every retained required class is supported, and every retained required class has zero matches; name the exact retained direct owner when supplied, otherwise return `required_input: exact-objective-owning-repository-identity-or-path`. The lifecycle is one MCP call, zero children, zero waits, a 45-second cutoff, 60-second hard deadline, and 15-second reserve. A hard deadline yields `inconclusive-delegate` and continues through the full flow.
 

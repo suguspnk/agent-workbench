@@ -46,7 +46,7 @@ class OwnershipProbeScannerTests(unittest.TestCase):
             result = self.scan(root)
         self.assertEqual(result["workspace_identity"], str(root.resolve()))
         self.assertEqual(result["tool_name"], "scan_required_artifacts")
-        self.assertEqual(result["descriptor_version"], 4)
+        self.assertEqual(result["descriptor_version"], 5)
         for query in result["query_results"]:
             self.assertTrue(query["complete"])
             self.assertFalse(query["truncated"])
@@ -157,9 +157,9 @@ class OwnershipProbeScannerTests(unittest.TestCase):
                 original_scan_pass = SERVER._scan_pass
                 calls = 0
 
-                def racing_scan_pass(deadline, entries_seen):
+                def racing_scan_pass(root_fd, deadline, entries_seen):
                     nonlocal calls
-                    value = original_scan_pass(deadline, entries_seen)
+                    value = original_scan_pass(root_fd, deadline, entries_seen)
                     calls += 1
                     if calls == 1:
                         if action == "create":
@@ -178,6 +178,43 @@ class OwnershipProbeScannerTests(unittest.TestCase):
                     result = self.scan(root)
                 self.assertTrue(all(not item["complete"] for item in result["query_results"]))
 
+    def test_pinned_root_identity_is_stable_across_both_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "workspace"
+            root.mkdir()
+            (root / "src").mkdir()
+            result = self.scan(root)
+        self.assertEqual(result["workspace_identity"], str(root.resolve()))
+        self.assertTrue(all(item["complete"] for item in result["query_results"]))
+
+    def test_root_rename_and_replacement_fail_closed_at_every_identity_boundary(self) -> None:
+        boundaries = {"pre-first-pass": 2, "inter-pass": 3, "post-second-pass": 4}
+        for action in ("rename", "replace"):
+            for boundary, trigger_call in boundaries.items():
+                with self.subTest(action=action, boundary=boundary), tempfile.TemporaryDirectory() as directory:
+                    parent = Path(directory)
+                    root = parent / "workspace"
+                    moved = parent / "workspace-moved"
+                    root.mkdir()
+                    original_matches = SERVER._workspace_binding_matches
+                    calls = 0
+
+                    def racing_binding_matches(root_fd, workspace_identity, root_identity):
+                        nonlocal calls
+                        calls += 1
+                        if calls == trigger_call:
+                            root.rename(moved)
+                            if action == "replace":
+                                root.mkdir()
+                        return original_matches(root_fd, workspace_identity, root_identity)
+
+                    with mock.patch.object(
+                        SERVER, "_workspace_binding_matches", side_effect=racing_binding_matches
+                    ):
+                        result = self.scan(root)
+                    self.assertEqual(result["workspace_identity"], str(root.resolve()))
+                    self.assertTrue(all(not item["complete"] for item in result["query_results"]))
+
     def test_intrapass_create_delete_rename_and_replacement_fail_closed(self) -> None:
         actions = ("create", "delete", "rename", "replace")
         for action in actions:
@@ -186,13 +223,13 @@ class OwnershipProbeScannerTests(unittest.TestCase):
                 artifact = root / "service-task-definition.json"
                 if action != "create":
                     artifact.touch()
-                original_fstat = SERVER.os.fstat
+                original_listdir = SERVER.os.listdir
                 calls = 0
 
-                def racing_fstat(fd):
+                def racing_listdir(fd):
                     nonlocal calls
                     calls += 1
-                    if calls == 2:
+                    if calls == 1:
                         if action == "create":
                             artifact.touch()
                         elif action == "delete":
@@ -203,9 +240,9 @@ class OwnershipProbeScannerTests(unittest.TestCase):
                             replacement = root / "replacement"
                             replacement.touch()
                             os.replace(replacement, artifact)
-                    return original_fstat(fd)
+                    return original_listdir(fd)
 
-                with mock.patch.object(SERVER.os, "fstat", side_effect=racing_fstat):
+                with mock.patch.object(SERVER.os, "listdir", side_effect=racing_listdir):
                     result = self.scan(root)
                 self.assertTrue(all(not item["complete"] for item in result["query_results"]))
 
@@ -233,6 +270,11 @@ class OwnershipProbeScannerTests(unittest.TestCase):
         self.assertEqual(list(SERVER.METADATA_TOKEN_FIELDS), descriptor["stability"]["metadata_token_fields"])
         self.assertEqual(SERVER.STABILITY_COMPARISON, descriptor["stability"]["comparison"])
         self.assertEqual(SERVER.STABILITY_FAILURE_ACTION, descriptor["stability"]["failure_action"])
+        self.assertEqual(SERVER.ROOT_PINNING, descriptor["stability"]["root_pinning"])
+        self.assertEqual(
+            SERVER.WORKSPACE_IDENTITY_BINDING,
+            descriptor["stability"]["workspace_identity_binding"],
+        )
 
     def test_source_has_no_process_network_environment_or_write_capability(self) -> None:
         source = SERVER_PATH.read_text(encoding="utf-8")

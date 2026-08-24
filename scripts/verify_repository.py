@@ -282,7 +282,7 @@ DIRECT_DIAGNOSIS_CONTRACT = {
     "work_cutoff_seconds": 90,
     "work_shape": "diagnose",
 }
-OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {'version': 4,
+OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {'version': 5,
  'phase': 'probe-ownership',
  'class_queries': [{'artifact_class': 'ecs-task-definition-manifests',
                     'accepted_path_pattern': '(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:json|yaml|yml)\\Z'},
@@ -308,6 +308,8 @@ OWNERSHIP_PROBE_REGISTRY_DESCRIPTOR = {'version': 4,
                                          'st_mtime_ns',
                                          'st_ctime_ns'],
                'directory_tokens': 'pre-and-post-fstat-must-match',
+               'root_pinning': 'opened-before-workspace-identity-and-reused-across-both-passes',
+               'workspace_identity_binding': 'canonical-path-and-pinned-root-st-dev-st-ino-revalidated-before-between-and-after-passes',
                'comparison': 'byte-identical-canonical-metadata-receipts-and-query-results',
                'failure_action': 'all-query-results-incomplete'},
  'excluded_directories': ['.git', '.hg', '.svn', '.tox', '.venv', '__pycache__', 'node_modules', 'vendor'],
@@ -387,7 +389,7 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
               'owner-artifact-present': 'normal-reroute'},
  'phase': 'after-inconclusive-identity-preflight-before-ordinary-routing',
  'query_order': 'protected-server-canonical-order',
- 'registry_descriptor': {'version': 4,
+ 'registry_descriptor': {'version': 5,
                          'phase': 'probe-ownership',
                          'class_queries': [{'artifact_class': 'ecs-task-definition-manifests',
                                             'accepted_path_pattern': '(?:[A-Za-z0-9._@+-]+/)*(?:[A-Za-z0-9][A-Za-z0-9._-]*[-_])?task[-_]definitions?(?:[-_.][A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:json|yaml|yml)\\Z'},
@@ -413,6 +415,8 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
                                                                  'st_mtime_ns',
                                                                  'st_ctime_ns'],
                                        'directory_tokens': 'pre-and-post-fstat-must-match',
+                                       'root_pinning': 'opened-before-workspace-identity-and-reused-across-both-passes',
+                                       'workspace_identity_binding': 'canonical-path-and-pinned-root-st-dev-st-ino-revalidated-before-between-and-after-passes',
                                        'comparison': 'byte-identical-canonical-metadata-receipts-and-query-results',
                                        'failure_action': 'all-query-results-incomplete'},
                          'excluded_directories': ['.git',
@@ -474,7 +478,7 @@ OWNERSHIP_PROBE_CONTRACT = {'artifact_classes': ['ecs-task-definition-manifests'
                                        'max_children': 0,
                                        'max_waits': 0,
                                        'hard_deadline_outcome': 'inconclusive-delegate'}},
- 'registry_descriptor_sha256': '4a5993ebc44201cbc76ab0ea2e5411d2bf4e5d923b39383c94388e3f7de38e08',
+ 'registry_descriptor_sha256': '648d6b9faeb2a33742137c148bd677f7dbf08a0cfd536f4447344aeb0ef02a42',
  'required_assertion': 'at-least-one-named-class-must-exist-in-objective-owning-repository',
  'tool': 'awb_ownership.scan_required_artifacts',
  'work_cutoff_seconds': 45}
@@ -500,8 +504,8 @@ PLANNER_LIFECYCLE_CONTRACT = {
     },
 }
 PLANNER_LIFECYCLE_ACTIVE_DIGESTS = {
-    "orchestrate-task skill": "a88f66022a8e0b43b66f9191a8e0f5c8e89dc8a3a685f85754a2b695c6729e92",
-    "portable contract": "77d12eee0d6c29dbf407851f9b139b045cb48ddec31742f6f52762a7d6fc84bc",
+    "orchestrate-task skill": "07ed4532cd3fa9222e49457ba2ec5b32610d34581ccc450975b85d6f7f4db56b",
+    "portable contract": "4c6748c865cfe18a5c4fc2fd5800052619d546fb7f86adc5091de76f50da5fda",
 }
 PLANNER_OWNERSHIP_OUTCOME_CONTRACT = (
     "Ownership mismatch outcomes are explicit: `known_owner` returns compact `blocked` or `needs-input` evidence naming the exact supplied missing objective-owning repository; "
@@ -535,7 +539,7 @@ PLANNER_LIFECYCLE_SKILL_REQUIREMENTS = (
     "canonical SHA-256 binding",
     "`awb_ownership.scan_required_artifacts`",
     "one direct, lead-owned, zero-argument call",
-    "protected descriptor is version 4",
+    "protected descriptor is version 5",
     "immutable context version 2",
     "direct user objective repository identity string or null",
     "host canonical workspace identity",
@@ -2311,7 +2315,7 @@ def validate_runtime_ownership_probe_surfaces(
             "zero-argument",
             "zero probe children, waits, or syntheses",
             "role name, read-only",
-            "version 4",
+            "version 5",
             "version 2",
             "retained",
             "workspace",
