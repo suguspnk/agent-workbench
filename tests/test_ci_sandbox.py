@@ -159,6 +159,10 @@ class SandboxCommandTests(unittest.TestCase):
             self.assertEqual(sum(f"dst={destination},readonly" in value for value in mounts), 1)
 
 
+@unittest.skipUnless(
+    Path("/usr/bin/git").is_file(),
+    "fixed /usr/bin/git checkout fixture is unavailable on this platform",
+)
 class CheckoutCredentialTests(unittest.TestCase):
     def _repository(self, root: Path) -> tuple[Path, str]:
         repository = root / "candidate"

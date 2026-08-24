@@ -227,25 +227,35 @@ class OwnershipProbeScannerTests(unittest.TestCase):
                 if action != "create":
                     artifact.touch()
                 original_listdir = SERVER.os.listdir
+                original_stat = SERVER.os.stat
                 calls = 0
 
                 def racing_listdir(fd):
                     nonlocal calls
                     calls += 1
-                    if calls == 1:
+                    names = original_listdir(fd)
+                    if calls == 1 and action in {"create", "delete"}:
                         if action == "create":
                             artifact.touch()
-                        elif action == "delete":
+                        else:
                             artifact.unlink()
-                        elif action == "rename":
+                    return names
+
+                def racing_stat(path, *args, **kwargs):
+                    metadata = original_stat(path, *args, **kwargs)
+                    if path == artifact.name and action in {"rename", "replace"}:
+                        if action == "rename":
                             artifact.rename(root / "renamed.txt")
                         else:
                             replacement = root / "replacement"
                             replacement.touch()
                             os.replace(replacement, artifact)
-                    return original_listdir(fd)
+                    return metadata
 
-                with mock.patch.object(SERVER.os, "listdir", side_effect=racing_listdir):
+                with (
+                    mock.patch.object(SERVER.os, "listdir", side_effect=racing_listdir),
+                    mock.patch.object(SERVER.os, "stat", side_effect=racing_stat),
+                ):
                     result = self.scan(root)
                 self.assertTrue(all(not item["complete"] for item in result["query_results"]))
 
