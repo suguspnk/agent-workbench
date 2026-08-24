@@ -413,6 +413,18 @@ class OwnershipProbeMcpProtocolTests(unittest.TestCase):
         self.assertEqual(structured["workspace_identity"], str(root.resolve()))
         self.assertNotIn("must-not-appear", json.dumps(responses))
 
+    def test_tools_list_accepts_codex_null_cursor_and_rejects_nonnull_cursor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            responses, _stderr = self.run_protocol(
+                [
+                    {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"cursor": None}},
+                    {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {"cursor": "next"}},
+                ],
+                Path(directory),
+            )
+        self.assertEqual(responses[0]["result"]["tools"][0]["name"], SERVER.TOOL_NAME)
+        self.assertEqual(responses[1]["error"]["code"], -32602)
+
     def test_unknown_method_tool_and_nonempty_input_fail_without_scanning(self) -> None:
         requests = [
             {"jsonrpc": "2.0", "id": 1, "method": "unknown", "params": {}},

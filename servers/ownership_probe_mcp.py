@@ -440,7 +440,11 @@ def handle_request(
             return _error_response(request_id, -32602, "Invalid params")
         return {"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-06-18", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION}}}
     if method == "tools/list":
-        if request.get("params", {}) != {}:
+        # Codex serializes the optional MCP pagination cursor as null during
+        # startup inventory.  Accept that canonical first-page shape while
+        # continuing to reject non-null cursors because this server has one
+        # unpaginated tool.
+        if request.get("params", {}) not in ({}, {"cursor": None}):
             return _error_response(request_id, -32602, "Invalid params")
         return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": [TOOL_DEFINITION]}}
     if method == "tools/call":
