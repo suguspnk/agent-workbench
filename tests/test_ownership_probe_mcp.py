@@ -556,6 +556,10 @@ class OwnershipProbeMcpProtocolTests(unittest.TestCase):
             )
             self.assertEqual(matches, ["workspace-task-definition.json"])
 
+    @unittest.skipUnless(
+        Path("/usr/bin/python3").is_file(),
+        "fixed /usr/bin/python3 launcher is unavailable on this platform",
+    )
     def test_fixed_isolated_launcher_ignores_hostile_path_pythonpath_and_sitecustomize(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
