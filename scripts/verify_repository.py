@@ -29,7 +29,7 @@ from typing import Any, Iterable, Mapping, NamedTuple
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.10.1"
+VERSION = "0.10.2"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 RULE_ID = re.compile(r"^[A-Z]+-\d{3}$")
 MAPPED_CONCERN = re.compile(r"^- \[([A-Z]+-\d{3})\] \S.*")
@@ -51,7 +51,7 @@ GOVERNANCE_ARTIFACT_DIGESTS = {
     "references/state-and-contract-integrity.md": "480c7b7b3886c10633f2814f9a9d6fedbe6c1c459a220a38e1d2c3bc30e22d49",
     "references/trust-and-domain-safety.md": "2b09f47191cd22908f0e20ecd4839173bc35beabe7f8a58aa9b7a3ee184a7eb1",
 }
-VERSION = "0.10.1"
+VERSION = "0.10.2"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 CANONICAL_GOVERNANCE_PATH = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?(?:/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)*$"

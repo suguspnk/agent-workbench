@@ -4,6 +4,11 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 
 ## Unreleased
 
+## 0.10.2 - 2026-08-26
+
+- Made `orchestrate-task` opt-in in Codex by requiring explicit invocation and added regression coverage for the activation policy.
+- Refreshed the protected validation policy for the explicit-activation and release metadata changes.
+
 ## 0.10.1 - 2026-08-25
 
 - Removed the root `.mcp.json` from the distributable Codex plugin so the unsupported ownership transport remains truly unregistered; retained its descriptor only as a protected offline test fixture.
