@@ -2,3 +2,6 @@ interface:
   display_name: "Orchestrate Task"
   short_description: "Route bounded work to verified subagents"
   default_prompt: "Use $orchestrate-task to coordinate this task through bounded subagents and accept only independently verified evidence."
+
+policy:
+  allow_implicit_invocation: false

@@ -199,7 +199,7 @@ Agent Workbench includes orchestration, deterministic code review, proposal-only
 <!-- BEGIN TRUSTED VALIDATION SUMMARY -->
 ## Trusted validation boundary
 
-The authoritative pull-request gate uses reviewed base-branch controls and policy version `42` with protected-set digest `c371d3e3cd21beba032705451f523de2bf1e48cd3cce48a990d28eb38319eeb9`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
+The authoritative pull-request gate uses reviewed base-branch controls and policy version `43` with protected-set digest `04f46efbddc741e0265211f4dec7db8dd4403bd499082f96d52ca75645b54d24`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
 
 There is no preceding trusted invariant gate for the initial activation because GitHub reads the `pull_request_target` workflow from the base branch. Initial activation and every later protected-set update therefore use the separately authorized procedure in [CONTRIBUTING.md](CONTRIBUTING.md); local checks never prove live activation.
 <!-- END TRUSTED VALIDATION SUMMARY -->

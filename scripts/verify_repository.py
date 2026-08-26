@@ -1307,17 +1307,39 @@ def forbidden_curl_arguments(script: str) -> set[str]:
 
 def check_public_openai_agent_contract(path: Path, skill_name: str) -> None:
     """Shape-check and bind one public OpenAI agent surface exactly."""
+    allow_implicit_invocation = False if skill_name == "orchestrate-task" else None
     lines = governance_physical_lines(path.read_text(encoding="utf-8"))
+    policy_lines = []
+    if allow_implicit_invocation is not None:
+        policy_lines = [
+            "",
+            "policy:",
+            f"  allow_implicit_invocation: {str(allow_implicit_invocation).lower()}",
+        ]
     if (
-        not lines
+        len(lines) != 4 + len(policy_lines)
         or lines[0] != "interface:"
-        or len(lines) != 4
-        or any(not line.startswith("  ") or line.startswith("   ") for line in lines[1:])
+        or any(
+            not line.startswith("  ") or line.startswith("   ")
+            for line in lines[1:4]
+        )
     ):
-        fail(f"{relative(path)} must contain exactly one interface mapping")
+        if allow_implicit_invocation is None:
+            fail(f"{relative(path)} OpenAI metadata must contain exactly one interface mapping")
+        fail(
+            f"{relative(path)} OpenAI metadata must contain one interface mapping and an exact "
+            f"policy.allow_implicit_invocation value of "
+            f"{str(allow_implicit_invocation).lower()}"
+        )
+    interface_lines = lines[1:4]
+    if lines[4:] != policy_lines:
+        fail(
+            f"{relative(path)} OpenAI metadata must set policy.allow_implicit_invocation to exactly "
+            f"{str(allow_implicit_invocation).lower()}"
+        )
     values = parse_exact_yaml_string_mapping(
         path,
-        [line[2:] if line.startswith("  ") else line for line in lines[1:]],
+        [line[2:] for line in interface_lines],
         {"display_name", "short_description", "default_prompt"},
         require_quoted=True,
         context="OpenAI interface",
