@@ -80,6 +80,10 @@ The Markdown workflows, normalized schemas, and contracts are the portable core.
 
 ## Install and use
 
+### Manager Loop for long builds
+
+Use `$manager-loop` to break a substantial build into dependency-ordered phases and coordinate a reusable implementer through each phase. The manager accepts current evidence before advancing; the implementer maintains a checklist and a local HTML progress chart. Stalled requirements remain visible while independent work continues. See [the skill](skills/manager-loop/SKILL.md) for goal-mode capability checks, recovery limits, and resumable handoffs. Native goal mode requires explicit authorization and available host controls; the skill does not change models, concurrency settings, or create user-visible tasks implicitly.
+
 ### Codex
 
 Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$code-review`, `$discover-loops`, `$implementation-quality-governance`, `$pr-evidence`, or `$ui-ux-pro-max`:
@@ -199,7 +203,7 @@ Agent Workbench includes orchestration, deterministic code review, proposal-only
 <!-- BEGIN TRUSTED VALIDATION SUMMARY -->
 ## Trusted validation boundary
 
-The authoritative pull-request gate uses reviewed base-branch controls and policy version `44` with protected-set digest `6f70ad351690ad1eec701fe3813f00771d6df9fdadc33813c719c1ef916fca37`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
+The authoritative pull-request gate uses reviewed base-branch controls and policy version `45` with protected-set digest `12e9ff0bfe33861e1644b39321ca41056c220d750d40a6e0cd4c7da94f60c28f`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
 
 There is no preceding trusted invariant gate for the initial activation because GitHub reads the `pull_request_target` workflow from the base branch. Initial activation and every later protected-set update therefore use the separately authorized procedure in [CONTRIBUTING.md](CONTRIBUTING.md); local checks never prove live activation.
 <!-- END TRUSTED VALIDATION SUMMARY -->
