@@ -65,6 +65,31 @@ def chmod_export_no_follow(root: Path, directory_mode: int, file_mode: int) -> N
 
 
 class VerifyRepositoryNegativeTests(unittest.TestCase):
+    def test_manager_loop_frontmatter_requires_manual_invocation(self) -> None:
+        source = (ROOT / "skills/manager-loop/SKILL.md").read_text(encoding="utf-8")
+        mutations = {
+            "missing": source.replace("disable-model-invocation: true\n", "", 1),
+            "false": source.replace("disable-model-invocation: true", "disable-model-invocation: false", 1),
+            "quoted": source.replace("disable-model-invocation: true", 'disable-model-invocation: "true"', 1),
+            "duplicate": source.replace(
+                "disable-model-invocation: true\n",
+                "disable-model-invocation: true\ndisable-model-invocation: true\n",
+                1,
+            ),
+        }
+        with tempfile.TemporaryDirectory(dir=PLATFORM_TEMP) as directory:
+            fixture_root = Path(directory)
+            fixture_skill = fixture_root / "skills/manager-loop"
+            shutil.copytree(ROOT / "skills/manager-loop", fixture_skill)
+            chmod_export_no_follow(fixture_skill, 0o700, 0o600)
+            with mock.patch.object(VERIFY, "ROOT", fixture_root):
+                VERIFY.check_manager_loop_skill()
+                for name, mutated in mutations.items():
+                    with self.subTest(case=name):
+                        (fixture_skill / "SKILL.md").write_text(mutated, encoding="utf-8")
+                        with self.assertRaisesRegex(SystemExit, "1"):
+                            VERIFY.check_manager_loop_skill()
+
     def test_public_openai_metadata_requires_explicit_invocation(self) -> None:
         interfaces = {
             "orchestrate-task": (
@@ -93,6 +118,12 @@ class VerifyRepositoryNegativeTests(unittest.TestCase):
                 for invalid_policy in (
                     "",
                     "\npolicy:\n  allow_implicit_invocation: true\n",
+                    '\npolicy:\n  allow_implicit_invocation: "false"\n',
+                    (
+                        "\npolicy:\n"
+                        "  allow_implicit_invocation: false\n"
+                        "  allow_implicit_invocation: false\n"
+                    ),
                 ):
                     with self.subTest(skill_name=skill_name, invalid_policy=invalid_policy):
                         metadata.write_text(interface + invalid_policy, encoding="utf-8")

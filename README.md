@@ -82,11 +82,11 @@ The Markdown workflows, normalized schemas, and contracts are the portable core.
 
 ### Manager Loop for long builds
 
-Use `$manager-loop` explicitly to break a substantial build into dependency-ordered phases and coordinate a reusable implementer through each phase. The skill cannot activate implicitly. The manager accepts current evidence before advancing; the implementer maintains a checklist and a local HTML progress chart. Stalled requirements remain visible while independent work continues. See [the skill](skills/manager-loop/SKILL.md) for goal-mode capability checks, recovery limits, and resumable handoffs. Native goal mode requires explicit authorization and available host controls; the skill does not change models, concurrency settings, or create user-visible tasks implicitly.
+Use `$manager-loop` explicitly to break a substantial build into dependency-ordered phases and coordinate a reusable implementer through each phase. The skill cannot activate implicitly in Codex or Claude Code. The manager accepts current evidence before advancing; the implementer maintains a checklist and a local HTML progress chart. Stalled requirements remain visible while independent work continues. See [the skill](skills/manager-loop/SKILL.md) for goal-mode capability checks, recovery limits, and resumable handoffs. Native goal mode requires explicit authorization and available host controls; the skill does not change models, concurrency settings, or create user-visible tasks implicitly.
 
 ### Codex
 
-Add the GitHub repository as a marketplace, install the plugin, and invoke `$orchestrate-task`, `$code-review`, `$discover-loops`, `$implementation-quality-governance`, `$pr-evidence`, or `$ui-ux-pro-max`:
+Add the GitHub repository as a marketplace, install the plugin, and invoke `$manager-loop`, `$orchestrate-task`, `$code-review`, `$discover-loops`, `$implementation-quality-governance`, `$pr-evidence`, or `$ui-ux-pro-max`:
 
 ```sh
 codex plugin marketplace add suguspnk/agent-workbench
@@ -104,7 +104,7 @@ For personal roles, copy the files to `~/.codex/agents/` instead. Review existin
 
 ### Claude Code
 
-Add the repository marketplace, install the plugin, and invoke `/agent-workbench:orchestrate-task`, `/agent-workbench:code-review`, `/agent-workbench:discover-loops`, `/agent-workbench:implementation-quality-governance`, `/agent-workbench:pr-evidence`, or `/agent-workbench:ui-ux-pro-max`:
+Add the repository marketplace, install the plugin, and invoke `/agent-workbench:manager-loop`, `/agent-workbench:orchestrate-task`, `/agent-workbench:code-review`, `/agent-workbench:discover-loops`, `/agent-workbench:implementation-quality-governance`, `/agent-workbench:pr-evidence`, or `/agent-workbench:ui-ux-pro-max`:
 
 ```sh
 claude plugin marketplace add suguspnk/agent-workbench
@@ -203,7 +203,7 @@ Agent Workbench includes orchestration, deterministic code review, proposal-only
 <!-- BEGIN TRUSTED VALIDATION SUMMARY -->
 ## Trusted validation boundary
 
-The authoritative pull-request gate uses reviewed base-branch controls and policy version `46` with protected-set digest `f691b3dfbc3564cfa924d138e05c9b23d79e5e142a1fa4280456819ac9214df5`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
+The authoritative pull-request gate uses reviewed base-branch controls and policy version `47` with protected-set digest `734049915f66b4b689eb4516b8efd3382bf978a829aec8ccc4717195dd9faded`. It binds the complete exported skill, both profile families, manifests, validator, router, replay data, CI controls, generator, file types, and executable bits; it also rejects unallowlisted repository instruction and automation surfaces.
 
 There is no preceding trusted invariant gate for the initial activation because GitHub reads the `pull_request_target` workflow from the base branch. Initial activation and every later protected-set update therefore use the separately authorized procedure in [CONTRIBUTING.md](CONTRIBUTING.md); local checks never prove live activation.
 <!-- END TRUSTED VALIDATION SUMMARY -->

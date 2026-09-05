@@ -4,6 +4,12 @@ All notable changes to Agent Workbench are documented here. Versions follow sema
 
 ## Unreleased
 
+## 0.10.3 - 2026-09-05
+
+- Added the `manager-loop` skill for long-horizon builds using phased checklists, a persistent implementer, evidence-based phase acceptance, bounded stall recovery, and a local progress dashboard.
+- Made `manager-loop` opt-in in Codex and Claude Code by requiring explicit invocation and added regression coverage for missing or permissive activation metadata.
+- Refreshed the protected validation policy for the new skill, activation contract, and release metadata.
+
 ## 0.10.2 - 2026-08-26
 
 - Made `orchestrate-task` opt-in in Codex by requiring explicit invocation and added regression coverage for the activation policy.

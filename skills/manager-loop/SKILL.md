@@ -1,6 +1,7 @@
 ---
 name: manager-loop
-description: Coordinate long-horizon builds through a manager and a persistent implementer, using a phased checklist, evidence-based phase acceptance, and stall recovery. Use when the user requests the Manager Loop or a substantial multi-phase autonomous build; keep ordinary bounded tasks lightweight.
+disable-model-invocation: true
+description: Coordinate long-horizon builds through a manager and a persistent implementer, using a phased checklist, evidence-based phase acceptance, and stall recovery. MANUAL TRIGGER ONLY. Use only when the user explicitly invokes $manager-loop or /agent-workbench:manager-loop; never infer it from a general request for a substantial or autonomous build.
 ---
 
 # Manager Loop
