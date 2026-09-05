@@ -1189,6 +1189,7 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
             "check_required_files",
             "check_manifests",
             "check_skill",
+            "check_manager_loop_skill",
             "check_discover_loops_skill",
             "check_pr_evidence_skill",
             "check_code_review_skills",
@@ -1271,6 +1272,7 @@ class ImplementationQualityGovernanceVerifierTests(unittest.TestCase):
         self.create_valid_planner_lifecycle_fixture()
         mocked_checks = (
             "check_required_files", "check_manifests", "check_skill",
+            "check_manager_loop_skill",
             "check_discover_loops_skill", "check_pr_evidence_skill",
             "check_code_review_skills", "check_codex_profiles",
             "check_claude_profiles", "check_replays_and_unit_tests",

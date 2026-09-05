@@ -65,35 +65,39 @@ def chmod_export_no_follow(root: Path, directory_mode: int, file_mode: int) -> N
 
 
 class VerifyRepositoryNegativeTests(unittest.TestCase):
-    def test_orchestrate_task_openai_metadata_requires_explicit_invocation(self) -> None:
-        interface = (
-            'interface:\n'
-            '  display_name: "Orchestrate Task"\n'
-            '  short_description: "Route bounded work to verified subagents"\n'
-            '  default_prompt: "Use $orchestrate-task to coordinate this task through bounded subagents and accept only independently verified evidence."\n'
-        )
+    def test_public_openai_metadata_requires_explicit_invocation(self) -> None:
+        interfaces = {
+            "orchestrate-task": (
+                'interface:\n'
+                '  display_name: "Orchestrate Task"\n'
+                '  short_description: "Route bounded work to verified subagents"\n'
+                '  default_prompt: "Use $orchestrate-task to coordinate this task through bounded subagents and accept only independently verified evidence."\n'
+            ),
+            "manager-loop": (
+                'interface:\n'
+                '  display_name: "Manager Loop"\n'
+                '  short_description: "Drive long builds through verified phases"\n'
+                '  default_prompt: "Use $manager-loop to plan this build into phases and coordinate an implementer through each phase extremely well."\n'
+            ),
+        }
         with tempfile.TemporaryDirectory(dir=PLATFORM_TEMP) as directory:
             metadata = Path(directory) / "openai.yaml"
-            metadata.write_text(
-                interface + "\npolicy:\n  allow_implicit_invocation: false\n",
-                encoding="utf-8",
-            )
-            VERIFY.check_public_openai_agent_contract(
-                metadata,
-                "orchestrate-task",
-            )
+            for skill_name, interface in interfaces.items():
+                with self.subTest(skill_name=skill_name, policy="false"):
+                    metadata.write_text(
+                        interface + "\npolicy:\n  allow_implicit_invocation: false\n",
+                        encoding="utf-8",
+                    )
+                    VERIFY.check_public_openai_agent_contract(metadata, skill_name)
 
-            for invalid_policy in (
-                "",
-                "\npolicy:\n  allow_implicit_invocation: true\n",
-            ):
-                with self.subTest(invalid_policy=invalid_policy):
-                    metadata.write_text(interface + invalid_policy, encoding="utf-8")
-                    with self.assertRaisesRegex(SystemExit, "1"):
-                        VERIFY.check_public_openai_agent_contract(
-                            metadata,
-                            "orchestrate-task",
-                        )
+                for invalid_policy in (
+                    "",
+                    "\npolicy:\n  allow_implicit_invocation: true\n",
+                ):
+                    with self.subTest(skill_name=skill_name, invalid_policy=invalid_policy):
+                        metadata.write_text(interface + invalid_policy, encoding="utf-8")
+                        with self.assertRaisesRegex(SystemExit, "1"):
+                            VERIFY.check_public_openai_agent_contract(metadata, skill_name)
 
     def test_bootstrap_docs_pin_initial_unprotected_activation_truth(self) -> None:
         documents = (

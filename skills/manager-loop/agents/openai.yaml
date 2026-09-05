@@ -2,3 +2,6 @@ interface:
   display_name: "Manager Loop"
   short_description: "Drive long builds through verified phases"
   default_prompt: "Use $manager-loop to plan this build into phases and coordinate an implementer through each phase extremely well."
+
+policy:
+  allow_implicit_invocation: false
